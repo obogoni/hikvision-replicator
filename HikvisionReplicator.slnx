@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/HikvisionReplicator.Api/HikvisionReplicator.Api.csproj" />
+  <Project Path="src/HikvisionReplicator.Data/HikvisionReplicator.Data.csproj" />
+  <Project Path="src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj" />
+</Solution>

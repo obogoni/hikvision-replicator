@@ -96,7 +96,7 @@ An operator needs to remove a device from the system when it is decommissioned o
 - **FR-008**: System MUST allow operators to update any combination of a device's fields (name, IP address, port, username, password) by its unique identifier.
 - **FR-009**: System MUST allow operators to delete a device by its unique identifier.
 - **FR-010**: System MUST NEVER include the device password in any response payload.
-- **FR-011**: System MUST store device passwords in a non-plaintext form.
+- **FR-011**: System MUST store device passwords using reversible symmetric encryption, so that the plaintext credential can be recovered for future device communication.
 - **FR-012**: System MUST return clear, human-readable error messages for validation failures, conflicts, and not-found conditions.
 - **FR-013**: When a password field is omitted or left blank during an update, the system MUST retain the existing password without change.
 - **FR-014**: The system MUST support a persistent storage mode where device registrations survive application restarts and crashes.
@@ -121,7 +121,7 @@ An operator needs to remove a device from the system when it is decommissioned o
 - The API is single-tenant; there is no concept of organizations, teams, or per-user device ownership in this version.
 - Authentication and authorization for the API itself (who can call these endpoints) is out of scope for this feature and will be addressed separately.
 - Device names are not required to be unique; the IP address + port combination serves as the uniqueness constraint.
-- The password field must never be returned in any response, but must be stored in a secure, non-plaintext form.
+- The password field must never be returned in any response, but must be stored using reversible symmetric encryption (not a one-way hash) so the plaintext can be recovered when the system later communicates with physical devices.
 - IPv6 addresses are out of scope for this version; only IPv4 is supported.
 - Soft-delete (marking as inactive rather than removing) is out of scope; deletion is permanent.
 - The API will be built using .NET 10 as specified by the requester.

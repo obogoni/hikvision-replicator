@@ -1,0 +1,38 @@
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docobj
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets / config overrides
+appsettings.*.json
+!appsettings.Development.json
+secrets.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NuGet
+packages/
+*.nupkg
+.nuget/
+
+# Test results
+TestResults/
+coverage/
+*.trx
+*.coveragexml
