@@ -21,31 +21,31 @@ src/HikvisionReplicator.Api/
 ├── Features/
 │   └── Devices/
 │       ├── CreateDevice/
-│       │   ├── ICreateDeviceService.cs      ← interface
-│       │   ├── CreateDeviceService.cs       ← implementation
-│       │   └── CreateDevice.Endpoint.cs     ← endpoint + DI registration
+│       │   ├── CreateDeviceService.Interface.cs  ← interface
+│       │   ├── CreateDeviceService.cs            ← implementation
+│       │   └── CreateDeviceService.Endpoint.cs   ← endpoint + DI registration
 │       ├── UpdateDevice/
-│       │   ├── IUpdateDeviceService.cs
+│       │   ├── UpdateDeviceService.Interface.cs
 │       │   ├── UpdateDeviceService.cs
-│       │   └── UpdateDevice.Endpoint.cs
+│       │   └── UpdateDeviceService.Endpoint.cs
 │       ├── GetDevice/
-│       │   ├── IGetDeviceService.cs
+│       │   ├── GetDeviceService.Interface.cs
 │       │   ├── GetDeviceService.cs
-│       │   └── GetDevice.Endpoint.cs
+│       │   └── GetDeviceService.Endpoint.cs
 │       └── DeleteDevice/
-│           ├── IDeleteDeviceService.cs
+│           ├── DeleteDeviceService.Interface.cs
 │           ├── DeleteDeviceService.cs
-│           └── DeleteDevice.Endpoint.cs
+│           └── DeleteDeviceService.Endpoint.cs
 ├── Infrastructure/
-│   └── EncryptionService.cs                 ← truly shared cross-cutting concerns
+│   └── EncryptionService.cs                      ← truly shared cross-cutting concerns
 └── Program.cs
 ```
 
 ### Endpoint registration convention
 
-Each `<UseCase>.Endpoint.cs` exposes a static method `Use<UseCase>(WebApplicationBuilder builder)` responsible for:
+Each `<UseCase>Service.Endpoint.cs` exposes a static method `Use<UseCase>(WebApplicationBuilder builder)` responsible for:
 
-1. Registering the service with the DI container (`builder.Services.AddScoped<I...Service, ...Service>()`)
+1. Registering the service with the DI container (`builder.Services.AddScoped<I<UseCase>Service, <UseCase>Service>()`)
 2. Mapping the HTTP route (`builder.Build()` is not called here — route mapping is chained from `Program.cs`)
 
 `Program.cs` composes the application by calling each `Use*` method.
@@ -54,13 +54,9 @@ Each `<UseCase>.Endpoint.cs` exposes a static method `Use<UseCase>(WebApplicatio
 
 Truly cross-cutting concerns (database context, encryption, etc.) remain in `Infrastructure/` inside the Api project. The `HikvisionReplicator.Data` project continues to own EF Core entities and migrations.
 
-### No Commands/Queries split
+### Contracts
 
-We do not distinguish between commands and queries at the folder level. All use cases follow the same structure regardless of whether they read or write. A dispatch mechanism (e.g. MediatR) may be introduced in a future ADR if the need arises.
-
-### DTOs
-
-Request and response DTOs are co-located inside the use case folder. There is no shared DTO layer.
+Request and response contracts are co-located inside the use case folder and follow the naming convention `<UseCase>Request` and `<UseCase>Response`. There is no shared contracts layer.
 
 ## Consequences
 
