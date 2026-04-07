@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace HikvisionReplicator.Data.Migrations
+namespace HikvisionReplicator.Api.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

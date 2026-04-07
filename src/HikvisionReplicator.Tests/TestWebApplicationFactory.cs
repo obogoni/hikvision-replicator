@@ -1,4 +1,4 @@
-using HikvisionReplicator.Data;
+using HikvisionReplicator.Api.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;

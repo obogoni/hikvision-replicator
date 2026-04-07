@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
+using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
-using HikvisionReplicator.Data;
-using HikvisionReplicator.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace HikvisionReplicator.Api.Features.Devices.CreateDevice;

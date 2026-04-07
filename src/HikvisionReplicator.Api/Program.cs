@@ -4,7 +4,6 @@ using HikvisionReplicator.Api.Features.Devices.GetDevice;
 using HikvisionReplicator.Api.Features.Devices.GetDevices;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 using HikvisionReplicator.Api.Infrastructure;
-using HikvisionReplicator.Data;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);

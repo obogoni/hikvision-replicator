@@ -1,7 +1,7 @@
-using HikvisionReplicator.Data.Entities;
+using HikvisionReplicator.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace HikvisionReplicator.Data;
+namespace HikvisionReplicator.Api.Infrastructure;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {

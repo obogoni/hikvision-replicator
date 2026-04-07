@@ -1,5 +1,4 @@
 using HikvisionReplicator.Api.Infrastructure;
-using HikvisionReplicator.Data;
 
 namespace HikvisionReplicator.Api.Features.Devices.GetDevice;
 

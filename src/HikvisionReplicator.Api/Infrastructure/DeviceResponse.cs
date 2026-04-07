@@ -1,4 +1,4 @@
-using HikvisionReplicator.Data.Entities;
+using HikvisionReplicator.Api.Domain;
 
 namespace HikvisionReplicator.Api.Infrastructure;
 

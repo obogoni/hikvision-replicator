@@ -1,4 +1,4 @@
-namespace HikvisionReplicator.Data.Entities;
+namespace HikvisionReplicator.Api.Domain;
 
 public class Device
 {
