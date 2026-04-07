@@ -18,6 +18,8 @@ Each feature domain lives under `Features/<Domain>/`. Each use case within that 
 
 ```
 src/HikvisionReplicator.Api/
+├── Domain/                                           ← EF Core entity classes
+│   └── Device.cs
 ├── Features/
 │   └── Devices/
 │       ├── CreateDevice/
@@ -37,7 +39,8 @@ src/HikvisionReplicator.Api/
 │           ├── DeleteDeviceService.cs
 │           └── DeleteDeviceService.Endpoint.cs
 ├── Infrastructure/
-│   └── EncryptionService.cs                      ← truly shared cross-cutting concerns
+│   ├── AppDbContext.cs                               ← EF Core DbContext
+│   └── EncryptionService.cs                          ← truly shared cross-cutting concerns
 └── Program.cs
 ```
 
@@ -52,7 +55,15 @@ Each `<UseCase>Service.Endpoint.cs` exposes a static method `Use<UseCase>(WebApp
 
 ### Shared infrastructure
 
-Truly cross-cutting concerns (database context, encryption, etc.) remain in `Infrastructure/` inside the Api project. The `HikvisionReplicator.Data` project continues to own EF Core entities and migrations.
+Truly cross-cutting concerns (database context, encryption, etc.) live in `Infrastructure/` inside the API project.
+
+### Domain entities
+
+Domain entity classes live inside the API project under `Domain/`, at the same level as `Features/` and `Infrastructure/`. There is no separate data project; keeping all code in a single project eliminates a cross-project dependency that adds no value at this scale.
+
+### EF Core
+
+The EF Core `DbContext` and migrations live in `Infrastructure/`. The `DbContext` is a shared, cross-cutting concern consumed by every feature slice, so it belongs alongside other shared infrastructure rather than inside any individual slice.
 
 ### Contracts
 
