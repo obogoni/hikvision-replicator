@@ -1,4 +1,8 @@
-using HikvisionReplicator.Api.Features.Devices;
+using HikvisionReplicator.Api.Features.Devices.CreateDevice;
+using HikvisionReplicator.Api.Features.Devices.DeleteDevice;
+using HikvisionReplicator.Api.Features.Devices.GetDevice;
+using HikvisionReplicator.Api.Features.Devices.GetDevices;
+using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Data;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +14,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
+builder
+    .UseCreateDevice()
+    .UseGetDevice()
+    .UseGetDevices()
+    .UseUpdateDevice()
+    .UseDeleteDevice();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -18,7 +29,12 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
-app.MapDevicesEndpoints();
+app
+    .MapCreateDevice()
+    .MapGetDevices()
+    .MapGetDevice()
+    .MapUpdateDevice()
+    .MapDeleteDevice();
 
 app.Run();
 

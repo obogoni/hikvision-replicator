@@ -1,7 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using HikvisionReplicator.Api.Features.Devices;
-using Xunit;
+using HikvisionReplicator.Api.Features.Devices.CreateDevice;
+using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
+using HikvisionReplicator.Api.Infrastructure;
 
 namespace HikvisionReplicator.Tests;
 

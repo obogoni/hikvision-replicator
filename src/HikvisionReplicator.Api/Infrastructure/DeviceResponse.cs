@@ -1,6 +1,6 @@
 using HikvisionReplicator.Data.Entities;
 
-namespace HikvisionReplicator.Api.Features.Devices;
+namespace HikvisionReplicator.Api.Infrastructure;
 
 public record DeviceResponse(
     int Id,

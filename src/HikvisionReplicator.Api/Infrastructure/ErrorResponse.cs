@@ -1,4 +1,4 @@
-namespace HikvisionReplicator.Api.Features.Devices;
+namespace HikvisionReplicator.Api.Infrastructure;
 
 public record ErrorResponse(
     string Type,
