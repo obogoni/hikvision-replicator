@@ -12,5 +12,5 @@ public record DeviceResponse(
     DateTime UpdatedAt)
 {
     public static DeviceResponse FromEntity(Device d) =>
-        new(d.Id, d.Name, d.IpAddress, d.HttpPort, d.Username, d.CreatedAt, d.UpdatedAt);
+        new(d.Id, d.Name, d.IpAddress.Value, d.HttpPort.Value, d.Username, d.CreatedAt, d.UpdatedAt);
 }
