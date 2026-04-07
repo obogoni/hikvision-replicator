@@ -110,3 +110,4 @@ public class Device
 **Negative / trade-offs:**
 - EF Core cannot construct private-constructor entities directly; a separate EF projection or owned-entity mapping strategy is required.
 - Callers must unwrap `Result<T>` before using the value, adding a small amount of ceremony at use sites.
+- The fail-fast nature of `Create` and `Update` means only the first validation error is returned per call. API consumers receive one error at a time rather than a full list of invalid fields.
