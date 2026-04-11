@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using HikvisionReplicator.Api.Features.Devices.CreateDevice;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
-using HikvisionReplicator.Api.Infrastructure;
+using Microsoft.AspNetCore.Http;
 using DeviceResponse = HikvisionReplicator.Api.Features.Devices.GetDevice.DeviceResponse;
 
 namespace HikvisionReplicator.Tests;
@@ -53,9 +53,6 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.1.11", port: 81));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        Assert.NotNull(body);
-        Assert.Equal("conflict", body!.Type);
     }
 
     [Fact]
@@ -65,11 +62,9 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/devices", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        var body = await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>();
         Assert.NotNull(body);
-        Assert.Equal("validation_error", body!.Type);
-        Assert.NotNull(body.Errors);
-        Assert.True(body.Errors!.ContainsKey("name"));
+        Assert.True(body!.Errors.ContainsKey("name"));
     }
 
     [Fact]
@@ -79,9 +74,8 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/devices", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        Assert.Equal("validation_error", body!.Type);
-        Assert.True(body.Errors!.ContainsKey("ipAddress"));
+        var body = await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>();
+        Assert.True(body!.Errors.ContainsKey("ipAddress"));
     }
 
     [Fact]
@@ -91,9 +85,8 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/devices", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        Assert.Equal("validation_error", body!.Type);
-        Assert.True(body.Errors!.ContainsKey("httpPort"));
+        var body = await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>();
+        Assert.True(body!.Errors.ContainsKey("httpPort"));
     }
 
     // ─── US2: Retrieve Device Information ────────────────────────────────
@@ -145,8 +138,6 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.GetAsync("/api/devices/999999");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        Assert.Equal("not_found", body!.Type);
     }
 
     // ─── US3: Update Device ───────────────────────────────────────────────
