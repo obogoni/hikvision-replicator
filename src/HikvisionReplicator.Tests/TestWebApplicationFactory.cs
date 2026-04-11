@@ -23,23 +23,25 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
     {
         builder.ConfigureAppConfiguration(config =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Encryption:Key"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            });
+            config.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Encryption:Key"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                }
+            );
         });
 
         builder.ConfigureServices(services =>
         {
             // Remove the real DbContext registration
-            var descriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            var descriptor = services.SingleOrDefault(d =>
+                d.ServiceType == typeof(DbContextOptions<AppDbContext>)
+            );
             if (descriptor != null)
                 services.Remove(descriptor);
 
             // All DbContext instances share the single open connection
-            services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlite(_connection));
+            services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection));
 
             // Create the schema once
             var sp = services.BuildServiceProvider();

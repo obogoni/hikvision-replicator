@@ -6,7 +6,8 @@ public static class DomainErrorExtensions
 {
     public static IResult ToMinimalApiResult(this ValidationError validationError) =>
         Results.ValidationProblem(
-            new Dictionary<string, string[]> { [validationError.Field] = [validationError.Message] });
+            new Dictionary<string, string[]> { [validationError.Field] = [validationError.Message] }
+        );
 
     public static IResult ToMinimalApiResult(this NotFoundError notFoundError) =>
         Results.Problem(detail: notFoundError.Message, statusCode: StatusCodes.Status404NotFound);

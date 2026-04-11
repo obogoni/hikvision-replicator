@@ -15,7 +15,8 @@ public class EncryptionService : IEncryptionService
 
     public EncryptionService(IConfiguration configuration)
     {
-        var keyBase64 = configuration["Encryption:Key"]
+        var keyBase64 =
+            configuration["Encryption:Key"]
             ?? throw new InvalidOperationException("Encryption:Key is not configured.");
         _key = Convert.FromBase64String(keyBase64);
         if (_key.Length != 32)
@@ -30,7 +31,11 @@ public class EncryptionService : IEncryptionService
 
         using var encryptor = aes.CreateEncryptor();
         var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
-        var ciphertextBytes = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
+        var ciphertextBytes = encryptor.TransformFinalBlock(
+            plaintextBytes,
+            0,
+            plaintextBytes.Length
+        );
 
         return $"{Convert.ToBase64String(aes.IV)}:{Convert.ToBase64String(ciphertextBytes)}";
     }
@@ -49,7 +54,11 @@ public class EncryptionService : IEncryptionService
         aes.IV = iv;
 
         using var decryptor = aes.CreateDecryptor();
-        var plaintextBytes = decryptor.TransformFinalBlock(ciphertextBytes, 0, ciphertextBytes.Length);
+        var plaintextBytes = decryptor.TransformFinalBlock(
+            ciphertextBytes,
+            0,
+            ciphertextBytes.Length
+        );
         return Encoding.UTF8.GetString(plaintextBytes);
     }
 }

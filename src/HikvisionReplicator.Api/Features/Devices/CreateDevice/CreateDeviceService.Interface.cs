@@ -9,7 +9,8 @@ public record CreateDeviceRequest(
     string? IpAddress,
     int? HttpPort,
     string? Username,
-    string? Password);
+    string? Password
+);
 
 public record DeviceResponse(
     int Id,
@@ -18,13 +19,25 @@ public record DeviceResponse(
     int HttpPort,
     string Username,
     DateTime CreatedAt,
-    DateTime UpdatedAt)
+    DateTime UpdatedAt
+)
 {
     public static DeviceResponse FromEntity(Device d) =>
-        new(d.Id, d.Name, d.IpAddress.Value, d.HttpPort.Value, d.Username, d.CreatedAt, d.UpdatedAt);
+        new(
+            d.Id,
+            d.Name,
+            d.IpAddress.Value,
+            d.HttpPort.Value,
+            d.Username,
+            d.CreatedAt,
+            d.UpdatedAt
+        );
 }
 
 public interface ICreateDeviceService
 {
-    Task<OneOf<DeviceResponse, ValidationError, ConflictError>> ExecuteAsync(CreateDeviceRequest request, CancellationToken cancellationToken);
+    Task<OneOf<DeviceResponse, ValidationError, ConflictError>> ExecuteAsync(
+        CreateDeviceRequest request,
+        CancellationToken cancellationToken
+    );
 }

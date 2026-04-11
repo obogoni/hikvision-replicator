@@ -23,8 +23,8 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
         string ip = "192.168.1.10",
         int port = 80,
         string username = "admin",
-        string password = "secret") =>
-        new(name, ip, port, username, password);
+        string password = "secret"
+    ) => new(name, ip, port, username, password);
 
     // ─── US1: Register a Device ───────────────────────────────────────────
 
@@ -50,7 +50,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     public async Task Post_DuplicateIpAndPort_Returns409()
     {
         await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.1.11", port: 81));
-        var response = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.1.11", port: 81));
+        var response = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.1.11", port: 81)
+        );
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -120,7 +123,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task GetById_ExistingDevice_Returns200WithCorrectData()
     {
-        var created = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.3.1", port: 80));
+        var created = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.3.1", port: 80)
+        );
         var device = await created.Content.ReadFromJsonAsync<DeviceResponse>();
 
         var response = await _client.GetAsync($"/api/devices/{device!.Id}");
@@ -145,7 +151,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task Put_PartialUpdate_OnlyUpdatesProvidedFields()
     {
-        var created = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.4.1", port: 80));
+        var created = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.4.1", port: 80)
+        );
         var device = await created.Content.ReadFromJsonAsync<DeviceResponse>();
 
         var update = new UpdateDeviceRequest("Updated Name", null, null, null, null);
@@ -160,7 +169,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task Put_OmittedPassword_RetainsExistingCredential()
     {
-        var created = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.4.2", port: 80));
+        var created = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.4.2", port: 80)
+        );
         var device = await created.Content.ReadFromJsonAsync<DeviceResponse>();
 
         var update = new UpdateDeviceRequest("New Name", null, null, null, null);
@@ -175,7 +187,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     public async Task Put_ConflictingIpAndPort_Returns409()
     {
         await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.5.1", port: 80));
-        var created2 = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.5.2", port: 80));
+        var created2 = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.5.2", port: 80)
+        );
         var device2 = await created2.Content.ReadFromJsonAsync<DeviceResponse>();
 
         var update = new UpdateDeviceRequest(null, "192.168.5.1", 80, null, null);
@@ -187,7 +202,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task Put_InvalidFieldValues_Returns400()
     {
-        var created = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.6.1", port: 80));
+        var created = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.6.1", port: 80)
+        );
         var device = await created.Content.ReadFromJsonAsync<DeviceResponse>();
 
         var update = new UpdateDeviceRequest(null, "not-an-ip", null, null, null);
@@ -210,7 +228,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task Delete_ExistingDevice_Returns204()
     {
-        var created = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.7.1", port: 80));
+        var created = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.7.1", port: 80)
+        );
         var device = await created.Content.ReadFromJsonAsync<DeviceResponse>();
 
         var response = await _client.DeleteAsync($"/api/devices/{device!.Id}");
@@ -221,7 +242,10 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task Delete_ThenGet_Returns404()
     {
-        var created = await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.8.1", port: 80));
+        var created = await _client.PostAsJsonAsync(
+            "/api/devices",
+            ValidCreate(ip: "192.168.8.1", port: 80)
+        );
         var device = await created.Content.ReadFromJsonAsync<DeviceResponse>();
 
         await _client.DeleteAsync($"/api/devices/{device!.Id}");

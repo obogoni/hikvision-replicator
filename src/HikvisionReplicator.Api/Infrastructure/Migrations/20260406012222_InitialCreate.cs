@@ -15,7 +15,8 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                 name: "Devices",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                    Id = table
+                        .Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
                     IpAddress = table.Column<string>(type: "TEXT", nullable: false),
@@ -23,25 +24,26 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                     Username = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
                     EncryptedPassword = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Devices", x => x.Id);
-                });
+                }
+            );
 
             migrationBuilder.CreateIndex(
                 name: "IX_Devices_IpAddress_HttpPort",
                 table: "Devices",
                 columns: new[] { "IpAddress", "HttpPort" },
-                unique: true);
+                unique: true
+            );
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "Devices");
+            migrationBuilder.DropTable(name: "Devices");
         }
     }
 }

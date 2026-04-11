@@ -9,6 +9,7 @@ public sealed class Port : ValueObject
     public int Value { get; }
 
     private Port(int value) => Value = value;
+
     private Port() { } // for EF Core
 
     public static OneOf<Port, ValidationError> Create(int? value)

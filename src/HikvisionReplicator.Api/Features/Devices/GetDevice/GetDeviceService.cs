@@ -6,7 +6,10 @@ namespace HikvisionReplicator.Api.Features.Devices.GetDevice;
 
 public class GetDeviceService(IRepository<Device> repo) : IGetDeviceService
 {
-    public async Task<OneOf<DeviceResponse, NotFoundError>> ExecuteAsync(int id, CancellationToken cancellationToken)
+    public async Task<OneOf<DeviceResponse, NotFoundError>> ExecuteAsync(
+        int id,
+        CancellationToken cancellationToken
+    )
     {
         var device = await repo.GetByIdAsync(id, cancellationToken);
         if (device is null)

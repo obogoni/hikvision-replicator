@@ -12,14 +12,18 @@ public static class CreateDeviceServiceEndpoint
 
     public static WebApplication MapCreateDevice(this WebApplication app)
     {
-        app.MapPost("/api/devices", async (CreateDeviceRequest req, ICreateDeviceService svc, CancellationToken ct) =>
-        {
-            var result = await svc.ExecuteAsync(req, ct);
-            return result.Match(
-                response => Results.Created($"/api/devices/{response.Id}", response),
-                validationError => validationError.ToMinimalApiResult(),
-                conflictError => conflictError.ToMinimalApiResult());
-        });
+        app.MapPost(
+            "/api/devices",
+            async (CreateDeviceRequest req, ICreateDeviceService svc, CancellationToken ct) =>
+            {
+                var result = await svc.ExecuteAsync(req, ct);
+                return result.Match(
+                    response => Results.Created($"/api/devices/{response.Id}", response),
+                    validationError => validationError.ToMinimalApiResult(),
+                    conflictError => conflictError.ToMinimalApiResult()
+                );
+            }
+        );
         return app;
     }
 }

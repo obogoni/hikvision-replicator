@@ -17,19 +17,22 @@ public class DeviceConfiguration : IEntityTypeConfiguration<Device>
         entity.Property(d => d.CreatedAt).IsRequired();
         entity.Property(d => d.UpdatedAt).IsRequired();
 
-        entity.Property(d => d.IpAddress)
+        entity
+            .Property(d => d.IpAddress)
             .IsRequired()
             .HasConversion(
                 new ValueConverter<IpAddress, string>(
                     ip => ip.Value,
-                    str => IpAddress.FromPersistence(str)));
+                    str => IpAddress.FromPersistence(str)
+                )
+            );
 
-        entity.Property(d => d.HttpPort)
+        entity
+            .Property(d => d.HttpPort)
             .IsRequired()
             .HasConversion(
-                new ValueConverter<Port, int>(
-                    port => port.Value,
-                    val => Port.FromPersistence(val)));
+                new ValueConverter<Port, int>(port => port.Value, val => Port.FromPersistence(val))
+            );
 
         entity.HasIndex(d => new { d.IpAddress, d.HttpPort }).IsUnique();
     }

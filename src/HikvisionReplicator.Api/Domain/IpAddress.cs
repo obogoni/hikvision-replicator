@@ -9,6 +9,7 @@ public sealed class IpAddress : ValueObject
     public string Value { get; }
 
     private IpAddress(string value) => Value = value;
+
     private IpAddress() => Value = string.Empty; // for EF Core
 
     public static OneOf<IpAddress, ValidationError> Create(string? value)

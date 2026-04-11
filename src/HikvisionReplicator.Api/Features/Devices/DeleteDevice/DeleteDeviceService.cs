@@ -6,7 +6,10 @@ namespace HikvisionReplicator.Api.Features.Devices.DeleteDevice;
 
 public class DeleteDeviceService(IRepository<Device> repo) : IDeleteDeviceService
 {
-    public async Task<OneOf<Success, NotFoundError>> ExecuteAsync(int id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFoundError>> ExecuteAsync(
+        int id,
+        CancellationToken cancellationToken
+    )
     {
         var device = await repo.GetByIdAsync(id, cancellationToken);
         if (device is null)

@@ -22,7 +22,8 @@ public class Device : IAggregateRoot
         Port httpPort,
         string username,
         string encryptedPassword,
-        DateTime now)
+        DateTime now
+    )
     {
         Name = name;
         IpAddress = ipAddress;
@@ -39,7 +40,8 @@ public class Device : IAggregateRoot
         int? httpPort,
         string? username,
         string encryptedPassword,
-        DateTime now)
+        DateTime now
+    )
     {
         if (string.IsNullOrWhiteSpace(name))
             return new ValidationError(Errors.NameField, Errors.NameRequired);
@@ -67,7 +69,8 @@ public class Device : IAggregateRoot
         string? ipAddress,
         int? httpPort,
         string? username,
-        string? encryptedPassword)
+        string? encryptedPassword
+    )
     {
         if (name is not null)
         {
@@ -103,11 +106,16 @@ public class Device : IAggregateRoot
                 return new ValidationError(Errors.UsernameField, Errors.UsernameTooLong);
         }
 
-        if (name is not null) Name = name;
-        if (newIp is not null) IpAddress = newIp;
-        if (newPort is not null) HttpPort = newPort;
-        if (username is not null) Username = username;
-        if (encryptedPassword is not null) EncryptedPassword = encryptedPassword;
+        if (name is not null)
+            Name = name;
+        if (newIp is not null)
+            IpAddress = newIp;
+        if (newPort is not null)
+            HttpPort = newPort;
+        if (username is not null)
+            Username = username;
+        if (encryptedPassword is not null)
+            EncryptedPassword = encryptedPassword;
         UpdatedAt = DateTime.UtcNow;
 
         return new Success();
