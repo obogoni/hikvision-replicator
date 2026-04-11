@@ -13,23 +13,24 @@ public static class UpdateDeviceServiceEndpoint
     public static WebApplication MapUpdateDevice(this WebApplication app)
     {
         app.MapPut(
-            "/api/devices/{id:int}",
-            async (
-                int id,
-                UpdateDeviceRequest req,
-                IUpdateDeviceService svc,
-                CancellationToken ct
-            ) =>
-            {
-                var result = await svc.ExecuteAsync(id, req, ct);
-                return result.Match(
-                    response => Results.Ok(response),
-                    validationError => validationError.ToMinimalApiResult(),
-                    notFoundError => notFoundError.ToMinimalApiResult(),
-                    conflictError => conflictError.ToMinimalApiResult()
-                );
-            }
-        );
+                "/api/devices/{id:int}",
+                async (
+                    int id,
+                    UpdateDeviceRequest req,
+                    IUpdateDeviceService svc,
+                    CancellationToken ct
+                ) =>
+                {
+                    var result = await svc.ExecuteAsync(id, req, ct);
+                    return result.Match(
+                        response => Results.Ok(response),
+                        validationError => validationError.ToMinimalApiResult(),
+                        notFoundError => notFoundError.ToMinimalApiResult(),
+                        conflictError => conflictError.ToMinimalApiResult()
+                    );
+                }
+            )
+            .WithTags("Devices");
         return app;
     }
 }

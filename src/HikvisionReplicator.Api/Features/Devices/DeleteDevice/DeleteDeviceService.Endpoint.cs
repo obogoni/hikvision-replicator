@@ -13,16 +13,17 @@ public static class DeleteDeviceServiceEndpoint
     public static WebApplication MapDeleteDevice(this WebApplication app)
     {
         app.MapDelete(
-            "/api/devices/{id:int}",
-            async (int id, IDeleteDeviceService svc, CancellationToken ct) =>
-            {
-                var result = await svc.ExecuteAsync(id, ct);
-                return result.Match(
-                    _ => Results.NoContent(),
-                    notFoundError => notFoundError.ToMinimalApiResult()
-                );
-            }
-        );
+                "/api/devices/{id:int}",
+                async (int id, IDeleteDeviceService svc, CancellationToken ct) =>
+                {
+                    var result = await svc.ExecuteAsync(id, ct);
+                    return result.Match(
+                        _ => Results.NoContent(),
+                        notFoundError => notFoundError.ToMinimalApiResult()
+                    );
+                }
+            )
+            .WithTags("Devices");
         return app;
     }
 }

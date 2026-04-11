@@ -11,10 +11,11 @@ public static class GetDevicesServiceEndpoint
     public static WebApplication MapGetDevices(this WebApplication app)
     {
         app.MapGet(
-            "/api/devices",
-            async (IGetDevicesService svc, CancellationToken ct) =>
-                Results.Ok(await svc.ExecuteAsync(ct))
-        );
+                "/api/devices",
+                async (IGetDevicesService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ExecuteAsync(ct))
+            )
+            .WithTags("Devices");
         return app;
     }
 }
