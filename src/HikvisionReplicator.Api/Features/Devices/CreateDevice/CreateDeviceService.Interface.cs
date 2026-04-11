@@ -26,5 +26,5 @@ public record DeviceResponse(
 
 public interface ICreateDeviceService
 {
-    Task<OneOf<DeviceResponse, ValidationError, ConflictError>> ExecuteAsync(CreateDeviceRequest request);
+    Task<OneOf<DeviceResponse, ValidationError, ConflictError>> ExecuteAsync(CreateDeviceRequest request, CancellationToken cancellationToken);
 }

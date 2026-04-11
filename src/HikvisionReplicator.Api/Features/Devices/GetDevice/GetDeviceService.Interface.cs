@@ -19,5 +19,5 @@ public record DeviceResponse(
 
 public interface IGetDeviceService
 {
-    Task<OneOf<DeviceResponse, NotFoundError>> ExecuteAsync(int id);
+    Task<OneOf<DeviceResponse, NotFoundError>> ExecuteAsync(int id, CancellationToken cancellationToken);
 }

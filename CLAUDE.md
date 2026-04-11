@@ -137,6 +137,33 @@ Features/Devices/
 
 ---
 
+## CancellationToken
+
+Every `ExecuteAsync` method on a service interface must accept `CancellationToken cancellationToken` (required — no default) as its last parameter, and pass it to every async operation (repository calls, external I/O, etc.).
+
+```csharp
+// interface — required, no default
+Task<OneOf<DeviceResponse, NotFoundError>> ExecuteAsync(int id, CancellationToken cancellationToken);
+
+// implementation
+public async Task<OneOf<DeviceResponse, NotFoundError>> ExecuteAsync(int id, CancellationToken cancellationToken)
+{
+    var device = await repo.GetByIdAsync(id, cancellationToken);
+    ...
+}
+```
+
+Endpoints declare `CancellationToken ct` in the lambda — ASP.NET Core injects it automatically from the `HttpContext`:
+
+```csharp
+app.MapGet("/api/devices/{id:int}", async (int id, IGetDeviceService svc, CancellationToken ct) =>
+{
+    var result = await svc.ExecuteAsync(id, ct);
+    ...
+```
+
+---
+
 ## Domain model
 
 Every domain entity must implement `IAggregateRoot` (`Shared/IAggregateRoot.cs`):

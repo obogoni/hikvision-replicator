@@ -12,9 +12,9 @@ public static class GetDeviceServiceEndpoint
 
     public static WebApplication MapGetDevice(this WebApplication app)
     {
-        app.MapGet("/api/devices/{id:int}", async (int id, IGetDeviceService svc) =>
+        app.MapGet("/api/devices/{id:int}", async (int id, IGetDeviceService svc, CancellationToken ct) =>
         {
-            var result = await svc.ExecuteAsync(id);
+            var result = await svc.ExecuteAsync(id, ct);
             return result.Match(
                 response => Results.Ok(response),
                 notFoundError => notFoundError.ToMinimalApiResult());

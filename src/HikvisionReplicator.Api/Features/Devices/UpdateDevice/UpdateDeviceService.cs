@@ -8,9 +8,9 @@ namespace HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 
 public class UpdateDeviceService(IRepository<Device> repo, IEncryptionService enc) : IUpdateDeviceService
 {
-    public async Task<OneOf<DeviceResponse, ValidationError, NotFoundError, ConflictError>> ExecuteAsync(int id, UpdateDeviceRequest req)
+    public async Task<OneOf<DeviceResponse, ValidationError, NotFoundError, ConflictError>> ExecuteAsync(int id, UpdateDeviceRequest req, CancellationToken cancellationToken)
     {
-        var device = await repo.GetByIdAsync(id);
+        var device = await repo.GetByIdAsync(id, cancellationToken);
         if (device is null)
             return new NotFoundError($"Device with id '{id}' was not found.");
 
@@ -27,13 +27,13 @@ public class UpdateDeviceService(IRepository<Device> repo, IEncryptionService en
 
         if (device.IpAddress.Value != originalIp || device.HttpPort.Value != originalPort)
         {
-            var conflict = await repo.AnyAsync(new DeviceByAddressSpec(device.IpAddress, device.HttpPort, id));
+            var conflict = await repo.AnyAsync(new DeviceByAddressSpec(device.IpAddress, device.HttpPort, id), cancellationToken);
             if (conflict)
                 return new ConflictError(
                     $"A device with address {device.IpAddress.Value}:{device.HttpPort.Value} is already registered.");
         }
 
-        await repo.UpdateAsync(device);
+        await repo.UpdateAsync(device, cancellationToken);
         return DeviceResponse.FromEntity(device);
     }
 }

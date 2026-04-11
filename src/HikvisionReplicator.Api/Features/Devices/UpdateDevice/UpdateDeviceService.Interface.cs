@@ -26,5 +26,5 @@ public record DeviceResponse(
 
 public interface IUpdateDeviceService
 {
-    Task<OneOf<DeviceResponse, ValidationError, NotFoundError, ConflictError>> ExecuteAsync(int id, UpdateDeviceRequest request);
+    Task<OneOf<DeviceResponse, ValidationError, NotFoundError, ConflictError>> ExecuteAsync(int id, UpdateDeviceRequest request, CancellationToken cancellationToken);
 }

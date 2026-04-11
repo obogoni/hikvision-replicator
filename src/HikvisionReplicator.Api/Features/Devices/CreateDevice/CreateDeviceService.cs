@@ -8,7 +8,7 @@ namespace HikvisionReplicator.Api.Features.Devices.CreateDevice;
 
 public class CreateDeviceService(IRepository<Device> repo, IEncryptionService enc) : ICreateDeviceService
 {
-    public async Task<OneOf<DeviceResponse, ValidationError, ConflictError>> ExecuteAsync(CreateDeviceRequest req)
+    public async Task<OneOf<DeviceResponse, ValidationError, ConflictError>> ExecuteAsync(CreateDeviceRequest req, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(req.Password))
             return new ValidationError("password", "Password is required.");
@@ -20,12 +20,12 @@ public class CreateDeviceService(IRepository<Device> repo, IEncryptionService en
         if (deviceResult.TryPickT1(out var validationError, out var device))
             return validationError;
 
-        var conflict = await repo.AnyAsync(new DeviceByAddressSpec(device.IpAddress, device.HttpPort));
+        var conflict = await repo.AnyAsync(new DeviceByAddressSpec(device.IpAddress, device.HttpPort), cancellationToken);
         if (conflict)
             return new ConflictError(
                 $"A device with address {req.IpAddress}:{req.HttpPort} is already registered.");
 
-        await repo.AddAsync(device);
+        await repo.AddAsync(device, cancellationToken);
 
         return DeviceResponse.FromEntity(device);
     }

@@ -17,5 +17,5 @@ public record DeviceResponse(
 
 public interface IGetDevicesService
 {
-    Task<List<DeviceResponse>> ExecuteAsync();
+    Task<List<DeviceResponse>> ExecuteAsync(CancellationToken cancellationToken);
 }
