@@ -1,15 +1,18 @@
+using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Domain.Specs;
 using HikvisionReplicator.Api.Infrastructure;
-using Microsoft.EntityFrameworkCore;
+using HikvisionReplicator.Api.Shared;
+using OneOf;
 
 namespace HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 
-public class UpdateDeviceService(AppDbContext db, IEncryptionService enc) : IUpdateDeviceService
+public class UpdateDeviceService(IRepository<Device> repo, IEncryptionService enc) : IUpdateDeviceService
 {
-    public async Task<IResult> ExecuteAsync(int id, UpdateDeviceRequest req)
+    public async Task<OneOf<DeviceResponse, ValidationError, NotFoundError, ConflictError>> ExecuteAsync(int id, UpdateDeviceRequest req)
     {
-        var device = await db.Devices.FindAsync(id);
+        var device = await repo.GetByIdAsync(id);
         if (device is null)
-            return Results.NotFound(ErrorResponse.NotFound($"Device with id '{id}' was not found."));
+            return new NotFoundError($"Device with id '{id}' was not found.");
 
         var originalIp = device.IpAddress.Value;
         var originalPort = device.HttpPort.Value;
@@ -19,20 +22,18 @@ public class UpdateDeviceService(AppDbContext db, IEncryptionService enc) : IUpd
             : enc.Encrypt(req.Password);
 
         var updateResult = device.Update(req.Name, req.IpAddress, req.HttpPort, req.Username, encryptedPassword);
-        if (updateResult.IsFailure)
-            return Results.BadRequest(ErrorResponse.Validation(
-                new Dictionary<string, string[]> { [updateResult.Error.Field] = [updateResult.Error.Message] }));
+        if (updateResult.TryPickT1(out var validationError, out _))
+            return validationError;
 
         if (device.IpAddress.Value != originalIp || device.HttpPort.Value != originalPort)
         {
-            var conflict = await db.Devices.AnyAsync(d =>
-                d.Id != id && d.IpAddress == device.IpAddress && d.HttpPort == device.HttpPort);
+            var conflict = await repo.AnyAsync(new DeviceByAddressSpec(device.IpAddress, device.HttpPort, id));
             if (conflict)
-                return Results.Conflict(ErrorResponse.Conflict(
-                    $"A device with address {device.IpAddress.Value}:{device.HttpPort.Value} is already registered."));
+                return new ConflictError(
+                    $"A device with address {device.IpAddress.Value}:{device.HttpPort.Value} is already registered.");
         }
 
-        await db.SaveChangesAsync();
-        return Results.Ok(DeviceResponse.FromEntity(device));
+        await repo.UpdateAsync(device);
+        return DeviceResponse.FromEntity(device);
     }
 }

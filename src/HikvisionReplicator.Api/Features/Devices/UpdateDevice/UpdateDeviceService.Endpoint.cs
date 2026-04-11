@@ -1,3 +1,5 @@
+using HikvisionReplicator.Api.Infrastructure;
+
 namespace HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 
 public static class UpdateDeviceServiceEndpoint
@@ -10,8 +12,15 @@ public static class UpdateDeviceServiceEndpoint
 
     public static WebApplication MapUpdateDevice(this WebApplication app)
     {
-        app.MapPut("/api/devices/{id:int}", (int id, UpdateDeviceRequest req, IUpdateDeviceService svc) =>
-            svc.ExecuteAsync(id, req));
+        app.MapPut("/api/devices/{id:int}", async (int id, UpdateDeviceRequest req, IUpdateDeviceService svc) =>
+        {
+            var result = await svc.ExecuteAsync(id, req);
+            return result.Match(
+                response => Results.Ok(response),
+                validationError => validationError.ToMinimalApiResult(),
+                notFoundError => notFoundError.ToMinimalApiResult(),
+                conflictError => conflictError.ToMinimalApiResult());
+        });
         return app;
     }
 }

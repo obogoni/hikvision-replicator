@@ -1,6 +1,9 @@
+using HikvisionReplicator.Api.Shared;
+using OneOf;
+
 namespace HikvisionReplicator.Api.Features.Devices.DeleteDevice;
 
 public interface IDeleteDeviceService
 {
-    Task<IResult> ExecuteAsync(int id);
+    Task<OneOf<Success, NotFoundError>> ExecuteAsync(int id);
 }

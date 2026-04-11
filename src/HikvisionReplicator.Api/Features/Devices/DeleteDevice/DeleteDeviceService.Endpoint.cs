@@ -1,3 +1,5 @@
+using HikvisionReplicator.Api.Infrastructure;
+
 namespace HikvisionReplicator.Api.Features.Devices.DeleteDevice;
 
 public static class DeleteDeviceServiceEndpoint
@@ -10,8 +12,13 @@ public static class DeleteDeviceServiceEndpoint
 
     public static WebApplication MapDeleteDevice(this WebApplication app)
     {
-        app.MapDelete("/api/devices/{id:int}", (int id, IDeleteDeviceService svc) =>
-            svc.ExecuteAsync(id));
+        app.MapDelete("/api/devices/{id:int}", async (int id, IDeleteDeviceService svc) =>
+        {
+            var result = await svc.ExecuteAsync(id);
+            return result.Match(
+                _ => Results.NoContent(),
+                notFoundError => notFoundError.ToMinimalApiResult());
+        });
         return app;
     }
 }

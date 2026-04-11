@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using HikvisionReplicator.Api.Features.Devices.CreateDevice;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 using HikvisionReplicator.Api.Infrastructure;
+using DeviceResponse = HikvisionReplicator.Api.Features.Devices.GetDevice.DeviceResponse;
 
 namespace HikvisionReplicator.Tests;
 

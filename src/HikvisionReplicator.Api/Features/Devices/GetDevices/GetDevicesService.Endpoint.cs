@@ -10,8 +10,8 @@ public static class GetDevicesServiceEndpoint
 
     public static WebApplication MapGetDevices(this WebApplication app)
     {
-        app.MapGet("/api/devices", (IGetDevicesService svc) =>
-            svc.ExecuteAsync());
+        app.MapGet("/api/devices", async (IGetDevicesService svc) =>
+            Results.Ok(await svc.ExecuteAsync()));
         return app;
     }
 }

@@ -1,4 +1,6 @@
 using CSharpFunctionalExtensions;
+using HikvisionReplicator.Api.Shared;
+using OneOf;
 
 namespace HikvisionReplicator.Api.Domain;
 
@@ -9,15 +11,15 @@ public sealed class IpAddress : ValueObject
     private IpAddress(string value) => Value = value;
     private IpAddress() => Value = string.Empty; // for EF Core
 
-    public static Result<IpAddress, ValidationError> Create(string? value)
+    public static OneOf<IpAddress, ValidationError> Create(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            return Result.Failure<IpAddress, ValidationError>(new(Errors.Field, Errors.Required));
+            return new ValidationError(Errors.Field, Errors.Required);
 
         if (!System.Net.IPAddress.TryParse(value, out _))
-            return Result.Failure<IpAddress, ValidationError>(new(Errors.Field, Errors.InvalidFormat));
+            return new ValidationError(Errors.Field, Errors.InvalidFormat);
 
-        return Result.Success<IpAddress, ValidationError>(new IpAddress(value));
+        return new IpAddress(value);
     }
 
     internal static IpAddress FromPersistence(string value) => new(value);

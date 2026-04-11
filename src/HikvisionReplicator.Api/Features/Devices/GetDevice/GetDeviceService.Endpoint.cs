@@ -1,3 +1,5 @@
+using HikvisionReplicator.Api.Infrastructure;
+
 namespace HikvisionReplicator.Api.Features.Devices.GetDevice;
 
 public static class GetDeviceServiceEndpoint
@@ -10,8 +12,13 @@ public static class GetDeviceServiceEndpoint
 
     public static WebApplication MapGetDevice(this WebApplication app)
     {
-        app.MapGet("/api/devices/{id:int}", (int id, IGetDeviceService svc) =>
-            svc.ExecuteAsync(id));
+        app.MapGet("/api/devices/{id:int}", async (int id, IGetDeviceService svc) =>
+        {
+            var result = await svc.ExecuteAsync(id);
+            return result.Match(
+                response => Results.Ok(response),
+                notFoundError => notFoundError.ToMinimalApiResult());
+        });
         return app;
     }
 }

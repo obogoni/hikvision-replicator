@@ -1,8 +1,9 @@
-using CSharpFunctionalExtensions;
+using HikvisionReplicator.Api.Shared;
+using OneOf;
 
 namespace HikvisionReplicator.Api.Domain;
 
-public class Device
+public class Device : IAggregateRoot
 {
     public int Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
@@ -32,7 +33,7 @@ public class Device
         UpdatedAt = now;
     }
 
-    public static Result<Device, ValidationError> Create(
+    public static OneOf<Device, ValidationError> Create(
         string? name,
         string? ipAddress,
         int? httpPort,
@@ -41,28 +42,27 @@ public class Device
         DateTime now)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return Result.Failure<Device, ValidationError>(new(Errors.NameField, Errors.NameRequired));
+            return new ValidationError(Errors.NameField, Errors.NameRequired);
         if (name.Length > 100)
-            return Result.Failure<Device, ValidationError>(new(Errors.NameField, Errors.NameTooLong));
+            return new ValidationError(Errors.NameField, Errors.NameTooLong);
 
         var ipResult = IpAddress.Create(ipAddress);
-        if (ipResult.IsFailure)
-            return Result.Failure<Device, ValidationError>(ipResult.Error);
+        if (ipResult.TryPickT1(out var ipErr, out var ip))
+            return ipErr;
 
         var portResult = Port.Create(httpPort);
-        if (portResult.IsFailure)
-            return Result.Failure<Device, ValidationError>(portResult.Error);
+        if (portResult.TryPickT1(out var portErr, out var port))
+            return portErr;
 
         if (string.IsNullOrWhiteSpace(username))
-            return Result.Failure<Device, ValidationError>(new(Errors.UsernameField, Errors.UsernameRequired));
+            return new ValidationError(Errors.UsernameField, Errors.UsernameRequired);
         if (username.Length > 100)
-            return Result.Failure<Device, ValidationError>(new(Errors.UsernameField, Errors.UsernameTooLong));
+            return new ValidationError(Errors.UsernameField, Errors.UsernameTooLong);
 
-        return Result.Success<Device, ValidationError>(
-            new Device(name, ipResult.Value, portResult.Value, username, encryptedPassword, now));
+        return new Device(name, ip, port, username, encryptedPassword, now);
     }
 
-    public UnitResult<ValidationError> Update(
+    public OneOf<Success, ValidationError> Update(
         string? name,
         string? ipAddress,
         int? httpPort,
@@ -72,35 +72,35 @@ public class Device
         if (name is not null)
         {
             if (name.Length == 0)
-                return UnitResult.Failure<ValidationError>(new(Errors.NameField, Errors.NameEmpty));
+                return new ValidationError(Errors.NameField, Errors.NameEmpty);
             if (name.Length > 100)
-                return UnitResult.Failure<ValidationError>(new(Errors.NameField, Errors.NameTooLong));
+                return new ValidationError(Errors.NameField, Errors.NameTooLong);
         }
 
         IpAddress? newIp = null;
         if (ipAddress is not null)
         {
             var ipResult = IpAddress.Create(ipAddress);
-            if (ipResult.IsFailure)
-                return UnitResult.Failure<ValidationError>(ipResult.Error);
-            newIp = ipResult.Value;
+            if (ipResult.TryPickT1(out var ipErr, out var ip))
+                return ipErr;
+            newIp = ip;
         }
 
         Port? newPort = null;
         if (httpPort is not null)
         {
             var portResult = Port.Create(httpPort);
-            if (portResult.IsFailure)
-                return UnitResult.Failure<ValidationError>(portResult.Error);
-            newPort = portResult.Value;
+            if (portResult.TryPickT1(out var portErr, out var port))
+                return portErr;
+            newPort = port;
         }
 
         if (username is not null)
         {
             if (username.Length == 0)
-                return UnitResult.Failure<ValidationError>(new(Errors.UsernameField, Errors.UsernameEmpty));
+                return new ValidationError(Errors.UsernameField, Errors.UsernameEmpty);
             if (username.Length > 100)
-                return UnitResult.Failure<ValidationError>(new(Errors.UsernameField, Errors.UsernameTooLong));
+                return new ValidationError(Errors.UsernameField, Errors.UsernameTooLong);
         }
 
         if (name is not null) Name = name;
@@ -110,7 +110,7 @@ public class Device
         if (encryptedPassword is not null) EncryptedPassword = encryptedPassword;
         UpdatedAt = DateTime.UtcNow;
 
-        return UnitResult.Success<ValidationError>();
+        return new Success();
     }
 
     public static class Errors

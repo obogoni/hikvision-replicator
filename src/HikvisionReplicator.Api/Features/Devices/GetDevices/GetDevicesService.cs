@@ -1,15 +1,13 @@
-using HikvisionReplicator.Api.Infrastructure;
-using Microsoft.EntityFrameworkCore;
+using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Shared;
 
 namespace HikvisionReplicator.Api.Features.Devices.GetDevices;
 
-public class GetDevicesService(AppDbContext db) : IGetDevicesService
+public class GetDevicesService(IRepository<Device> repo) : IGetDevicesService
 {
-    public async Task<IResult> ExecuteAsync()
+    public async Task<List<DeviceResponse>> ExecuteAsync()
     {
-        var devices = await db.Devices
-            .Select(d => DeviceResponse.FromEntity(d))
-            .ToListAsync();
-        return Results.Ok(devices);
+        var devices = await repo.ListAsync();
+        return devices.Select(DeviceResponse.FromEntity).ToList();
     }
 }

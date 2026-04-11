@@ -1,4 +1,6 @@
 using CSharpFunctionalExtensions;
+using HikvisionReplicator.Api.Shared;
+using OneOf;
 
 namespace HikvisionReplicator.Api.Domain;
 
@@ -9,15 +11,15 @@ public sealed class Port : ValueObject
     private Port(int value) => Value = value;
     private Port() { } // for EF Core
 
-    public static Result<Port, ValidationError> Create(int? value)
+    public static OneOf<Port, ValidationError> Create(int? value)
     {
         if (value is null)
-            return Result.Failure<Port, ValidationError>(new(Errors.Field, Errors.Required));
+            return new ValidationError(Errors.Field, Errors.Required);
 
         if (value < 1 || value > 65535)
-            return Result.Failure<Port, ValidationError>(new(Errors.Field, Errors.OutOfRange));
+            return new ValidationError(Errors.Field, Errors.OutOfRange);
 
-        return Result.Success<Port, ValidationError>(new Port(value.Value));
+        return new Port(value.Value);
     }
 
     internal static Port FromPersistence(int value) => new(value);

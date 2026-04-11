@@ -1,17 +1,18 @@
-using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Shared;
+using OneOf;
 
 namespace HikvisionReplicator.Api.Features.Devices.DeleteDevice;
 
-public class DeleteDeviceService(AppDbContext db) : IDeleteDeviceService
+public class DeleteDeviceService(IRepository<Device> repo) : IDeleteDeviceService
 {
-    public async Task<IResult> ExecuteAsync(int id)
+    public async Task<OneOf<Success, NotFoundError>> ExecuteAsync(int id)
     {
-        var device = await db.Devices.FindAsync(id);
+        var device = await repo.GetByIdAsync(id);
         if (device is null)
-            return Results.NotFound(ErrorResponse.NotFound($"Device with id '{id}' was not found."));
+            return new NotFoundError($"Device with id '{id}' was not found.");
 
-        db.Devices.Remove(device);
-        await db.SaveChangesAsync();
-        return Results.NoContent();
+        await repo.DeleteAsync(device);
+        return new Success();
     }
 }
