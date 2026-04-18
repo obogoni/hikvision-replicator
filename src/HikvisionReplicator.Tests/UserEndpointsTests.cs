@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using HikvisionReplicator.Api.Features.Users.CreateUser;
 using Microsoft.AspNetCore.Http;
+using UserResponse = HikvisionReplicator.Api.Features.Users.GetUser.UserResponse;
 
 namespace HikvisionReplicator.Tests;
 
@@ -115,5 +116,30 @@ public class UserEndpointsTests : IClassFixture<TestWebApplicationFactory>
 
         var body = await response.Content.ReadFromJsonAsync<UserResponse>();
         Assert.NotNull(body);
+    }
+
+    // ─── Get User ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Get_ExistingUser_Returns200WithBody()
+    {
+        var created = await _client.PostAsJsonAsync("/api/users", ValidCreate());
+        var id = created.Headers.Location!.ToString().Split('/').Last();
+
+        var response = await _client.GetAsync($"/api/users/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>();
+        Assert.NotNull(body);
+        Assert.Equal("John Doe", body!.Name);
+        Assert.Equal("1234", body.AccessCode);
+    }
+
+    [Fact]
+    public async Task Get_NonExistentUser_Returns404()
+    {
+        var response = await _client.GetAsync("/api/users/99999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
