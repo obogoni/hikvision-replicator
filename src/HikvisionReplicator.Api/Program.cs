@@ -5,9 +5,13 @@ using HikvisionReplicator.Api.Features.Devices.GetDevice;
 using HikvisionReplicator.Api.Features.Devices.GetDevices;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 using HikvisionReplicator.Api.Features.Users.CreateUser;
+using HikvisionReplicator.Api.Features.Users.GetUser;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +21,23 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 );
 
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+var otlpEndpoint = builder.Configuration["OpenTelemetry:OtlpEndpoint"];
+if (!string.IsNullOrEmpty(otlpEndpoint))
+{
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService(serviceName: "hikvision-replicator"))
+        .WithTracing(tracing => tracing
+            .AddAspNetCoreInstrumentation()
+            .AddEntityFrameworkCoreInstrumentation()
+            .AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+                options.Protocol = OtlpExportProtocol.Grpc;
+            }));
+}
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddScoped<IRepository<Device>, DeviceRepository>();
 builder.Services.AddScoped<IRepository<User>, UserRepository>();
@@ -27,9 +48,12 @@ builder
     .UseGetDevices()
     .UseUpdateDevice()
     .UseDeleteDevice()
-    .UseCreateUser();
+    .UseCreateUser()
+    .UseGetUser();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -48,7 +72,8 @@ app.MapCreateDevice()
     .MapGetDevice()
     .MapUpdateDevice()
     .MapDeleteDevice()
-    .MapCreateUser();
+    .MapCreateUser()
+    .MapGetUser();
 
 app.Run();
 
