@@ -1,11 +1,13 @@
+using Hangfire;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Domain.Specs;
+using HikvisionReplicator.Api.Features.Users.SyncUser;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
 namespace HikvisionReplicator.Api.Features.Users.UpsertUser;
 
-public class UpsertUserService(IRepository<User> repo) : IUpsertUserService
+public class UpsertUserService(IRepository<User> repo, IBackgroundJobClient jobClient) : IUpsertUserService
 {
     public async Task<OneOf<UpsertUserResult, ValidationError>> ExecuteAsync(
         UpsertUserRequest req,
@@ -29,6 +31,7 @@ public class UpsertUserService(IRepository<User> repo) : IUpsertUserService
                 return validationError;
 
             await repo.UpdateAsync(existing, cancellationToken);
+            jobClient.Enqueue<UserSyncJob>(j => j.Execute(existing.Id, false));
             return new UpsertUserResult(UserResponse.FromEntity(existing), WasCreated: false);
         }
 
@@ -37,6 +40,7 @@ public class UpsertUserService(IRepository<User> repo) : IUpsertUserService
             return createError;
 
         await repo.AddAsync(user, cancellationToken);
+        jobClient.Enqueue<UserSyncJob>(j => j.Execute(user.Id, true));
         return new UpsertUserResult(UserResponse.FromEntity(user), WasCreated: true);
     }
 }

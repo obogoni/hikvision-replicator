@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.Storage.SQLite;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Features.Devices.CreateDevice;
 using HikvisionReplicator.Api.Features.Devices.DeleteDevice;
@@ -51,6 +53,14 @@ builder
     .UseUpsertUser()
     .UseGetUser();
 
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSQLiteStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddHangfireServer();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -65,6 +75,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+    app.UseHangfireDashboard("/hangfire");
 }
 
 app.MapCreateDevice()
