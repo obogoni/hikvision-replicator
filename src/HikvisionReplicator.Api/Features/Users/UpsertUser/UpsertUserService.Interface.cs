@@ -2,7 +2,9 @@ using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
-namespace HikvisionReplicator.Api.Features.Users.GetUser;
+namespace HikvisionReplicator.Api.Features.Users.UpsertUser;
+
+public record UpsertUserRequest(string? ExternalRef, string? Name, string? AccessCode, byte[]? FacePic);
 
 public record UserResponse(
     int Id,
@@ -17,10 +19,12 @@ public record UserResponse(
         new(u.Id, u.ExternalRef, u.Name, u.AccessCode.Value, u.CreatedAt, u.UpdatedAt);
 }
 
-public interface IGetUserService
+public record UpsertUserResult(UserResponse User, bool WasCreated);
+
+public interface IUpsertUserService
 {
-    Task<OneOf<UserResponse, NotFoundError>> ExecuteAsync(
-        int id,
+    Task<OneOf<UpsertUserResult, ValidationError>> ExecuteAsync(
+        UpsertUserRequest request,
         CancellationToken cancellationToken
     );
 }

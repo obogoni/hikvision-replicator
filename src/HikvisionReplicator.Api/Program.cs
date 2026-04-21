@@ -4,7 +4,7 @@ using HikvisionReplicator.Api.Features.Devices.DeleteDevice;
 using HikvisionReplicator.Api.Features.Devices.GetDevice;
 using HikvisionReplicator.Api.Features.Devices.GetDevices;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
-using HikvisionReplicator.Api.Features.Users.CreateUser;
+using HikvisionReplicator.Api.Features.Users.UpsertUser;
 using HikvisionReplicator.Api.Features.Users.GetUser;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
@@ -48,7 +48,7 @@ builder
     .UseGetDevices()
     .UseUpdateDevice()
     .UseDeleteDevice()
-    .UseCreateUser()
+    .UseUpsertUser()
     .UseGetUser();
 
 var app = builder.Build();
@@ -72,7 +72,7 @@ app.MapCreateDevice()
     .MapGetDevice()
     .MapUpdateDevice()
     .MapDeleteDevice()
-    .MapCreateUser()
+    .MapUpsertUser()
     .MapGetUser();
 
 app.Run();
