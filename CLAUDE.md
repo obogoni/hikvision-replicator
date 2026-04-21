@@ -28,7 +28,36 @@ dotnet restore          # Restore NuGet packages
 dotnet build            # Build solution
 dotnet ef database update --project src/HikvisionReplicator.Data  # Apply migrations
 dotnet run --project src/HikvisionReplicator.Api                  # Run API (http://localhost:5000)
-dotnet test             # Run all tests
+dotnet test             # Run all tests (integration only — does NOT include E2E)
+dotnet test src/HikvisionReplicator.Tests       # Integration tests (xUnit, in-memory SQLite, no running API needed)
+dotnet test src/HikvisionReplicator.E2ETests    # E2E tests (NUnit + Playwright, requires running API — see below)
+```
+
+## E2E Tests
+
+Located in `src/HikvisionReplicator.E2ETests/`. Uses Playwright .NET (`IAPIRequestContext`) to hit a real running API as a blackbox — no `WebApplicationFactory`, no shared code with the API project.
+
+### One-time setup (per machine)
+
+```bash
+dotnet build src/HikvisionReplicator.E2ETests
+pwsh src/HikvisionReplicator.E2ETests/bin/Debug/net10.0/playwright.ps1 install
+```
+
+### Running
+
+```bash
+# Terminal 1 — start the API
+dotnet run --project src/HikvisionReplicator.Api
+
+# Terminal 2 — run E2E tests
+dotnet test src/HikvisionReplicator.E2ETests
+```
+
+Base URL defaults to `http://localhost:5000`. Override with the `E2E_BASE_URL` env var:
+
+```bash
+E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2ETests
 ```
 
 ## Code Style

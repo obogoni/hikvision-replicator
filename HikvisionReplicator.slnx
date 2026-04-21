@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="src/HikvisionReplicator.Api/HikvisionReplicator.Api.csproj" />
   <Project Path="src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj" />
+  <Project Path="src/HikvisionReplicator.E2ETests/HikvisionReplicator.E2ETests.csproj" />
 </Solution>
