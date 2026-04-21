@@ -70,7 +70,7 @@ public class DeviceEndpointsTests : PlaywrightTest
     }
 
     [Test]
-    public async Task Post_ValidDevice_Returns201WithExpectedBody()
+    public async Task New_device_is_created_and_returned()
     {
         var payload = ValidDevicePayload(name: "Camera Lobby", port: 8080);
 
@@ -90,7 +90,7 @@ public class DeviceEndpointsTests : PlaywrightTest
     }
 
     [Test]
-    public async Task GetById_AfterCreation_Returns200WithMatchingData()
+    public async Task Getting_existing_device_returns_correct_data()
     {
         var created = await CreateDeviceAsync(ValidDevicePayload(name: "Camera Entrance", port: 554));
 
@@ -109,7 +109,7 @@ public class DeviceEndpointsTests : PlaywrightTest
     }
 
     [Test]
-    public async Task GetById_NonExistentId_Returns404()
+    public async Task Getting_unknown_device_returns_not_found()
     {
         var response = await _api.GetAsync($"/api/devices/{int.MaxValue}");
 

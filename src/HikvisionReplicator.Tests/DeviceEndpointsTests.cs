@@ -29,7 +29,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     // ─── US1: Register a Device ───────────────────────────────────────────
 
     [Fact]
-    public async Task Post_ValidDevice_Returns201WithLocationAndBody()
+    public async Task New_device_is_created_and_returned()
     {
         var response = await _client.PostAsJsonAsync("/api/devices", ValidCreate());
 
@@ -47,7 +47,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Post_DuplicateIpAndPort_Returns409()
+    public async Task Device_with_duplicate_ip_and_port_is_rejected()
     {
         await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.1.11", port: 81));
         var response = await _client.PostAsJsonAsync(
@@ -59,7 +59,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Post_MissingRequiredField_Returns400WithFieldErrors()
+    public async Task Device_without_required_name_is_invalid()
     {
         var request = new CreateDeviceRequest(null, "192.168.1.12", 80, "admin", "secret");
         var response = await _client.PostAsJsonAsync("/api/devices", request);
@@ -71,7 +71,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Post_InvalidIpAddress_Returns400()
+    public async Task Device_with_invalid_ip_address_is_rejected()
     {
         var request = ValidCreate(ip: "not-an-ip");
         var response = await _client.PostAsJsonAsync("/api/devices", request);
@@ -82,7 +82,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Post_PortOutOfRange_Returns400()
+    public async Task Device_with_out_of_range_port_is_rejected()
     {
         var request = ValidCreate(port: 0);
         var response = await _client.PostAsJsonAsync("/api/devices", request);
@@ -95,7 +95,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     // ─── US2: Retrieve Device Information ────────────────────────────────
 
     [Fact]
-    public async Task GetAll_NoDevices_Returns200WithEmptyArray()
+    public async Task Listing_devices_with_none_registered_returns_empty()
     {
         var response = await _client.GetAsync("/api/devices");
 
@@ -107,7 +107,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task GetAll_WithDevices_ReturnsAllWithoutPasswords()
+    public async Task Listing_devices_returns_all_without_passwords()
     {
         await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.2.1", port: 80));
 
@@ -121,7 +121,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task GetById_ExistingDevice_Returns200WithCorrectData()
+    public async Task Getting_existing_device_returns_correct_data()
     {
         var created = await _client.PostAsJsonAsync(
             "/api/devices",
@@ -139,7 +139,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task GetById_UnknownId_Returns404()
+    public async Task Getting_unknown_device_returns_not_found()
     {
         var response = await _client.GetAsync("/api/devices/999999");
 
@@ -149,7 +149,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     // ─── US3: Update Device ───────────────────────────────────────────────
 
     [Fact]
-    public async Task Put_PartialUpdate_OnlyUpdatesProvidedFields()
+    public async Task Partial_update_only_changes_provided_fields()
     {
         var created = await _client.PostAsJsonAsync(
             "/api/devices",
@@ -167,7 +167,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Put_OmittedPassword_RetainsExistingCredential()
+    public async Task Update_without_password_retains_existing_credential()
     {
         var created = await _client.PostAsJsonAsync(
             "/api/devices",
@@ -184,7 +184,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Put_ConflictingIpAndPort_Returns409()
+    public async Task Update_to_conflicting_ip_and_port_is_rejected()
     {
         await _client.PostAsJsonAsync("/api/devices", ValidCreate(ip: "192.168.5.1", port: 80));
         var created2 = await _client.PostAsJsonAsync(
@@ -200,7 +200,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Put_InvalidFieldValues_Returns400()
+    public async Task Update_with_invalid_field_values_is_rejected()
     {
         var created = await _client.PostAsJsonAsync(
             "/api/devices",
@@ -215,7 +215,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Put_UnknownId_Returns404()
+    public async Task Updating_unknown_device_returns_not_found()
     {
         var update = new UpdateDeviceRequest("X", null, null, null, null);
         var response = await _client.PutAsJsonAsync("/api/devices/999999", update);
@@ -226,7 +226,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     // ─── US4: Delete Device ───────────────────────────────────────────────
 
     [Fact]
-    public async Task Delete_ExistingDevice_Returns204()
+    public async Task Existing_device_can_be_deleted()
     {
         var created = await _client.PostAsJsonAsync(
             "/api/devices",
@@ -240,7 +240,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Delete_ThenGet_Returns404()
+    public async Task Deleted_device_is_no_longer_retrievable()
     {
         var created = await _client.PostAsJsonAsync(
             "/api/devices",
@@ -255,7 +255,7 @@ public class DeviceEndpointsTests : IClassFixture<TestWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Delete_UnknownId_Returns404()
+    public async Task Deleting_unknown_device_returns_not_found()
     {
         var response = await _client.DeleteAsync("/api/devices/999999");
 

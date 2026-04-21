@@ -46,7 +46,7 @@ public class UserEndpointsTests : PlaywrightTest
     }
 
     [Test]
-    public async Task Post_ValidUser_Returns201WithExpectedBody()
+    public async Task New_user_is_created_and_returned()
     {
         var externalRef = $"e2e-{Guid.NewGuid()}";
         var payload = new
