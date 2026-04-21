@@ -94,3 +94,7 @@ Each feature lives under `Features/{Resource}/{Operation}/` — three files, no 
 ## EF Core
 
 `AppDbContext.OnModelCreating` calls `ApplyConfigurationsFromAssembly` — add `IEntityTypeConfiguration<T>` in `Infrastructure/` and it is picked up automatically.
+
+## Tests
+
+When writing any test, follow the naming convention in [`docs/test-patterns.md`](docs/test-patterns.md).
