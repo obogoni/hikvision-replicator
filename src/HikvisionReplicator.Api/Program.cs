@@ -43,6 +43,7 @@ if (!string.IsNullOrEmpty(otlpEndpoint))
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddScoped<IRepository<Device>, DeviceRepository>();
 builder.Services.AddScoped<IRepository<User>, UserRepository>();
+builder.Services.AddScoped<IRepository<Replication>, ReplicationRepository>();
 
 builder
     .UseCreateDevice()
