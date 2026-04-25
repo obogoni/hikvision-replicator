@@ -14,6 +14,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         entity.Property(u => u.ExternalRef).IsRequired().HasMaxLength(255);
         entity.HasIndex(u => u.ExternalRef).IsUnique();
         entity.Property(u => u.Name).IsRequired().HasMaxLength(100);
+        entity.Property(u => u.Status).IsRequired().HasConversion<string>();
         entity.Property(u => u.CreatedAt).IsRequired();
         entity.Property(u => u.UpdatedAt).IsRequired();
 

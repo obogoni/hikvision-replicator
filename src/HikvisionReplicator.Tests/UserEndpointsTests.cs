@@ -43,6 +43,7 @@ public class UserEndpointsTests : IClassFixture<TestWebApplicationFactory>
         Assert.Equal("1234", body.AccessCode);
         Assert.Equal(request.ExternalRef, body.ExternalRef);
         Assert.True(body.Id > 0);
+        Assert.Equal("PendingAdd", body.Status);
     }
 
     [Fact]
@@ -78,6 +79,7 @@ public class UserEndpointsTests : IClassFixture<TestWebApplicationFactory>
         var body = await response.Content.ReadFromJsonAsync<UpsertUserResponse>();
         Assert.Equal("Updated", body!.Name);
         Assert.Equal(externalRef, body.ExternalRef);
+        Assert.Equal("PendingAdd", body.Status);
     }
 
     [Fact]

@@ -11,6 +11,7 @@ internal sealed record UserResponse(
     [property: JsonPropertyName("externalRef")] string   ExternalRef,
     [property: JsonPropertyName("name")]        string   Name,
     [property: JsonPropertyName("accessCode")]  string   AccessCode,
+    [property: JsonPropertyName("status")]      string   Status,
     [property: JsonPropertyName("createdAt")]   DateTime CreatedAt,
     [property: JsonPropertyName("updatedAt")]   DateTime UpdatedAt
 );
@@ -68,6 +69,7 @@ public class UserEndpointsTests : PlaywrightTest
         Assert.That(user.Name,         Is.EqualTo("E2E User"));
         Assert.That(user.ExternalRef,  Is.EqualTo(externalRef));
         Assert.That(user.AccessCode,   Is.EqualTo("1234"));
+        Assert.That(user.Status,       Is.EqualTo("PendingAdd"));
         Assert.That(json,              Does.Not.Contain("facePic"));
     }
 }

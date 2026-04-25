@@ -12,6 +12,7 @@ public class User : IAggregateRoot
     public string Name { get; private set; } = string.Empty;
     public AccessCode AccessCode { get; private set; } = null!;
     public byte[]? FacePic { get; private set; }
+    public UserStatus Status { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -23,6 +24,7 @@ public class User : IAggregateRoot
         Name = name;
         AccessCode = accessCode;
         FacePic = facePic;
+        Status = UserStatus.PendingAdd;
         CreatedAt = now;
         UpdatedAt = now;
     }
@@ -96,6 +98,7 @@ public class User : IAggregateRoot
         if (changed)
             UpdatedAt = DateTime.UtcNow;
 
+        Status = UserStatus.PendingAdd;
         return new Success();
     }
 

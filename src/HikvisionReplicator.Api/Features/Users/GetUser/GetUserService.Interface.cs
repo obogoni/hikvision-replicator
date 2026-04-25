@@ -9,12 +9,13 @@ public record UserResponse(
     string ExternalRef,
     string Name,
     string AccessCode,
+    string Status,
     DateTime CreatedAt,
     DateTime UpdatedAt
 )
 {
     public static UserResponse FromEntity(User u) =>
-        new(u.Id, u.ExternalRef, u.Name, u.AccessCode.Value, u.CreatedAt, u.UpdatedAt);
+        new(u.Id, u.ExternalRef, u.Name, u.AccessCode.Value, u.Status.ToString(), u.CreatedAt, u.UpdatedAt);
 }
 
 public interface IGetUserService
