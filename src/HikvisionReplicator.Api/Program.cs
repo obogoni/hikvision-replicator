@@ -1,6 +1,7 @@
 using HikvisionReplicator.Api.Features.Devices.GetDevice;
 using HikvisionReplicator.Api.Features.Devices.ListDevices;
 using HikvisionReplicator.Api.Features.Devices.RegisterDevice;
+using HikvisionReplicator.Api.Features.Devices.RemoveDevice;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
@@ -32,6 +33,7 @@ builder.UseRegisterDevice();
 builder.UseGetDevice();
 builder.UseListDevices();
 builder.UseUpdateDevice();
+builder.UseRemoveDevice();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -81,6 +83,7 @@ app.MapRegisterDevice();
 app.MapGetDevice();
 app.MapListDevices();
 app.MapUpdateDevice();
+app.MapRemoveDevice();
 
 app.Run();
 

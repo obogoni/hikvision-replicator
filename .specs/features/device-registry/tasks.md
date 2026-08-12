@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Design**: `.specs/features/device-registry/design.md` (Approved · 2026-08-12)
 **Spec**: `.specs/features/device-registry/spec.md` (Confirmed · 2026-08-12)
-**Status**: In Progress · Phases 1–2 complete (T1–T9), 73 tests green
+**Status**: In Progress · Phases 1–3 complete (T1–T15), 136 tests green (69 unit / 67 integration)
 
 ---
 
@@ -443,6 +443,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T15: Implement the `RemoveDevice` slice
 
+**Status**: ✅ Complete
+
 **What**: Hard-delete a device and free its address.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/RemoveDevice/RemoveDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
 **Depends on**: T14
@@ -452,11 +454,11 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `DELETE /api/devices/{id}` returns `204`, and the device is then absent from the list and `404` by id (DEV-11)
-- [ ] An unknown id returns `404` (DEV-24)
-- [ ] Re-registering the removed device's address succeeds (DEV-25)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 4 new tests pass (no silent deletions)
+- [x] `DELETE /api/devices/{id}` returns `204`, and the device is then absent from the list and `404` by id (DEV-11)
+- [x] An unknown id returns `404` (DEV-24)
+- [x] Re-registering the removed device's address succeeds (DEV-25)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 4 new tests pass (5 new, 136 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(devices): add remove-device endpoint`
