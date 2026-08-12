@@ -632,6 +632,25 @@ T21
 **Tests**: integration · **Gate**: full
 **Commit**: `test(tracing): assert spans are emitted and carry no credentials`
 
+### T22: Guard the blank-password rule at registration
+
+**What**: One test closing DEV-02's "omitted **or blank**" clause for `password` on registration.
+**Where**: `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs`
+**Depends on**: T21
+**Reuses**: `ValidRegistration(password:)` helper and `AssertRejectedFieldAsync`, mirroring `Device_with_a_blank_name_is_invalid`
+**Requirement**: DEV-02
+
+**Status**: ✅ Complete — `see commit below`
+
+**Done when**:
+- [x] A whitespace-only `password` at registration is rejected with `400` naming `password`
+- [x] **Mutation-proof**: reproducing Verifier mutation M11 (`string.IsNullOrWhiteSpace(request.Password)` → `request.Password is null`) fails exactly this test — verified, observed 1 failure, reverted
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests` — 156 passed, 0 failed, 0 skipped
+- [x] Production code unchanged — the rule was already correct, only unguarded
+
+**Tests**: integration · **Gate**: full
+**Commit**: `test(devices): guard the blank-password rule at registration`
+
 ---
 
 ## Phase Execution Map

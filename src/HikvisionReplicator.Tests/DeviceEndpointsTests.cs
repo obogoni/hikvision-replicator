@@ -188,6 +188,14 @@ public class DeviceEndpointsTests(PostgresFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Device_with_a_blank_password_is_invalid()
+    {
+        var response = await RegisterAsync(ValidRegistration(password: "   "));
+
+        await AssertRejectedFieldAsync(response, "password");
+    }
+
+    [Fact]
     public async Task Device_without_a_face_capacity_is_invalid()
     {
         var response = await RegisterAsync(

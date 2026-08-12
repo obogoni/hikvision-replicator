@@ -3,6 +3,61 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 1,
-  "lessons": []
+  "next_id": 4,
+  "lessons": [
+    {
+      "id": "L-001",
+      "key": "surviving_mutant::assert the observable side effect itself not the di registration that is supposed to produce it",
+      "text": "Assert the observable side effect itself, not the DI registration that is supposed to produce it.",
+      "signal": "surviving_mutant",
+      "scope": "observability",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 1 mutation 7 — Program.cs:56-57 (.AddAspNetCoreInstrumentation / .AddEntityFrameworkCoreInstrumentation removed, suite green) (observability)"
+      ],
+      "created": "2026-08-12T16:24:04Z",
+      "last_seen": "2026-08-12T16:24:04Z"
+    },
+    {
+      "id": "L-002",
+      "key": "ac_gap::when an acceptance criterion names several channels assert the outcome in every named channel not only the convenient ones",
+      "text": "When an acceptance criterion names several channels, assert the outcome in every named channel, not only the convenient ones.",
+      "signal": "ac_gap",
+      "scope": "security",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 1 — DEV-07 trace-attribute clause had no file:line (security)"
+      ],
+      "created": "2026-08-12T16:24:04Z",
+      "last_seen": "2026-08-12T16:24:04Z"
+    },
+    {
+      "id": "L-003",
+      "key": "surviving_mutant::assert both the omitted case and the blank case for every required field on every route that accepts it",
+      "text": "Assert both the omitted case and the blank case for every required field, on every route that accepts it.",
+      "signal": "surviving_mutant",
+      "scope": "validation",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 2 mutation M11 — RegisterDeviceService.cs:23 (blank password accepted at registration, suite green) (validation)"
+      ],
+      "created": "2026-08-12T16:24:04Z",
+      "last_seen": "2026-08-12T16:24:04Z"
+    }
+  ]
 }
