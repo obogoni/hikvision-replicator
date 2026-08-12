@@ -552,6 +552,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T19: Add the E2E suite
 
+**Status**: ✅ Complete
+
 **What**: Playwright/NUnit tests covering the five routes against a live API.
 **Where**: `src/HikvisionReplicator.E2ETests/DeviceEndpointsTests.cs`
 **Depends on**: T18
@@ -561,12 +563,12 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: `playwright` · Skill: NONE
 
 **Done when**:
-- [ ] Register → get → list → update → remove runs end-to-end against a live API on the configured base URL
-- [ ] One error path per route is covered (duplicate address, unknown id)
-- [ ] `E2E_BASE_URL` override still works
-- [ ] Test names follow `docs/test-patterns.md`
-- [ ] Gate check passes: E2E gate — `dotnet test src/HikvisionReplicator.E2ETests` against a running API
-- [ ] Test count: ≥ 7 tests pass (no silent deletions)
+- [x] Register → get → list → update → remove runs end-to-end against a live API on the configured base URL
+- [x] One error path per route is covered (duplicate address, unknown id)
+- [x] `E2E_BASE_URL` override still works
+- [x] Test names follow `docs/test-patterns.md`
+- [x] Gate check passes: E2E gate — `dotnet test src/HikvisionReplicator.E2ETests` against a running API
+- [x] Test count: ≥ 7 tests pass (9 new)
 
 **Tests**: e2e · **Gate**: e2e
 **Commit**: `test(e2e): add device endpoint end-to-end suite`
