@@ -32,6 +32,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: validation.md iteration 2 mutation M11 — RegisterDeviceService.cs:23 (blank password accepted at registration, suite green) (validation)
 - last seen: 2026-08-12T16:24:04Z
 
+### L-004 — Assert, for every independently-updatable field, that changing only that field advances the update timestamp — a test on one representative field does not cover the others.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `domain` · harmful: 0
+- features: device-registry
+- evidence: validation.md iteration 3 mutations M3/M4 — Domain/Device.cs:171-175 (FaceCapacity) and :153-157 (HttpPort) changed-guard's changed=true removed independently, suite green on both (domain)
+- last seen: 2026-08-12T16:33:45Z
+
+### L-005 — Assert CancellationToken is honored on write paths with a pre-cancelled token expecting the operation to abort, not merely that the parameter is threaded through method signatures.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `repository` · harmful: 0
+- features: device-registry
+- evidence: validation.md iteration 3 mutation M2 — Infrastructure/DeviceRepository.cs:35 (SaveChangesAsync(cancellationToken) -> SaveChangesAsync()), suite green (repository)
+- last seen: 2026-08-12T16:33:45Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
