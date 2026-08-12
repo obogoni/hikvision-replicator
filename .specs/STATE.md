@@ -207,14 +207,13 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 
 ## Handoff
 
-- **Feature**: `device-registry` (Phase 1, item 1)
-- **Phase / Task**: Execute — all 20 tasks committed across 3 phase-batches. Independent Verifier dispatched; `validation.md` pending.
-- **Completed**: spec.md (confirmed), design.md (approved), tasks.md (all 20 ✅), 20 atomic commits `08a7dbb`…`783ae4f` on `feat/device-registry`. 160 tests: 69 unit / 82 integration (Testcontainers PostgreSQL) / 9 e2e. All 25 P1+P2 requirements implemented.
+- **Feature**: `device-registry` (Phase 1, item 1) — **complete**
+- **Phase / Task**: Execute finished. 24 tasks, 28 commits on `feat/device-registry`. Three Verifier iterations; every gap closed and mutation-verified.
+- **Completed**: spec.md (confirmed) · design.md (approved) · tasks.md (24 ✅) · validation.md (iteration 3) · 25 of 26 requirements verified, DEV-26 deferred by decision. **169 in-process tests** (81 unit / 88 integration, Testcontainers PostgreSQL) + 9 e2e. Build reports zero NuGet advisory warnings.
 - **In-progress** (file:line): none
-- **Next step**: Read the Verifier's `validation.md`. If PASS — decide on the open NuGet advisory, then merge `feat/device-registry` to `main` and start Phase 1 item 2 (`user-registry`). If FAIL — route ranked gaps to fix tasks (bounded to 3 fix→re-verify iterations).
-- **Blockers**: none for this feature.
-- **Open decisions**:
-  - **High-severity NuGet advisory** `NU1903` on `Microsoft.OpenApi` 2.0.0, transitive via `Microsoft.AspNetCore.OpenApi` 10.0.5; moderate `NU1902` on OpenTelemetry 1.15.2. Fixed versions exist (`Microsoft.AspNetCore.OpenApi` 10.0.11, OpenTelemetry 1.17.0). Deliberately untouched — outside every task's scope. Needs a decision: fold into a follow-up task or defer.
-  - Phase 2 still needs three numbers: device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
+- **Next step**: **Merge `feat/device-registry` into `main`** (not yet merged, never pushed), then specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
+- **Blockers**: none.
+- **Verification findings worth carrying forward**: all three gaps were *missing assertions over correct production code*, not bugs. Mutation testing found every one; the passing gate found none. Lessons L-001…L-005 in `lessons.json` are all `candidate` — promotion needs corroboration from a second feature, so `user-registry` is where they get tested.
+- **Open decisions**: Phase 2 still needs three numbers — device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
 - **Uncommitted files**: none
-- **Branch**: `feat/device-registry` (not merged, not pushed)
+- **Branch**: `feat/device-registry`
