@@ -600,6 +600,40 @@ T16 → T17 → T18 → T19 → T20
 
 ---
 
+## Phase 5: Verification Gaps (added 2026-08-12 after Verifier iteration 1)
+
+Routed from `validation.md` — a surviving mutant proved DEV-16's span-emission clause
+is unobservable by the current suite.
+
+```
+T21
+```
+
+### T21: Assert traces are actually emitted
+
+**Status**: ✅ Complete — `7411707`
+
+**What**: Prove spans are emitted, not merely that a `TracerProvider` is registered.
+**Where**: `src/HikvisionReplicator.Tests/TracingTests.cs` (new), `src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj` (test-only package)
+**Depends on**: T20
+**Reuses**: `TestWebApplicationFactory`, `PostgresFixture`, the `CredentialLeakageTests` sentinel pattern
+**Requirement**: DEV-16 (clause a), DEV-07 (trace-attribute clause)
+
+**Tools**: MCP: NONE · Skill: NONE
+
+**Done when**:
+- [x] A request through the factory produces a captured **ASP.NET Core HTTP server span** and at least one **child EF Core span**, with the child's `TraceId` matching the parent's and its `ParentSpanId` pointing at the HTTP span (DEV-16 clause a) — `TracingTests.cs:187-190` and `:198-206`
+- [x] **Mutation-proof**: removing `.AddAspNetCoreInstrumentation()` → 2 tests failed (`Handled_request_produces_a_span_naming_the_route_that_served_it`, `Database_work_is_traced_as_a_child_of_the_request_that_caused_it`); removing `.AddEntityFrameworkCoreInstrumentation()` → 3 tests failed (the child-span test plus both credential sweeps, whose liveness guard collapses). Both edits reverted; `git status` clean of `Program.cs`
+- [x] No captured span's attributes contain the sentinel password, its ciphertext, or the encryption key (DEV-07 trace-attribute clause) — `TracingTests.cs:216-222` and `:229-237`
+- [x] Production code is **unchanged** — capture via `services.ConfigureOpenTelemetryTracerProvider(...)` in the test host, not by altering `Program.cs`
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: 155 passed (151 + 4), 0 failed, 0 skipped
+
+**Tests**: integration · **Gate**: full
+**Commit**: `test(tracing): assert spans are emitted and carry no credentials`
+
+---
+
 ## Phase Execution Map
 
 ```
