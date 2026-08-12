@@ -392,6 +392,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T13: Implement the `ListDevices` slice
 
+**Status**: ✅ Complete
+
 **What**: List the whole catalogue — an infallible query returning the value directly (AD-003).
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/ListDevices/ListDevicesService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
 **Depends on**: T12
@@ -401,11 +403,11 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] The service returns `Task<IReadOnlyList<DeviceResponse>>` — no `OneOf`, since it cannot fail (AD-003)
-- [ ] An empty catalogue returns `200` with `[]`, never `404` (DEV-09)
-- [ ] Two registered devices both appear, each with the full field set and no password (DEV-08)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 3 new tests pass (no silent deletions)
+- [x] The service returns `Task<IReadOnlyList<DeviceResponse>>` — no `OneOf`, since it cannot fail (AD-003)
+- [x] An empty catalogue returns `200` with `[]`, never `404` (DEV-09)
+- [x] Two registered devices both appear, each with the full field set and no password (DEV-08)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 3 new tests pass (3 new, 117 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(devices): add list-devices endpoint`

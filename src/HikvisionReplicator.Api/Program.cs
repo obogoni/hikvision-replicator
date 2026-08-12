@@ -1,4 +1,5 @@
 using HikvisionReplicator.Api.Features.Devices.GetDevice;
+using HikvisionReplicator.Api.Features.Devices.ListDevices;
 using HikvisionReplicator.Api.Features.Devices.RegisterDevice;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
@@ -28,6 +29,7 @@ builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
 
 builder.UseRegisterDevice();
 builder.UseGetDevice();
+builder.UseListDevices();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -75,6 +77,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapRegisterDevice();
 app.MapGetDevice();
+app.MapListDevices();
 
 app.Run();
 
