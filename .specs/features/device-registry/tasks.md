@@ -312,6 +312,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T10: Implement the device repository and specifications
 
+**Status**: ✅ Complete — `c766a7e`
+
 **Status**: ✅ Complete
 
 **What**: `IDeviceRepository` + `DeviceRepository` translating PostgreSQL `23505` into `ConflictError`, plus the two address specifications.
@@ -337,6 +339,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T11: Implement the `RegisterDevice` slice
+
+**Status**: ✅ Complete — `caa92b3`
 
 **Status**: ✅ Complete
 
@@ -367,6 +371,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T12: Implement the `GetDevice` slice
 
+**Status**: ✅ Complete — `a8c2b5a`
+
 **Status**: ✅ Complete
 
 **What**: Retrieve one device by id.
@@ -392,6 +398,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T13: Implement the `ListDevices` slice
 
+**Status**: ✅ Complete — `4159138`
+
 **Status**: ✅ Complete
 
 **What**: List the whole catalogue — an infallible query returning the value directly (AD-003).
@@ -415,6 +423,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T14: Implement the `UpdateDevice` slice
+
+**Status**: ✅ Complete — `dc5d37e`
 
 **Status**: ✅ Complete
 
@@ -443,6 +453,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T15: Implement the `RemoveDevice` slice
 
+**Status**: ✅ Complete — `adb4b36`
+
 **Status**: ✅ Complete
 
 **What**: Hard-delete a device and free its address.
@@ -467,6 +479,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T16: Implement the global exception handler
 
+**Status**: ✅ Complete
+
 **What**: `GlobalExceptionHandler` mapping database-unreachable failures to `503` without leaking connection details, and everything else to `500`.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/GlobalExceptionHandler.cs`, `Program.cs` (register) + `src/HikvisionReplicator.Tests/ErrorHandlingTests.cs`
 **Depends on**: T15
@@ -476,11 +490,11 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] A request made while PostgreSQL is unreachable returns `503` as an RFC 7807 problem body (DEV-14) — provoked by pausing or stopping the container, or pointing the factory at a dead port
-- [ ] The response contains **no** stack trace, host, port, database name, username, or connection string (DEV-14) — asserted against the full serialized body
-- [ ] Non-database exceptions still map to `500` with a problem body
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 3 tests pass (no silent deletions)
+- [x] A request made while PostgreSQL is unreachable returns `503` as an RFC 7807 problem body (DEV-14) — provoked by pausing or stopping the container, or pointing the factory at a dead port
+- [x] The response contains **no** stack trace, host, port, database name, username, or connection string (DEV-14) — asserted against the full serialized body
+- [x] Non-database exceptions still map to `500` with a problem body
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 3 tests pass (3 new, 139 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(infra): map database failures to 503 problem responses`

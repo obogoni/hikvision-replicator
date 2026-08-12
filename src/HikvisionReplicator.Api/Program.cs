@@ -38,6 +38,10 @@ builder.UseRemoveDevice();
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 
+// Database failures become 503 and everything else 500, always as a problem body
+// and never carrying the exception itself (DEV-14).
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 // Tracing is exported only when an endpoint is configured (DEV-16). EF instrumentation
 // is left at its defaults so SQL text — and therefore parameters — is never captured,
 // and sensitive data logging is never enabled (DEV-07).
@@ -68,6 +72,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 }
+
+app.UseExceptionHandler();
 
 // Gives an RFC 7807 body to framework-generated bodiless failures — a malformed JSON
 // body is answered as a 400 problem, never an empty response or a 500.
