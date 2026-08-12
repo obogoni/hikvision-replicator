@@ -367,6 +367,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T12: Implement the `GetDevice` slice
 
+**Status**: ✅ Complete
+
 **What**: Retrieve one device by id.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/GetDevice/GetDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
 **Depends on**: T11
@@ -376,12 +378,12 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `GET /api/devices/{id}` returns `200` with the device for a known id (DEV-10)
-- [ ] An unknown id returns `404` with an RFC 7807 problem body (DEV-10)
-- [ ] Following the `Location` header from T11 returns the same device, with no password field
-- [ ] A never-used id and a deleted id are indistinguishable — both `404` (edge case; deleted-id half re-asserted in T15)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 4 new tests pass (no silent deletions)
+- [x] `GET /api/devices/{id}` returns `200` with the device for a known id (DEV-10)
+- [x] An unknown id returns `404` with an RFC 7807 problem body (DEV-10)
+- [x] Following the `Location` header from T11 returns the same device, with no password field
+- [x] A never-used id and a deleted id are indistinguishable — both `404` (edge case; deleted-id half re-asserted in T15)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 4 new tests pass (4 new, 114 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(devices): add get-device-by-id endpoint`
