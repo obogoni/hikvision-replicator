@@ -201,34 +201,34 @@ Full sweep (Large scope) — every dimension resolves to a requirement or an exp
 
 | Requirement ID | Story | Tasks | Status |
 |---|---|---|---|
-| DEV-01 | P1: Register | T11, T19 | ✅ Implemented |
-| DEV-02 | P1: Register | T4, T11 | ✅ Implemented |
-| DEV-03 | P1: Register | T4, T11 | ✅ Implemented |
-| DEV-04 | P1: Register | T3, T11 | ✅ Implemented |
-| DEV-05 | P1: Register | T6, T10, T11 | ✅ Implemented |
-| DEV-06 | P1: Register | T6, T10, T11 | ✅ Implemented |
-| DEV-07 | P1: Register | T7, T8, T11, T18 | ✅ Implemented |
-| DEV-08 | P1: Inspect | T13, T19 | ✅ Implemented |
-| DEV-09 | P1: Inspect | T13 | ✅ Implemented |
-| DEV-10 | P1: Inspect | T12, T19 | ✅ Implemented |
-| DEV-12 | P1: Foundation | T8, T9 | ✅ Implemented |
-| DEV-13 | P1: Foundation | T9 | ✅ Implemented |
-| DEV-14 | P1: Foundation | T16 | ✅ Implemented |
-| DEV-15 | P1: Foundation | T7, T17 | ✅ Implemented |
-| DEV-16 | P1: Foundation | T8, T17 | ✅ Implemented |
-| DEV-17 | P1: Foundation | T8, T17 | ✅ Implemented |
-| DEV-18 | P2: Amend | T5, T14, T19 | ✅ Implemented |
-| DEV-19 | P2: Amend | T5, T14 | ✅ Implemented |
-| DEV-20 | P2: Amend | T10, T14 | ✅ Implemented |
-| DEV-21 | P2: Amend | T14 | ✅ Implemented |
-| DEV-22 | P2: Amend | T14 | ✅ Implemented |
-| DEV-23 | P2: Amend | T5, T14 | ✅ Implemented |
-| DEV-11 | P2: Remove | T15, T19 | ✅ Implemented |
-| DEV-24 | P2: Remove | T15 | ✅ Implemented |
-| DEV-25 | P2: Remove | T15 | ✅ Implemented |
+| DEV-01 | P1: Register | T11, T19 | ✅ Verified |
+| DEV-02 | P1: Register | T4, T11 | ✅ Verified |
+| DEV-03 | P1: Register | T4, T11 | ✅ Verified |
+| DEV-04 | P1: Register | T3, T11 | ✅ Verified |
+| DEV-05 | P1: Register | T6, T10, T11 | ✅ Verified |
+| DEV-06 | P1: Register | T6, T10, T11 | ✅ Verified |
+| DEV-07 | P1: Register | T7, T8, T11, T18 | ✅ Verified |
+| DEV-08 | P1: Inspect | T13, T19 | ✅ Verified |
+| DEV-09 | P1: Inspect | T13 | ✅ Verified |
+| DEV-10 | P1: Inspect | T12, T19 | ✅ Verified |
+| DEV-12 | P1: Foundation | T8, T9 | ✅ Verified |
+| DEV-13 | P1: Foundation | T9 | ✅ Verified |
+| DEV-14 | P1: Foundation | T16 | ✅ Verified |
+| DEV-15 | P1: Foundation | T7, T17 | ✅ Verified |
+| DEV-16 | P1: Foundation | T8, T17 | ✅ Verified |
+| DEV-17 | P1: Foundation | T8, T17 | ✅ Verified |
+| DEV-18 | P2: Amend | T5, T14, T19 | ✅ Verified |
+| DEV-19 | P2: Amend | T5, T14 | ✅ Verified |
+| DEV-20 | P2: Amend | T10, T14 | ✅ Verified |
+| DEV-21 | P2: Amend | T14 | ✅ Verified |
+| DEV-22 | P2: Amend | T14 | ✅ Verified |
+| DEV-23 | P2: Amend | T5, T14 | ✅ Verified |
+| DEV-11 | P2: Remove | T15, T19 | ✅ Verified |
+| DEV-24 | P2: Remove | T15 | ✅ Verified |
+| DEV-25 | P2: Remove | T15 | ✅ Verified |
 | DEV-26 | P3: Paginate | — | ⏸ Deferred (P3, deliberately unscheduled) |
 
-**Coverage:** 26 total · 25 implemented across T3–T19 · DEV-26 deferred by decision. Independent verification pending — see `validation.md`.
+**Coverage:** 26 total · 25 verified against `validation.md` evidence and mutation-tested · DEV-26 deferred by decision. Three verifier iterations found three gaps (DEV-16, DEV-02, DEV-23); all closed.
 
 ---
 

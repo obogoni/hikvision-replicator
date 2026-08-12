@@ -651,6 +651,42 @@ T21
 **Tests**: integration · **Gate**: full
 **Commit**: `test(devices): guard the blank-password rule at registration`
 
+### T23: Prove every update field gates the timestamp
+
+**What**: Two theories covering all six updatable fields in both directions, plus a pre-cancelled-token test on the write path.
+**Where**: `src/HikvisionReplicator.Tests/Domain/DeviceUpdateTests.cs`, `src/HikvisionReplicator.Tests/DeviceRepositoryTests.cs`
+**Depends on**: T22
+**Requirement**: DEV-23, AD-007
+
+**Status**: ✅ Complete — `8bbd787`
+
+**Done when**:
+- [x] Changing any single field on its own advances `updatedAt` (6 cases)
+- [x] Re-supplying any single field with its current value leaves `updatedAt` alone (6 cases)
+- [x] A pre-cancelled token aborts the write and persists nothing
+- [x] **Mutation-verified**: breaking the FaceCapacity guard, the HttpPort guard, or dropping the token each fails exactly one test — observed, then reverted
+- [x] Gate: 169 passed, 0 failed, 0 skipped
+
+**Tests**: unit + integration · **Gate**: full
+**Commit**: `test(domain): prove every update field gates the timestamp and cancellation aborts`
+
+---
+
+### T24: Clear the NuGet security advisories
+
+**What**: Bump the packages carrying published advisories.
+**Where**: `src/HikvisionReplicator.Api/HikvisionReplicator.Api.csproj`, `src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj`
+**Depends on**: T23
+**Requirement**: security hygiene (raised during execution, not a spec AC)
+
+**Status**: ✅ Complete — `846a190`
+
+**Done when**:
+- [x] `Microsoft.AspNetCore.OpenApi` 10.0.5 → 10.0.11, clearing the high-severity `NU1903`
+- [x] OpenTelemetry 1.15.2 → 1.17.0 (EF instrumentation 1.17.0-beta.1, its only channel), clearing `NU1902`
+- [x] Build reports **zero** advisory warnings
+- [x] Suite green at 169; tracing tests re-checked as still mutation-sensitive after the SDK bump
+
 ---
 
 ## Phase Execution Map
