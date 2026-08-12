@@ -416,6 +416,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T14: Implement the `UpdateDevice` slice
 
+**Status**: ✅ Complete
+
 **What**: Partial update over `PUT`, including the self-address exemption and password-retention rule.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/UpdateDevice/UpdateDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
 **Depends on**: T13
@@ -425,14 +427,14 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Updating only `name` returns `200` and leaves address, username, and capacity untouched (DEV-18)
-- [ ] An invalid field returns `400` naming it, and a re-read shows **no partial change persisted** (DEV-19)
-- [ ] Moving onto another device's address returns `409`; re-submitting the device's **own** address succeeds (DEV-20)
-- [ ] Omitting `password` leaves the stored ciphertext byte-identical; supplying one replaces it (DEV-21, A-7)
-- [ ] An unknown id returns `404` (DEV-22)
-- [ ] A real change advances `updatedAt` and leaves `createdAt` fixed; an entirely empty body returns `200` with `updatedAt` **unadvanced** (DEV-23 + edge case)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 10 new tests pass (no silent deletions)
+- [x] Updating only `name` returns `200` and leaves address, username, and capacity untouched (DEV-18)
+- [x] An invalid field returns `400` naming it, and a re-read shows **no partial change persisted** (DEV-19)
+- [x] Moving onto another device's address returns `409`; re-submitting the device's **own** address succeeds (DEV-20)
+- [x] Omitting `password` leaves the stored ciphertext byte-identical; supplying one replaces it (DEV-21, A-7)
+- [x] An unknown id returns `404` (DEV-22)
+- [x] A real change advances `updatedAt` and leaves `createdAt` fixed; an entirely empty body returns `200` with `updatedAt` **unadvanced** (DEV-23 + edge case)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 10 new tests pass (14 new, 131 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(devices): add update-device endpoint`
