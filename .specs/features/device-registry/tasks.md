@@ -528,6 +528,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T18: Sweep for credential leakage
 
+**Status**: ✅ Complete
+
 **What**: A suite-wide assertion that no plaintext password reaches a response body or a log line.
 **Where**: `src/HikvisionReplicator.Tests/CredentialLeakageTests.cs`
 **Depends on**: T17
@@ -537,11 +539,11 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Every device route is exercised with a distinctive sentinel password, and no response body across them contains it or its ciphertext (DEV-07)
-- [ ] No captured log line from any of those requests contains the sentinel, the ciphertext, or the encryption key (DEV-07, addresses the design's "no test asserts logs are password-free" risk)
-- [ ] The persisted `EncryptedPassword` column is asserted to differ from the sentinel and to decrypt back to it
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 4 tests pass (no silent deletions)
+- [x] Every device route is exercised with a distinctive sentinel password, and no response body across them contains it or its ciphertext (DEV-07)
+- [x] No captured log line from any of those requests contains the sentinel, the ciphertext, or the encryption key (DEV-07, addresses the design's "no test asserts logs are password-free" risk)
+- [x] The persisted `EncryptedPassword` column is asserted to differ from the sentinel and to decrypt back to it
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 4 tests pass (4 new, 151 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `test(security): assert credentials never leak to responses or logs`
