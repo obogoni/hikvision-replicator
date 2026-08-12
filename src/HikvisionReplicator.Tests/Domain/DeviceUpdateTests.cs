@@ -137,6 +137,62 @@ public class DeviceUpdateTests
         Assert.Equal(Later, device.UpdatedAt);
     }
 
+    // Every field gates the update time independently, so proving one field
+    // says nothing about the other five. Both halves of each guard are
+    // covered: a real change must advance, an identical value must not.
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("ipAddress")]
+    [InlineData("httpPort")]
+    [InlineData("username")]
+    [InlineData("password")]
+    [InlineData("faceCapacity")]
+    public void Changing_any_single_field_on_its_own_advances_the_update_time(string field)
+    {
+        var device = Registered();
+
+        var result = device.Update(
+            field == "name" ? "Back Gate Reader" : null,
+            field == "ipAddress" ? "192.168.1.99" : null,
+            field == "httpPort" ? 8080 : null,
+            field == "username" ? "operator" : null,
+            field == "password" ? "IV2:cipher2" : null,
+            field == "faceCapacity" ? 50_000 : null,
+            Later
+        );
+
+        Assert.True(result.IsT0);
+        Assert.Equal(Later, device.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("ipAddress")]
+    [InlineData("httpPort")]
+    [InlineData("username")]
+    [InlineData("password")]
+    [InlineData("faceCapacity")]
+    public void Resupplying_a_field_with_its_current_value_leaves_the_update_time_alone(
+        string field
+    )
+    {
+        var device = Registered();
+
+        var result = device.Update(
+            field == "name" ? "Front Gate Reader" : null,
+            field == "ipAddress" ? "192.168.1.10" : null,
+            field == "httpPort" ? 80 : null,
+            field == "username" ? "admin" : null,
+            field == "password" ? "IV:cipher" : null,
+            field == "faceCapacity" ? 10_000 : null,
+            Later
+        );
+
+        Assert.True(result.IsT0);
+        Assert.Equal(CreatedOn, device.UpdatedAt);
+    }
+
     // ─── DEV-19: a rejected update persists no partial change ─────────────
 
     [Fact]

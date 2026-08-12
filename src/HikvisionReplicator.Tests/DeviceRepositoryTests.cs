@@ -80,6 +80,25 @@ public class DeviceRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
         Assert.Equal(1, await verification.Devices.CountAsync());
     }
 
+    // AD-007 requires cancellation to be end-to-end. Threading the token
+    // through a signature proves nothing — only aborting on a cancelled one does.
+
+    [Fact]
+    public async Task Registering_a_device_aborts_when_the_caller_has_already_cancelled()
+    {
+        await using var context = fixture.CreateDbContext();
+        var repository = new DeviceRepository(context);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => repository.AddIfAddressFreeAsync(NewDevice("192.168.1.10"), cancelled.Token)
+        );
+
+        await using var verification = fixture.CreateDbContext();
+        Assert.Equal(0, await verification.Devices.CountAsync());
+    }
+
     // ─── DEV-20: the update path ─────────────────────────────────────────
 
     [Fact]
