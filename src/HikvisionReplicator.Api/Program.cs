@@ -1,3 +1,4 @@
+using HikvisionReplicator.Api.Features.Devices.RegisterDevice;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,9 @@ builder
 
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+
+builder.UseRegisterDevice();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -57,11 +61,17 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
+// Gives an RFC 7807 body to framework-generated bodiless failures — a malformed JSON
+// body is answered as a 400 problem, never an empty response or a 500.
+app.UseStatusCodePages();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.MapRegisterDevice();
 
 app.Run();
 

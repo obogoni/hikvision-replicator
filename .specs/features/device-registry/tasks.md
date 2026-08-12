@@ -338,6 +338,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T11: Implement the `RegisterDevice` slice
 
+**Status**: ✅ Complete
+
 **What**: The three-file registration slice and its endpoint tests, including the concurrency and secrecy criteria.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/RegisterDevice/RegisterDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs`
 **Depends on**: T10
@@ -347,16 +349,16 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `POST /api/devices` returns `201` with a `Location` of `/api/devices/{id}` and the full response body (DEV-01)
-- [ ] Missing/blank/oversized/out-of-range fields each return `400` naming the offending field (DEV-02, DEV-03, DEV-04)
-- [ ] A duplicate address returns `409` and creates no second row (DEV-05)
-- [ ] **Concurrency test**: N simultaneous `POST`s of one address via `Task.WhenAll` yield exactly one `201`, N−1 `409`s, and zero `500`s (DEV-06)
-- [ ] **Normalization test**: registering `192.168.1.1` then `192.168.001.001` returns `409` (A-2 edge case)
-- [ ] The response body contains no password or ciphertext field, and the persisted column holds neither the plaintext nor an empty value (DEV-07)
-- [ ] Malformed JSON returns a `400` problem body, not `500` (edge case)
-- [ ] `DomainErrorExtensions.ToMinimalApiResult()` exists and the endpoint uses `.Match()` with descriptive parameter names (AD-003)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 16 tests pass (no silent deletions)
+- [x] `POST /api/devices` returns `201` with a `Location` of `/api/devices/{id}` and the full response body (DEV-01)
+- [x] Missing/blank/oversized/out-of-range fields each return `400` naming the offending field (DEV-02, DEV-03, DEV-04)
+- [x] A duplicate address returns `409` and creates no second row (DEV-05)
+- [x] **Concurrency test**: N simultaneous `POST`s of one address via `Task.WhenAll` yield exactly one `201`, N−1 `409`s, and zero `500`s (DEV-06)
+- [x] **Normalization test**: registering `192.168.1.1` then `192.168.001.001` returns `409` (A-2 edge case)
+- [x] The response body contains no password or ciphertext field, and the persisted column holds neither the plaintext nor an empty value (DEV-07)
+- [x] Malformed JSON returns a `400` problem body, not `500` (edge case) — needed `app.UseStatusCodePages()` so the framework's bodiless 400 gains an RFC 7807 body
+- [x] `DomainErrorExtensions.ToMinimalApiResult()` exists and the endpoint uses `.Match()` with descriptive parameter names (AD-003)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 16 tests pass (28 new, 110 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(devices): add device registration endpoint`
