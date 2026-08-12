@@ -1,5 +1,31 @@
 # Test Patterns
 
+## Choosing the test level
+
+Source: `.specs/STATE.md` — **AD-024** (active, 2026-08-12), which amends AD-019's
+"integration is the default level" clause.
+
+**The level is chosen by layer, not uniformly.**
+
+| Layer | Level | Where | Depth |
+|---|---|---|---|
+| Pure logic with no I/O — domain aggregates, value objects, `EncryptionService`, options validation | **unit** | `src/HikvisionReplicator.Tests/Domain/`, marked `[Trait("Category", "Unit")]` | All branches, 1:1 with the spec's acceptance criteria, every listed edge case |
+| Anything touching I/O or wiring — feature slices and their routes, repositories and specifications, startup behaviour, cross-cutting handlers | **integration** | `src/HikvisionReplicator.Tests/`, in-process through the HTTP surface against Testcontainers PostgreSQL | Every route: happy path, every listed edge case, every documented error path |
+| The HTTP surface out of process | **e2e** | `src/HikvisionReplicator.E2ETests/` | A thin confirmation of each route — one happy path and one error path. Not a coverage layer |
+
+Two rules keep the split honest:
+
+- The `[Trait("Category", "Unit")]` marker exists so the pure-logic tests run **without
+  Docker** — that is the fast feedback loop.
+- Unit tests **add depth; they never replace endpoint coverage.** Every route keeps its
+  acceptance-criterion coverage at the integration layer, so a branch can never be
+  unit-tested but unproven through the API.
+
+Why split at all: branch-level domain behaviour is only observable indirectly through
+HTTP. The two defects the rewrite fixed in `Device` — IP normalization and the
+`UpdatedAt` change-guard — are exactly that shape, and "no change means no touch" is not
+cleanly assertable through a round-trip.
+
 ## Naming Tests
 
 Source: [You are naming your tests wrong!](https://enterprisecraftsmanship.com/posts/you-naming-tests-wrong/)

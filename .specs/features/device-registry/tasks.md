@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Design**: `.specs/features/device-registry/design.md` (Approved · 2026-08-12)
 **Spec**: `.specs/features/device-registry/spec.md` (Confirmed · 2026-08-12)
-**Status**: In Progress · Phases 1–3 complete (T1–T15), 136 tests green (69 unit / 67 integration)
+**Status**: All phases complete (T1–T20) · 151 xUnit tests green (69 unit / 82 integration) + 9 E2E
 
 ---
 
@@ -577,6 +577,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T20: Refresh the project documentation
 
+**Status**: ✅ Complete
+
 **What**: Bring `CLAUDE.md`, `README.md`, and `.specs/ARCHITECTURE.md` in line with the rewritten solution.
 **Where**: `CLAUDE.md`, `README.md`, `docs/test-patterns.md`, `.specs/ARCHITECTURE.md`
 **Depends on**: T19
@@ -586,13 +588,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `CLAUDE.md` Commands section reflects PostgreSQL, the Docker prerequisite, and the real `dotnet ef --project src/HikvisionReplicator.Api` path — the stale `HikvisionReplicator.Data` line is gone
-- [ ] The stack line reads PostgreSQL, not SQLite; Hangfire is absent until Phase 2 reintroduces it
-- [ ] `README.md` documents `docker compose up -d` as a prerequisite for both running and testing
-- [ ] `docs/test-patterns.md` gains a **"Choosing the test level"** section stating AD-024 — unit for pure no-I/O logic under `Tests/Domain/` with `[Trait("Category","Unit")]`, integration through the HTTP surface for slices/repositories/startup, E2E as thin out-of-process confirmation — and `CLAUDE.md`'s Tests section links to it
-- [ ] `CLAUDE.md` records both gate commands: the Docker-free unit filter and the full integration run
-- [ ] `ARCHITECTURE.md` describes the rewritten solution, and its "Known Gaps" list drops the items this feature fixed
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx`
+- [x] `CLAUDE.md` Commands section reflects PostgreSQL, the Docker prerequisite, and the real `dotnet ef --project src/HikvisionReplicator.Api` path — the stale `HikvisionReplicator.Data` line is gone
+- [x] The stack line reads PostgreSQL, not SQLite; Hangfire is absent until Phase 2 reintroduces it
+- [x] `README.md` documents `docker compose up -d` as a prerequisite for both running and testing
+- [x] `docs/test-patterns.md` gains a **"Choosing the test level"** section stating AD-024 — unit for pure no-I/O logic under `Tests/Domain/` with `[Trait("Category","Unit")]`, integration through the HTTP surface for slices/repositories/startup, E2E as thin out-of-process confirmation — and `CLAUDE.md`'s Tests section links to it
+- [x] `CLAUDE.md` records both gate commands: the Docker-free unit filter and the full integration run
+- [x] `ARCHITECTURE.md` describes the rewritten solution, and its "Known Gaps" list drops the items this feature fixed
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx`
 
 **Tests**: none · **Gate**: build
 **Commit**: `docs: align project documentation with the PostgreSQL rewrite`

@@ -2,39 +2,62 @@
 
 ## Stack
 
-C# / .NET 10 · ASP.NET Core 10 Minimal APIs · Entity Framework Core 10 · System.Security.Cryptography (AES-256)
+C# / .NET 10 · ASP.NET Core 10 Minimal APIs · Entity Framework Core 10 + **PostgreSQL** (Npgsql) · System.Security.Cryptography (AES-256)
+
+PostgreSQL is the database from the first commit of the rewrite (AD-018), so **Docker is
+required** to run the app or its integration tests. Hangfire is not in the solution; the
+job runner is decided in Phase 2.
 
 ## Project Structure
 
 ```text
 src/
 ├── HikvisionReplicator.Api/
-│   ├── Domain/           ← Entities, value objects, error types
+│   ├── Domain/           ← Aggregates, value objects
 │   │   └── Specs/        ← Ardalis specifications
-│   ├── Features/         ← Vertical slices (Devices/, Users/)
-│   ├── Infrastructure/   ← EF Core, repositories, encryption
-│   ├── Shared/           ← IAggregateRoot, IRepository<T>
+│   ├── Features/         ← Vertical slices (Devices/)
+│   ├── Infrastructure/   ← EF Core, migrations, repositories, encryption, exception handler
+│   ├── Shared/           ← IAggregateRoot, IRepository<T>, error records, ports
 │   └── Program.cs
-└── HikvisionReplicator.Tests/      ← xUnit integration tests
+├── HikvisionReplicator.Tests/      ← xUnit — unit tests under Domain/, integration tests at the root
+└── HikvisionReplicator.E2ETests/   ← NUnit + Playwright, against a live API
 ```
 
 ## Commands
 
 ```bash
+docker compose up -d                                       # PostgreSQL + Tempo + Grafana — required
 dotnet restore
-dotnet build
-dotnet ef database update --project src/HikvisionReplicator.Data
-dotnet run --project src/HikvisionReplicator.Api          # http://localhost:5000
-dotnet test src/HikvisionReplicator.Tests       # integration tests (in-memory SQLite)
-dotnet test src/HikvisionReplicator.E2ETests    # E2E tests (requires running API)
+dotnet build HikvisionReplicator.slnx
+dotnet ef database update --project src/HikvisionReplicator.Api   # migrations live in Api/Infrastructure/Migrations
+dotnet run --project src/HikvisionReplicator.Api           # http://localhost:5000
+dotnet test src/HikvisionReplicator.E2ETests               # E2E tests (requires a running API)
 ```
 
-### E2E one-time setup
+The API applies its migrations itself at startup, so `dotnet ef database update` is only
+needed to migrate a database out of band.
+
+### Gate commands
+
+```bash
+# Docker-free — pure logic only (AD-024)
+dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"
+
+# Full — needs a Docker daemon for Testcontainers PostgreSQL (AD-019)
+dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests
+```
+
+### E2E setup
 
 ```bash
 dotnet build src/HikvisionReplicator.E2ETests
-pwsh src/HikvisionReplicator.E2ETests/bin/Debug/net10.0/playwright.ps1 install
 ```
+
+The suite drives the API through Playwright's `IAPIRequestContext`, which needs only the
+node driver shipped in the package — **no browser download, and no `pwsh`, is required**.
+Installing browsers (`playwright.ps1 install`, or `playwright install` after
+`dotnet tool install --global Microsoft.Playwright.CLI`) is only needed if browser-driven
+tests are ever added.
 
 Override base URL: `E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2ETests`
 
@@ -97,4 +120,8 @@ Each feature lives under `Features/{Resource}/{Operation}/` — three files, no 
 
 ## Tests
 
-When writing any test, follow the naming convention in [`docs/test-patterns.md`](docs/test-patterns.md).
+Before writing any test, read [`docs/test-patterns.md`](docs/test-patterns.md) — it holds
+both the **"Choosing the test level"** rules (AD-024: unit for pure no-I/O logic under
+`Tests/Domain/` with `[Trait("Category", "Unit")]`, integration through the HTTP surface
+for slices, repositories, and startup, E2E as a thin out-of-process confirmation) and the
+behaviour-based naming convention.

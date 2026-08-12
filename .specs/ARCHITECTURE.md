@@ -1,8 +1,9 @@
 # Architecture Map — hikvision-replicator
 
-Reverse-engineered from the codebase at commit `ebfc510` (2026-08-02). This is the
-baseline snapshot for adopting spec-driven development on an existing project:
-what exists, how it is layered, and where the gaps are.
+Describes the solution as rebuilt by the `device-registry` feature (2026-08-12), the
+first feature of the spec-first rewrite (AD-013). The pre-rewrite implementation this
+replaced is preserved in git history at `ebfc510`; nothing in the working tree descends
+from it except by deliberate port.
 
 Conventions that future features must follow are recorded as `AD-NNN` entries in
 [STATE.md](STATE.md) — this document is the *map*, STATE.md is the *contract*.
@@ -12,11 +13,13 @@ Conventions that future features must follow are recorded as `AD-NNN` entries in
 ## 1. Purpose
 
 An ASP.NET Core 10 Minimal API that owns a catalogue of Hikvision access-control
-devices and a catalogue of users, and is meant to **replicate** user records
-(name, access code, face picture) out to every registered device.
+devices and, in later phases, a catalogue of users it **replicates** out to every
+registered device (AD-014, AD-015).
 
-Today the API manages both catalogues and *queues* replication work. The step that
-actually talks to a device over Hikvision ISAPI does not exist yet — see §7.
+Today the API owns the device catalogue and the walking skeleton every later feature
+builds on: PostgreSQL with real migrations, RFC 7807 errors, OpenTelemetry, and a
+Testcontainers-backed test harness. Users, replication, and the Hikvision ISAPI client
+are Phase 1 item 2 onwards — see §7.
 
 ---
 
@@ -25,11 +28,11 @@ actually talks to a device over Hikvision ISAPI does not exist yet — see §7.
 ```text
 hikvision-replicator/
 ├── HikvisionReplicator.slnx          # 3 projects
-├── docker-compose.yml                # Tempo + Grafana (observability only)
+├── docker-compose.yml                # postgres + Tempo + Grafana
 ├── docker/
 │   ├── tempo/tempo.yaml
 │   └── grafana/provisioning/datasources/tempo.yaml
-├── docs/test-patterns.md             # behaviour-based test naming rules
+├── docs/test-patterns.md             # test level (AD-024) + behaviour-based naming
 ├── .specs/                           # ← spec-driven development artifacts
 │   ├── ARCHITECTURE.md               # this file
 │   ├── STATE.md                      # AD-NNN decision log + handoff snapshot
@@ -38,7 +41,7 @@ hikvision-replicator/
 ├── scripts/lessons.py                # lessons bookkeeping (do not hand-edit output)
 └── src/
     ├── HikvisionReplicator.Api/
-    ├── HikvisionReplicator.Tests/        # xUnit · in-memory SQLite · in-process
+    ├── HikvisionReplicator.Tests/        # xUnit · unit + integration · Testcontainers PostgreSQL
     └── HikvisionReplicator.E2ETests/     # NUnit + Playwright APIRequest · needs live API
 ```
 
@@ -51,40 +54,41 @@ src/HikvisionReplicator.Api/
 ├── Program.cs                    ← composition root: DI, pipeline, route mapping
 │
 ├── Domain/                       ← LAYER 1 · no framework deps beyond OneOf/CSharpFunctionalExtensions
-│   ├── Device.cs                     aggregate root
-│   ├── User.cs                       aggregate root
-│   ├── Replication.cs                aggregate root
-│   ├── IpAddress.cs / Port.cs        value objects (Device)
-│   ├── AccessCode.cs                 value object (User)
-│   ├── UserStatus.cs                 enum: PendingAdd | PendingRemove
-│   ├── ReplicationType.cs            enum: Add | Remove
-│   ├── ReplicationStatus.cs          enum: Pending | Processed | Canceled
+│   ├── Device.cs                     aggregate root — Create + Update
+│   ├── IpAddress.cs                  value object · stores the NORMALIZED address
+│   ├── Port.cs                       value object · 1…65535
+│   ├── FaceCapacity.cs               value object · 1…1,000,000 (AD-020)
 │   └── Specs/                        Ardalis Specification<T> query objects
-│       ├── DeviceByAddressSpec.cs        uniqueness of (IpAddress, HttpPort)
-│       └── UserByExternalRefSpec.cs      upsert lookup key
+│       ├── DeviceByAddressSpec.cs            uniqueness pre-check on (IpAddress, HttpPort)
+│       └── DeviceByAddressExcludingSpec.cs   same, exempting the device being updated
 │
 ├── Features/                     ← LAYER 2 · vertical slices, 3 files each
-│   ├── Devices/{CreateDevice,GetDevice,GetDevices,UpdateDevice,DeleteDevice}/
-│   └── Users/{UpsertUser,GetUser}/  + SyncUser/UserSyncJob.cs (background job)
+│   └── Devices/{RegisterDevice,GetDevice,ListDevices,UpdateDevice,RemoveDevice}/
 │
 ├── Infrastructure/               ← LAYER 3 · everything framework-facing
 │   ├── AppDbContext.cs               DbSets + ApplyConfigurationsFromAssembly
-│   ├── {Device,User,Replication}Configuration.cs   IEntityTypeConfiguration<T>
-│   ├── {Device,User,Replication}Repository.cs      Ardalis RepositoryBase<T>
+│   ├── AppDbContextFactory.cs        design-time factory for `dotnet ef`
+│   ├── DeviceConfiguration.cs        IEntityTypeConfiguration<Device> + named unique index
+│   ├── DeviceRepository.cs           Ardalis RepositoryBase<Device> + 23505 translation
 │   ├── EncryptionService.cs          AES-256-CBC, reversible, key from config
-│   ├── GlobalExceptionHandler.cs     IExceptionHandler → ProblemDetails
+│   ├── EncryptionOptions.cs          + validator, wired with ValidateOnStart()
+│   ├── GlobalExceptionHandler.cs     IExceptionHandler → 503 (database) / 500 (anything else)
 │   ├── DomainErrorExtensions.cs      error record → IResult
-│   └── Migrations/                   4 EF Core migrations
+│   └── Migrations/                   one migration: InitialCreate (Npgsql)
 │
 └── Shared/                       ← LAYER 0 · contracts, referenced by all layers
-    ├── IAggregateRoot.cs             Id · CreatedAt · UpdatedAt
+    ├── IAggregateRoot.cs             marker for aggregates
     ├── IRepository.cs                IRepositoryBase<T> where T : IAggregateRoot
+    ├── IDeviceRepository.cs          address-safe add/save returning OneOf<Success, ConflictError>
+    ├── IEncryptionService.cs         port — the implementation stays in Infrastructure/
     └── Errors.cs                     ValidationError · NotFoundError · ConflictError · Success
 ```
 
 **Dependency direction:** `Program.cs → Features → Domain`, `Features → Shared`,
-`Infrastructure → Domain + Shared`. Features touch Infrastructure only for
-`IEncryptionService` and `ToMinimalApiResult()`; they never see `AppDbContext`.
+`Infrastructure → Domain + Shared`. `IEncryptionService` lives in `Shared/`, which
+removes the one backwards `Features → Infrastructure` edge the previous layout had;
+Features still reach into Infrastructure for `ToMinimalApiResult()` only, and never see
+`AppDbContext`.
 
 ---
 
@@ -98,55 +102,62 @@ Every operation is three files under `Features/{Resource}/{Operation}/`:
 | `{Op}Service.cs` | Implementation — orchestrates domain + repository |
 | `{Op}Service.Endpoint.cs` | `Use{Op}()` (DI) + `Map{Op}()` (route) extensions |
 
-DTOs are **never shared across slices** — `UpsertUser` and `GetUser` each declare
-their own `UserResponse` record. That duplication is deliberate (AD-004).
+DTOs are **never shared across slices** — each of the five device slices declares its own
+`DeviceResponse`. That duplication is deliberate (AD-004). No response carries a password
+field of any kind (DEV-07).
 
 ### Request flow (write path)
 
 ```text
 HTTP POST /api/devices
-  → Map{Op}() minimal-api delegate  (injects I{Op}Service, CancellationToken ct)
-  → I{Op}Service.ExecuteAsync(request, ct)
-       ├─ IEncryptionService.Encrypt(password)          [writes only]
-       ├─ Device.Create(...)  → OneOf<Device, ValidationError>
-       ├─ IRepository<Device>.AnyAsync(new DeviceByAddressSpec(...), ct)  → ConflictError
-       └─ IRepository<Device>.AddAsync(device, ct)      [SaveChanges inside]
+  → MapRegisterDevice() minimal-api delegate  (injects IRegisterDeviceService, CancellationToken ct)
+  → IRegisterDeviceService.ExecuteAsync(request, ct)
+       ├─ reject a blank plaintext password         [the aggregate only ever sees ciphertext]
+       ├─ IEncryptionService.Encrypt(password)
+       ├─ Device.Create(..., now)  → OneOf<Device, ValidationError>     [now from TimeProvider, AD-023]
+       ├─ IDeviceRepository.AnyAsync(new DeviceByAddressSpec(...), ct)  → friendly ConflictError
+       └─ IDeviceRepository.AddIfAddressFreeAsync(device, ct)
+              └─ 23505 on the named address index → the same ConflictError   [AD-022]
   → OneOf<...>.Match(response => Results.Created(...), err => err.ToMinimalApiResult())
 ```
 
 Errors are values, never exceptions: `OneOf<TSuccess, ValidationError, ConflictError, …>`
 all the way from the domain factory to the endpoint's `.Match()`.
 
+**The database is the authority on address uniqueness.** The specification pre-check
+exists only to produce a better message; a registration that wins the race past it still
+comes back as `409`, never `500` (DEV-06).
+
 ---
 
 ## 5. Domain Model
 
 ```text
-User (aggregate)                      Device (aggregate)
- ├ Id                                  ├ Id
- ├ ExternalRef  (unique, ≤255)         ├ Name (≤100)
- ├ Name (≤100)                         ├ IpAddress   ┐ unique together
- ├ AccessCode   (VO, 4–20 digits)      ├ HttpPort    ┘ (DeviceByAddressSpec)
- ├ FacePic      (byte[]?, ≤200 KB)     ├ Username (≤100)
- ├ Status       PendingAdd|PendingRemove│└ EncryptedPassword  (AES-256, never returned)
- └ Created/UpdatedAt                   └ Created/UpdatedAt
-        │                                      │
-        └──────────────┬───────────────────────┘
-                       ▼
-              Replication (aggregate)
-               ├ UserId · DeviceId          ← plain ints, no EF navigation/FK
-               ├ Type    Add | Remove
-               ├ Status  Pending → Processed | Canceled
-               └ Created/UpdatedAt
+Device (aggregate)
+ ├ Id
+ ├ Name (≤100)
+ ├ IpAddress          VO — normalized via IPAddress.Parse(x).ToString()  ┐ unique together
+ ├ HttpPort           VO — 1…65535                                       ┘ IX_devices_IpAddress_HttpPort
+ ├ Username (≤100)
+ ├ EncryptedPassword  AES-256-CBC `base64(IV):base64(ciphertext)`, never returned
+ ├ FaceCapacity       VO — 1…1,000,000 (AD-020/AD-021 capacity guard)
+ └ Created/UpdatedAt  timestamptz — UpdatedAt advances only when a value actually changed
 ```
 
-- Aggregates have **private setters and private constructors**; the only entry
-  points are static `Create(...)` factories and instance mutators, both returning
+- Aggregates have **private setters and private constructors**; the only entry points are
+  the static `Create(...)` factory and the `Update(...)` mutator, both returning
   `OneOf<…, ValidationError>`.
+- `Update` validates **every** field before mutating **any** of them, so a rejected update
+  leaves the aggregate byte-identical (DEV-19), and `null` means "leave unchanged"
+  (DEV-18).
+- Both take `DateTime now` as a parameter; no aggregate reads the wall clock (AD-023).
 - Value objects derive from `CSharpFunctionalExtensions.ValueObject` and expose an
   `internal static FromPersistence(...)` used only by the EF value converters.
-- Error message constants live in a nested `static class Errors` on each type, so
-  tests assert against the constant rather than a string literal.
+- Error message constants live in a nested `static class Errors` on each type, so tests
+  assert against the constant rather than a string literal.
+
+`User` and `Replication` are not modelled yet — they arrive with `user-registry` and
+`replication-queue`.
 
 ---
 
@@ -154,86 +165,79 @@ User (aggregate)                      Device (aggregate)
 
 | Concern | Implementation | Notes |
 |---|---|---|
-| Persistence | EF Core 10 + SQLite | Connection string `DefaultConnection` |
+| Persistence | EF Core 10 + **PostgreSQL** (Npgsql) | Connection string `DefaultConnection`; AD-018 |
+| Schema | `db.Database.Migrate()` at startup | `EnsureCreated()` appears nowhere (DEV-12) |
 | Repositories | Ardalis.Specification 9 `RepositoryBase<T>` | One concrete repo per aggregate, registered explicitly |
 | Queries | `Specification<T>` subclasses in `Domain/Specs/` | Inline LINQ in services is banned (AD-006) |
-| Password storage | AES-256-CBC, `IV:ciphertext` base64 pair | Reversible by design — devices need the plaintext |
-| Background jobs | Hangfire 1.8 + SQLite storage | Dashboard at `/hangfire` (Development only) |
-| Errors | `GlobalExceptionHandler` + `AddProblemDetails()` | RFC 7807 responses |
-| Tracing | OpenTelemetry → OTLP/gRPC → Tempo → Grafana | Only enabled when `OpenTelemetry:OtlpEndpoint` is set |
-| API docs | `AddOpenApi()` + Scalar UI | `/openapi/v1.json`, `/scalar/v1` (Development only) |
+| Invariants | DB constraint + `23505` → `ConflictError` inside the repository | Services never see a provider exception (AD-022) |
+| Password storage | AES-256-CBC, `IV:ciphertext` base64 pair, fresh IV per call | Reversible by design — devices need the plaintext |
+| Key configuration | `EncryptionOptions` + `ValidateOnStart()` | A missing or non-32-byte key aborts startup (DEV-15) |
+| Time | `TimeProvider` injected; `now` passed into the domain | Deterministic `UpdatedAt` assertions (AD-023) |
+| Errors | `GlobalExceptionHandler` + `AddProblemDetails()` + `UseStatusCodePages()` | RFC 7807 everywhere: `503` for database failures, `500` otherwise, `400` for malformed JSON |
+| Tracing | OpenTelemetry → OTLP/gRPC → Tempo → Grafana | Only registered when `OpenTelemetry:OtlpEndpoint` is set (DEV-16); EF SQL text is never captured |
+| API docs | `AddOpenApi()` + Scalar UI | `/openapi/v1.json`, `/scalar/v1` — Development only (DEV-17) |
+| Background jobs | **none** | Hangfire was not carried over; the job runner is decided in Phase 2 (ROADMAP OD-3) |
 | **Auth** | **none** | No authentication, authorization, or rate limiting anywhere |
 
 ---
 
 ## 7. Feature Inventory & Coverage
 
-| Slice | Route | Status | Spec backfilled? |
+| Slice | Route | Status | Spec |
 |---|---|---|---|
-| CreateDevice | `POST /api/devices` | implemented | ❌ |
-| GetDevices | `GET /api/devices` | implemented | ❌ |
-| GetDevice | `GET /api/devices/{id}` | implemented | ❌ |
-| UpdateDevice | `PUT /api/devices/{id}` | implemented | ❌ |
-| DeleteDevice | `DELETE /api/devices/{id}` | implemented | ❌ |
-| UpsertUser | `POST /api/users` | implemented | ❌ |
-| GetUser | `GET /api/users/{id}` | implemented | ❌ |
-| SyncUser (`UserSyncJob`) | Hangfire job | partial — creates `Pending`/`Add` rows only | ❌ |
-| **Device push (ISAPI)** | — | **missing** | — |
-| **Replications API** | — | **missing** | — |
-| **Delete/deactivate user** | — | **missing** | — |
+| RegisterDevice | `POST /api/devices` | implemented | ✅ `device-registry` |
+| ListDevices | `GET /api/devices` | implemented | ✅ `device-registry` |
+| GetDevice | `GET /api/devices/{id}` | implemented | ✅ `device-registry` |
+| UpdateDevice | `PUT /api/devices/{id}` | implemented | ✅ `device-registry` |
+| RemoveDevice | `DELETE /api/devices/{id}` | implemented | ✅ `device-registry` |
+| Catalogue pagination | — | **not scheduled** — DEV-26, P3 | ✅ specified, deliberately unbuilt |
+| **Users API** | — | **not built** — Phase 1 item 2 | — |
+| **Replication queue + worker** | — | **not built** — Phase 2 | — |
+| **Device push (ISAPI)** | — | **not built** — Phase 3 | — |
 
-**Test coverage:** 35 xUnit integration tests (17 device · 15 user · 3 sync job) over
-`TestWebApplicationFactory` with in-memory SQLite; 4 NUnit/Playwright E2E tests
-against a live API. No unit tests on domain factories in isolation — validation is
-exercised through the HTTP surface.
+**Test coverage:** 151 xUnit tests — 69 unit (`Tests/Domain/`, `Category=Unit`, no Docker)
+and 82 integration through the HTTP surface against Testcontainers PostgreSQL — plus 9
+NUnit/Playwright E2E tests against a live API. The level is chosen by layer per AD-024;
+see [`docs/test-patterns.md`](../docs/test-patterns.md).
 
 ---
 
 ## 8. Known Gaps (candidate spec backlog)
 
-Ordered by how much they block the product's stated purpose.
+The rewrite closed the defects the previous implementation carried: `EnsureCreated()`
+alongside migrations, the racy read-then-write uniqueness check, unnormalized IP storage,
+the unconditional `UpdatedAt` advance, the stale `HikvisionReplicator.Data` path in the
+docs, and the stray connection-string-named artifact. What remains:
 
-1. **Replication never leaves the database.** No Hikvision ISAPI client, no worker
-   that consumes `Pending` replications. `Replication.MarkProcessed()` and
-   `Cancel()` are never called; `ReplicationStatus.Processed`/`Canceled` are
-   unreachable. This is the core feature.
-2. **`UserSyncJob` is not idempotent.** It enqueues on every upsert and blindly
-   adds one `Add` replication per device each time, so repeated updates accumulate
-   duplicate pending rows. No dedup key, no "supersede prior pending" rule.
-3. **Removal path is dead.** `UserStatus.PendingRemove` and `ReplicationType.Remove`
-   are declared but never produced — nothing deletes or deactivates a user, and no
-   `Remove` replication is ever created.
-4. **`User.Update` resets `Status` to `PendingAdd` unconditionally**, including on a
-   no-op update, and it does so outside the `changed` guard that protects `UpdatedAt`.
-5. **New devices get no backfill.** Registering a device does not create `Add`
-   replications for existing users — only the user side triggers sync.
-6. **`Replication` has no specification and no FK.** `UserSyncJobTests` loads every
-   replication and filters in memory (`ListAsync().Where(...)`), which violates the
-   "always use a `Specification<T>`" rule and will not scale.
-7. **`EnsureCreated()` vs. migrations.** `Program.cs:72` calls
-   `db.Database.EnsureCreated()` while four EF migrations exist — `EnsureCreated`
-   bypasses the migration history, so migrations will never apply on a fresh DB.
-8. **Docs drift.** `CLAUDE.md` documents `dotnet ef database update --project
-   src/HikvisionReplicator.Data`; no such project exists — migrations live in
-   `Api/Infrastructure/Migrations/`.
-9. **Stray artifact committed.** `src/HikvisionReplicator.Api/Data Source=devices-dev.db`
-   is a file literally named after a connection-string fragment, created by a
-   mis-quoted CLI argument. Safe to delete.
-10. **No auth, no rate limiting.** Every endpoint is anonymous, including the ones
-    that store device credentials.
-11. **AES-256-CBC without authentication.** `EncryptionService` provides
-    confidentiality but no integrity check (no HMAC / GCM tag).
+1. **The product's core capability does not exist yet.** Nothing replicates a user to a
+   device: no user catalogue, no replication queue, no worker, no Hikvision ISAPI client.
+   Phases 1–3 of [ROADMAP.md](ROADMAP.md) exist to build exactly this.
+2. **No auth, no rate limiting.** Every endpoint is anonymous, including the ones that
+   accept and store device credentials. Accepted for now (assumption A-6 of
+   `device-registry`), with a hard deployment constraint: **this must not reach a routable
+   network before `api-auth` ships.**
+3. **AES-256-CBC without authentication.** `EncryptionService` provides confidentiality
+   but no integrity check (no HMAC / GCM tag), so a tampered ciphertext fails at decrypt
+   time rather than being detected. A move to AES-GCM needs a versioned ciphertext prefix
+   and is easier to add before there is data than after (A-8).
+4. **The device catalogue is unpaginated.** `GET /api/devices` returns a bare array, which
+   pins the empty case to `[]`; DEV-26 will ship as a paged shape behind query parameters
+   or a `v2` route rather than by mutating this response.
+5. **Face capacity is declared but not yet enforced.** `Device.FaceCapacity` is modelled
+   and validated; the guard that refuses a replication which would overfill a device is
+   the required AD-021 mitigation and lands with `replication-queue`.
 
 ---
 
 ## 9. Commands
 
 ```bash
-dotnet build
+docker compose up -d                                        # PostgreSQL + Tempo + Grafana
+dotnet build HikvisionReplicator.slnx
 dotnet run   --project src/HikvisionReplicator.Api          # http://localhost:5000
-dotnet test  src/HikvisionReplicator.Tests                  # integration, no Docker needed
+dotnet test  src/HikvisionReplicator.Tests --filter "Category=Unit"   # pure logic, no Docker
+dotnet test  src/HikvisionReplicator.Tests                  # + integration, needs a Docker daemon
 dotnet test  src/HikvisionReplicator.E2ETests               # requires a running API
-docker compose up -d                                        # Tempo + Grafana
 dotnet ef migrations add <Name> --project src/HikvisionReplicator.Api
-python3 scripts/lessons.py list --status confirmed           # load lessons at Specify/Design
+python3 scripts/lessons.py list --status confirmed          # load lessons at Specify/Design
 ```
