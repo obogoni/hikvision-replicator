@@ -40,7 +40,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Build | Scaffolding, contracts, EF config, docs — tasks with no required tests | `dotnet build HikvisionReplicator.slnx` |
 | Quick | After tasks whose only required tests are domain unit tests | `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"` |
 | Full | After any task with integration tests | `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests` (**requires a Docker daemon** — Testcontainers, AD-019) |
-| E2E | Only T19 | `docker compose up -d && dotnet run --project src/HikvisionReplicator.Api &` then `dotnet test src/HikvisionReplicator.E2ETests` (one-time: `pwsh …/playwright.ps1 install`) |
+| E2E | Only T19 | `docker compose up -d && dotnet run --project src/HikvisionReplicator.Api &` then `dotnet test src/HikvisionReplicator.E2ETests`. **No `pwsh` and no browser install required** — `IAPIRequestContext` uses only the node driver shipped in the package (verified during T19). |
 
 ---
 
@@ -314,7 +314,6 @@ T16 → T17 → T18 → T19 → T20
 
 **Status**: ✅ Complete — `c766a7e`
 
-**Status**: ✅ Complete
 
 **What**: `IDeviceRepository` + `DeviceRepository` translating PostgreSQL `23505` into `ConflictError`, plus the two address specifications.
 **Where**: `src/HikvisionReplicator.Api/Shared/IDeviceRepository.cs`, `Infrastructure/DeviceRepository.cs`, `Domain/Specs/{DeviceByAddressSpec,DeviceByAddressExcludingSpec}.cs` + `src/HikvisionReplicator.Tests/DeviceRepositoryTests.cs`
@@ -342,7 +341,6 @@ T16 → T17 → T18 → T19 → T20
 
 **Status**: ✅ Complete — `caa92b3`
 
-**Status**: ✅ Complete
 
 **What**: The three-file registration slice and its endpoint tests, including the concurrency and secrecy criteria.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/RegisterDevice/RegisterDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs`
@@ -373,7 +371,6 @@ T16 → T17 → T18 → T19 → T20
 
 **Status**: ✅ Complete — `a8c2b5a`
 
-**Status**: ✅ Complete
 
 **What**: Retrieve one device by id.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/GetDevice/GetDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
@@ -400,7 +397,6 @@ T16 → T17 → T18 → T19 → T20
 
 **Status**: ✅ Complete — `4159138`
 
-**Status**: ✅ Complete
 
 **What**: List the whole catalogue — an infallible query returning the value directly (AD-003).
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/ListDevices/ListDevicesService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
@@ -426,7 +422,6 @@ T16 → T17 → T18 → T19 → T20
 
 **Status**: ✅ Complete — `dc5d37e`
 
-**Status**: ✅ Complete
 
 **What**: Partial update over `PUT`, including the self-address exemption and password-retention rule.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/UpdateDevice/UpdateDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
@@ -455,7 +450,6 @@ T16 → T17 → T18 → T19 → T20
 
 **Status**: ✅ Complete — `adb4b36`
 
-**Status**: ✅ Complete
 
 **What**: Hard-delete a device and free its address.
 **Where**: `src/HikvisionReplicator.Api/Features/Devices/RemoveDevice/RemoveDeviceService.{Interface,,Endpoint}.cs` + `src/HikvisionReplicator.Tests/DeviceEndpointsTests.cs` (modify)
@@ -479,7 +473,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T16: Implement the global exception handler
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — `4724603`
+
 
 **What**: `GlobalExceptionHandler` mapping database-unreachable failures to `503` without leaking connection details, and everything else to `500`.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/GlobalExceptionHandler.cs`, `Program.cs` (register) + `src/HikvisionReplicator.Tests/ErrorHandlingTests.cs`
@@ -503,7 +498,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T17: Verify startup and environment behaviour
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — `a0c646d`
+
 
 **What**: Tests for the three startup-gated behaviours — key validation, tracing registration, and Development-only docs.
 **Where**: `src/HikvisionReplicator.Tests/StartupTests.cs`
@@ -528,7 +524,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T18: Sweep for credential leakage
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — `670ce07`
+
 
 **What**: A suite-wide assertion that no plaintext password reaches a response body or a log line.
 **Where**: `src/HikvisionReplicator.Tests/CredentialLeakageTests.cs`
@@ -552,7 +549,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T19: Add the E2E suite
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — `d629d49`
+
 
 **What**: Playwright/NUnit tests covering the five routes against a live API.
 **Where**: `src/HikvisionReplicator.E2ETests/DeviceEndpointsTests.cs`
@@ -577,7 +575,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T20: Refresh the project documentation
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — `783ae4f`
+
 
 **What**: Bring `CLAUDE.md`, `README.md`, and `.specs/ARCHITECTURE.md` in line with the rewritten solution.
 **Where**: `CLAUDE.md`, `README.md`, `docs/test-patterns.md`, `.specs/ARCHITECTURE.md`

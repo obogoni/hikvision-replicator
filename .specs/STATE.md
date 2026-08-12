@@ -208,11 +208,13 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 ## Handoff
 
 - **Feature**: `device-registry` (Phase 1, item 1)
-- **Phase / Task**: Tasks — `tasks.md` drafted (20 tasks, 4 phases), awaiting user approval. Spec confirmed and design approved 2026-08-12. Layout Approach A (single `Api` project). AD-022, AD-023, AD-024 promoted.
-- **Completed**: ARCHITECTURE.md, ROADMAP.md (OD-1/OD-2/OD-6 resolved), AD-001…AD-024, lessons store initialised, device-registry spec.md (confirmed) + design.md (approved) + tasks.md (draft)
+- **Phase / Task**: Execute — all 20 tasks committed across 3 phase-batches. Independent Verifier dispatched; `validation.md` pending.
+- **Completed**: spec.md (confirmed), design.md (approved), tasks.md (all 20 ✅), 20 atomic commits `08a7dbb`…`783ae4f` on `feat/device-registry`. 160 tests: 69 unit / 82 integration (Testcontainers PostgreSQL) / 9 e2e. All 25 P1+P2 requirements implemented.
 - **In-progress** (file:line): none
-- **Next step**: User approves `tasks.md` → Execute. 20 tasks packs to ~3 batches, so the sub-agent offer is made at the start of Execute. `src/` is deleted in T1 per AD-013; T20 writes AD-024 into `docs/test-patterns.md` and `CLAUDE.md`.
-- **Open at approval**: DEV-26 pagination deliberately unscheduled (P3). Test-level question resolved by AD-024.
-- **Blockers**: none for Phase 1. Phase 2 still needs three numbers: device/reader count, live-sync latency SLO (proposed p95 < 30s), and bulk-load window. OD-3 (job runner under load) open.
-- **Uncommitted files**: `.specs/`, `scripts/lessons.py`, `.claude/`
-- **Branch**: main
+- **Next step**: Read the Verifier's `validation.md`. If PASS — decide on the open NuGet advisory, then merge `feat/device-registry` to `main` and start Phase 1 item 2 (`user-registry`). If FAIL — route ranked gaps to fix tasks (bounded to 3 fix→re-verify iterations).
+- **Blockers**: none for this feature.
+- **Open decisions**:
+  - **High-severity NuGet advisory** `NU1903` on `Microsoft.OpenApi` 2.0.0, transitive via `Microsoft.AspNetCore.OpenApi` 10.0.5; moderate `NU1902` on OpenTelemetry 1.15.2. Fixed versions exist (`Microsoft.AspNetCore.OpenApi` 10.0.11, OpenTelemetry 1.17.0). Deliberately untouched — outside every task's scope. Needs a decision: fold into a follow-up task or defer.
+  - Phase 2 still needs three numbers: device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
+- **Uncommitted files**: none
+- **Branch**: `feat/device-registry` (not merged, not pushed)
