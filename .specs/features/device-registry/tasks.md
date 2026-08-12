@@ -503,6 +503,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T17: Verify startup and environment behaviour
 
+**Status**: ✅ Complete
+
 **What**: Tests for the three startup-gated behaviours — key validation, tracing registration, and Development-only docs.
 **Where**: `src/HikvisionReplicator.Tests/StartupTests.cs`
 **Depends on**: T16
@@ -512,12 +514,12 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Booting with `Encryption:Key` missing throws at **startup**, before any request is served, with a message naming the key (DEV-15)
-- [ ] Booting with a non-32-byte Base64 key fails the same way (DEV-15)
-- [ ] With `OpenTelemetry:OtlpEndpoint` unset, no tracer provider is registered; with it set, one is (DEV-16)
-- [ ] In the Development environment `/openapi/v1.json` and the Scalar route respond; outside Development both `404` (DEV-17)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 6 tests pass (no silent deletions)
+- [x] Booting with `Encryption:Key` missing throws at **startup**, before any request is served, with a message naming the key (DEV-15)
+- [x] Booting with a non-32-byte Base64 key fails the same way (DEV-15)
+- [x] With `OpenTelemetry:OtlpEndpoint` unset, no tracer provider is registered; with it set, one is (DEV-16)
+- [x] In the Development environment `/openapi/v1.json` and the Scalar route respond; outside Development both `404` (DEV-17)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 6 tests pass (8 new, 147 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `test(startup): verify key validation, tracing, and docs gating`
