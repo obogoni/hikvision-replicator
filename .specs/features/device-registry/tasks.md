@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Design**: `.specs/features/device-registry/design.md` (Approved · 2026-08-12)
 **Spec**: `.specs/features/device-registry/spec.md` (Confirmed · 2026-08-12)
-**Status**: Approved · 2026-08-12
+**Status**: In Progress · Phases 1–2 complete (T1–T9), 73 tests green
 
 ---
 
@@ -86,6 +86,8 @@ T16 → T17 → T18 → T19 → T20
 
 ### T1: Scaffold the rewrite solution
 
+**Status**: ✅ Complete — `08a7dbb`
+
 **What**: Delete `src/`, recreate the three projects with pinned packages, and add a `postgres` service to `docker-compose.yml`.
 **Where**: `src/HikvisionReplicator.{Api,Tests,E2ETests}/*.csproj`, `HikvisionReplicator.slnx`, `docker-compose.yml`
 **Depends on**: None
@@ -95,13 +97,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `src/` reference implementation is deleted (git history retains it — AD-013)
-- [ ] Api project references `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Ardalis.Specification.EntityFrameworkCore` 9.3.1, `OneOf` 3.0.271, `CSharpFunctionalExtensions` 3.7.0, `Microsoft.AspNetCore.OpenApi` 10.0.5, `Scalar.AspNetCore` 2.13.22, the `OpenTelemetry.*` set, `Microsoft.EntityFrameworkCore.Design`
-- [ ] **No** Hangfire and **no** SQLite package anywhere
-- [ ] Tests project references `xunit` 2.9.3, `Microsoft.AspNetCore.Mvc.Testing` 10.0.5, `Testcontainers.PostgreSql` 4.13.0, `Respawn` 7.0.0
-- [ ] E2ETests project keeps its Playwright/NUnit package set unchanged
-- [ ] `docker-compose.yml` has a `postgres` service with a named volume; Tempo and Grafana are untouched
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx`
+- [x] `src/` reference implementation is deleted (git history retains it — AD-013)
+- [x] Api project references `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Ardalis.Specification.EntityFrameworkCore` 9.3.1, `OneOf` 3.0.271, `CSharpFunctionalExtensions` 3.7.0, `Microsoft.AspNetCore.OpenApi` 10.0.5, `Scalar.AspNetCore` 2.13.22, the `OpenTelemetry.*` set, `Microsoft.EntityFrameworkCore.Design`
+- [x] **No** Hangfire and **no** SQLite package anywhere
+- [x] Tests project references `xunit` 2.9.3, `Microsoft.AspNetCore.Mvc.Testing` 10.0.5, `Testcontainers.PostgreSql` 4.13.0, `Respawn` 7.0.0
+- [x] E2ETests project keeps its Playwright/NUnit package set unchanged
+- [x] `docker-compose.yml` has a `postgres` service with a named volume; Tempo and Grafana are untouched
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx`
 
 **Tests**: none · **Gate**: build
 **Commit**: `feat(skeleton): scaffold rewrite solution on PostgreSQL`
@@ -109,6 +111,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T2: Define the shared contracts
+
+**Status**: ✅ Complete — `02c9868`
 
 **What**: `IAggregateRoot`, `IRepository<T>`, the standalone error records, and `IEncryptionService` — all in `Shared/`.
 **Where**: `src/HikvisionReplicator.Api/Shared/{IAggregateRoot,IRepository,Errors,IEncryptionService}.cs`
@@ -119,9 +123,9 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Errors.cs` holds `ValidationError`, `NotFoundError`, `ConflictError`, `Success` as standalone records with no base class
-- [ ] `IEncryptionService` lives in `Shared/`, **not** `Infrastructure/` (design decision — removes the `Features → Infrastructure` edge)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx`
+- [x] `Errors.cs` holds `ValidationError`, `NotFoundError`, `ConflictError`, `Success` as standalone records with no base class
+- [x] `IEncryptionService` lives in `Shared/`, **not** `Infrastructure/` (design decision — removes the `Features → Infrastructure` edge)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx`
 
 **Tests**: none · **Gate**: build
 **Commit**: `feat(shared): add aggregate, repository, and error contracts`
@@ -129,6 +133,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T3: Implement the domain value objects
+
+**Status**: ✅ Complete — `d4be32b`
 
 **What**: `IpAddress` (storing the **normalized** form), `Port`, and `FaceCapacity`, each with a `Create` factory returning `OneOf<T, ValidationError>`.
 **Where**: `src/HikvisionReplicator.Api/Domain/{IpAddress,Port,FaceCapacity}.cs` + `src/HikvisionReplicator.Tests/Domain/ValueObjectTests.cs`
@@ -139,13 +145,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `IpAddress.Create` stores `System.Net.IPAddress.Parse(value).ToString()`, so `192.168.001.001` and `192.168.1.1` produce equal value objects
-- [ ] IPv6 addresses are accepted (A-1)
-- [ ] `Port` accepts `1` and `65535`, rejects `0` and `65536`
-- [ ] `FaceCapacity` accepts `1` and `1_000_000`, rejects `0`, negatives, and `1_000_001`
-- [ ] Each type exposes `internal static FromPersistence(...)` and nested `Errors` constants
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
-- [ ] Test count: ≥ 12 tests pass (no silent deletions)
+- [x] `IpAddress.Create` stores `System.Net.IPAddress.Parse(value).ToString()`, so `192.168.001.001` and `192.168.1.1` produce equal value objects
+- [x] IPv6 addresses are accepted (A-1)
+- [x] `Port` accepts `1` and `65535`, rejects `0` and `65536`
+- [x] `FaceCapacity` accepts `1` and `1_000_000`, rejects `0`, negatives, and `1_000_001`
+- [x] Each type exposes `internal static FromPersistence(...)` and nested `Errors` constants
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
+- [x] Test count: ≥ 12 tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
 **Commit**: `feat(domain): add IpAddress, Port, and FaceCapacity value objects`
@@ -153,6 +159,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T4: Implement `Device.Create`
+
+**Status**: ✅ Complete — `f5e9cad`
 
 **What**: The `Device` aggregate root with its private constructors and the `Create` factory.
 **Where**: `src/HikvisionReplicator.Api/Domain/Device.cs` + `src/HikvisionReplicator.Tests/Domain/DeviceCreateTests.cs`
@@ -163,12 +171,12 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Create(name, ipAddress, httpPort, username, encryptedPassword, faceCapacity, now)` returns `OneOf<Device, ValidationError>`
-- [ ] Each of `name`, `ipAddress`, `httpPort`, `username`, `faceCapacity` missing or blank yields a `ValidationError` naming that exact field (DEV-02)
-- [ ] `name` and `username` accept exactly 100 characters and reject 101 (DEV-03 + edge case)
-- [ ] `CreatedAt` and `UpdatedAt` are both set from the passed-in `now` — the aggregate never reads `DateTime.UtcNow` (AD-023)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
-- [ ] Test count: ≥ 14 tests pass (no silent deletions)
+- [x] `Create(name, ipAddress, httpPort, username, encryptedPassword, faceCapacity, now)` returns `OneOf<Device, ValidationError>`
+- [x] Each of `name`, `ipAddress`, `httpPort`, `username`, `faceCapacity` missing or blank yields a `ValidationError` naming that exact field (DEV-02)
+- [x] `name` and `username` accept exactly 100 characters and reject 101 (DEV-03 + edge case)
+- [x] `CreatedAt` and `UpdatedAt` are both set from the passed-in `now` — the aggregate never reads `DateTime.UtcNow` (AD-023)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
+- [x] Test count: ≥ 14 tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
 **Commit**: `feat(domain): add Device aggregate with Create factory`
@@ -176,6 +184,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T5: Implement `Device.Update`
+
+**Status**: ✅ Complete — `a2b856f`
 
 **What**: The partial-update mutator — validate everything before mutating anything, and advance `UpdatedAt` only when a value actually changed.
 **Where**: `src/HikvisionReplicator.Api/Domain/Device.cs` (modify) + `src/HikvisionReplicator.Tests/Domain/DeviceUpdateTests.cs`
@@ -186,13 +196,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Update(..., DateTime now)` returns `OneOf<Success, ValidationError>` and takes `now` as a parameter (AD-023)
-- [ ] Every field is validated **before** any field is assigned, so a rejected update leaves the aggregate byte-identical (DEV-19)
-- [ ] `null` means "leave unchanged"; only non-null fields are applied (DEV-18)
-- [ ] An update whose values all equal the current ones leaves `UpdatedAt` **unadvanced** (DEV-23 + the empty-body edge case)
-- [ ] An update that changes at least one value advances `UpdatedAt` and leaves `CreatedAt` untouched (DEV-23)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
-- [ ] Test count: ≥ 12 tests pass (no silent deletions)
+- [x] `Update(..., DateTime now)` returns `OneOf<Success, ValidationError>` and takes `now` as a parameter (AD-023)
+- [x] Every field is validated **before** any field is assigned, so a rejected update leaves the aggregate byte-identical (DEV-19)
+- [x] `null` means "leave unchanged"; only non-null fields are applied (DEV-18)
+- [x] An update whose values all equal the current ones leaves `UpdatedAt` **unadvanced** (DEV-23 + the empty-body edge case)
+- [x] An update that changes at least one value advances `UpdatedAt` and leaves `CreatedAt` untouched (DEV-23)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
+- [x] Test count: ≥ 12 tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
 **Commit**: `feat(domain): add Device.Update with change detection`
@@ -200,6 +210,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T6: Add the EF Core model and initial migration
+
+**Status**: ✅ Complete — `ea74bad`
 
 **What**: `AppDbContext`, `DeviceConfiguration` with value converters and a **named** unique index, and one fresh `InitialCreate` migration for PostgreSQL.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/{AppDbContext,DeviceConfiguration}.cs`, `Infrastructure/Migrations/`
@@ -210,11 +222,11 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `OnModelCreating` calls `ApplyConfigurationsFromAssembly`
-- [ ] `IpAddress`, `Port`, and `FaceCapacity` map through `ValueConverter` + `FromPersistence`
-- [ ] The unique index on `(IpAddress, HttpPort)` is created with an explicit `HasDatabaseName(...)` so T10's `23505` translation can key off the name
-- [ ] Exactly one migration exists, generated against Npgsql, and no `EnsureCreated` call appears anywhere in the solution
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx`
+- [x] `OnModelCreating` calls `ApplyConfigurationsFromAssembly`
+- [x] `IpAddress`, `Port`, and `FaceCapacity` map through `ValueConverter` + `FromPersistence`
+- [x] The unique index on `(IpAddress, HttpPort)` is created with an explicit `HasDatabaseName(...)` so T10's `23505` translation can key off the name
+- [x] Exactly one migration exists, generated against Npgsql, and no `EnsureCreated` call appears anywhere in the solution
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx`
 
 **Tests**: none (EF config layer — build gate only per the matrix) · **Gate**: build
 **Commit**: `feat(data): add AppDbContext, device mapping, and initial migration`
@@ -222,6 +234,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T7: Implement encryption with startup-validated configuration
+
+**Status**: ✅ Complete — `8b582af`
 
 **What**: `EncryptionService` (AES-256-CBC, `IV:ciphertext`) plus `EncryptionOptions` wired for `ValidateOnStart()`.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/{EncryptionService,EncryptionOptions}.cs` + `src/HikvisionReplicator.Tests/Domain/EncryptionServiceTests.cs`
@@ -232,12 +246,12 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Encrypt`/`Decrypt` round-trip ASCII and **multi-byte UTF-8** passwords unchanged (edge case)
-- [ ] Two encryptions of the same plaintext produce different ciphertext (fresh IV per call)
-- [ ] Ciphertext never contains the plaintext
-- [ ] `EncryptionOptions` validation rejects a missing key and a non-32-byte Base64 key with a named, actionable message — the rule is unit-testable in isolation; the startup abort itself is asserted in T17
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
-- [ ] Test count: ≥ 7 tests pass (no silent deletions)
+- [x] `Encrypt`/`Decrypt` round-trip ASCII and **multi-byte UTF-8** passwords unchanged (edge case)
+- [x] Two encryptions of the same plaintext produce different ciphertext (fresh IV per call)
+- [x] Ciphertext never contains the plaintext
+- [x] `EncryptionOptions` validation rejects a missing key and a non-32-byte Base64 key with a named, actionable message — the rule is unit-testable in isolation; the startup abort itself is asserted in T17
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"`
+- [x] Test count: ≥ 7 tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
 **Commit**: `feat(infra): add AES-256 encryption with validated key configuration`
@@ -245,6 +259,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T8: Wire the composition root
+
+**Status**: ✅ Complete — `1783c43`
 
 **What**: `Program.cs` — Npgsql, `Migrate()` at startup, ProblemDetails, conditional OpenTelemetry, Development-gated OpenAPI/Scalar, `TimeProvider.System`.
 **Where**: `src/HikvisionReplicator.Api/Program.cs`, `appsettings*.json`
@@ -255,13 +271,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `db.Database.Migrate()` runs at startup; `EnsureCreated()` appears nowhere (DEV-12)
-- [ ] OpenTelemetry is registered **only** when `OpenTelemetry:OtlpEndpoint` is non-empty (DEV-16)
-- [ ] `MapOpenApi()` and `MapScalarApiReference()` are inside an `IsDevelopment()` guard (DEV-17)
-- [ ] `EnableSensitiveDataLogging()` is never called and EF instrumentation is left at its default (no SQL text) — DEV-07 precondition
-- [ ] `TimeProvider.System` and `IEncryptionService` are registered (AD-023)
-- [ ] `public partial class Program { }` is present so `WebApplicationFactory<Program>` can bind
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx`
+- [x] `db.Database.Migrate()` runs at startup; `EnsureCreated()` appears nowhere (DEV-12)
+- [x] OpenTelemetry is registered **only** when `OpenTelemetry:OtlpEndpoint` is non-empty (DEV-16)
+- [x] `MapOpenApi()` and `MapScalarApiReference()` are inside an `IsDevelopment()` guard (DEV-17)
+- [x] `EnableSensitiveDataLogging()` is never called and EF instrumentation is left at its default (no SQL text) — DEV-07 precondition
+- [x] `TimeProvider.System` and `IEncryptionService` are registered (AD-023)
+- [x] `public partial class Program { }` is present so `WebApplicationFactory<Program>` can bind
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx`
 
 **Tests**: none yet — no harness exists; DEV-12/16/17 are asserted in T9 and T17, the earliest points they become runnable · **Gate**: build
 **Commit**: `feat(skeleton): wire composition root with migrations and tracing`
@@ -269,6 +285,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T9: Build the Testcontainers test harness
+
+**Status**: ✅ Complete — `47cc5f5`
 
 **What**: `PostgresFixture` (container + migrations + Respawn) and `TestWebApplicationFactory`, proven by a boot smoke test.
 **Where**: `src/HikvisionReplicator.Tests/{PostgresFixture,TestWebApplicationFactory,HarnessTests}.cs`
@@ -279,13 +297,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] One `PostgreSqlContainer` starts per test collection and applies migrations once (AD-019)
-- [ ] `Respawner.ResetAsync()` runs between tests, so a test never sees another's rows
-- [ ] The factory overrides the connection string and injects a valid `Encryption:Key`
-- [ ] A smoke test asserts the app boots against an **empty** database and the `devices` table plus the migration-history table exist afterwards (DEV-12)
-- [ ] An isolation test asserts state written by one test is absent in the next (DEV-13)
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 3 tests pass (no silent deletions)
+- [x] One `PostgreSqlContainer` starts per test collection and applies migrations once (AD-019)
+- [x] `Respawner.ResetAsync()` runs between tests, so a test never sees another's rows
+- [x] The factory overrides the connection string and injects a valid `Encryption:Key`
+- [x] A smoke test asserts the app boots against an **empty** database and the `devices` table plus the migration-history table exist afterwards (DEV-12)
+- [x] An isolation test asserts state written by one test is absent in the next (DEV-13)
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 3 tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `test(harness): add Testcontainers PostgreSQL fixture with Respawn`
@@ -293,6 +311,8 @@ T16 → T17 → T18 → T19 → T20
 ---
 
 ### T10: Implement the device repository and specifications
+
+**Status**: ✅ Complete
 
 **What**: `IDeviceRepository` + `DeviceRepository` translating PostgreSQL `23505` into `ConflictError`, plus the two address specifications.
 **Where**: `src/HikvisionReplicator.Api/Shared/IDeviceRepository.cs`, `Infrastructure/DeviceRepository.cs`, `Domain/Specs/{DeviceByAddressSpec,DeviceByAddressExcludingSpec}.cs` + `src/HikvisionReplicator.Tests/DeviceRepositoryTests.cs`
@@ -303,13 +323,13 @@ T16 → T17 → T18 → T19 → T20
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `AddIfAddressFreeAsync` returns `ConflictError` when the unique index rejects the insert, and `Success` otherwise
-- [ ] `SaveIfAddressFreeAsync` does the same for the update path
-- [ ] Only `23505` on the **named device address index** is translated; any other `DbUpdateException` propagates unchanged
-- [ ] `DeviceByAddressExcludingSpec(ip, port, excludeId)` matches a conflicting device but never the device being updated (DEV-20)
-- [ ] A test inserts a duplicate address **bypassing the pre-check** (calling the repository directly) and asserts a `ConflictError` rather than an exception — this is the DEV-06 mechanism
-- [ ] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
-- [ ] Test count: ≥ 6 tests pass (no silent deletions)
+- [x] `AddIfAddressFreeAsync` returns `ConflictError` when the unique index rejects the insert, and `Success` otherwise
+- [x] `SaveIfAddressFreeAsync` does the same for the update path
+- [x] Only `23505` on the **named device address index** is translated; any other `DbUpdateException` propagates unchanged
+- [x] `DeviceByAddressExcludingSpec(ip, port, excludeId)` matches a conflicting device but never the device being updated (DEV-20)
+- [x] A test inserts a duplicate address **bypassing the pre-check** (calling the repository directly) and asserts a `ConflictError` rather than an exception — this is the DEV-06 mechanism
+- [x] Gate check passes: `dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests`
+- [x] Test count: ≥ 6 tests pass (9 new, 82 total)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(infra): add device repository with unique-violation translation`
