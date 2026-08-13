@@ -8,6 +8,43 @@ PostgreSQL is the database from the first commit of the rewrite (AD-018), so **D
 required** to run the app or its integration tests. Hangfire is not in the solution; the
 job runner is decided in Phase 2.
 
+## Git Workflow (AD-025)
+
+**Never commit directly to `main`.** The only exception is an explicit, in-the-moment
+instruction from the user to do so — a general "go ahead" on a task is not that
+instruction. If you are on `main` and about to commit, stop and branch first.
+
+**One branch per change.** Branch off `main`, named `<type>/<kebab-slug>` using the same
+type vocabulary as the commit message — `feat/device-registry`, `fix/ip-normalization`,
+`docs/test-patterns`, `chore/repo-conventions`. When work is stacked on an unmerged
+branch, say so and note the rebase needed once the base lands.
+
+**Conventional Commits.** Every commit message is `type(scope): subject`, where scope is
+optional but encouraged:
+
+| Type | Use for |
+|---|---|
+| `feat` | New user-visible capability |
+| `fix` | Bug fix |
+| `docs` | Documentation, including `.specs/` and `docs/` |
+| `test` | Tests only, no production-code change |
+| `refactor` | Behaviour-preserving restructuring |
+| `perf` | Performance work |
+| `build` | Project files, NuGet dependencies, Docker |
+| `ci` | Pipeline configuration |
+| `chore` | Anything else that ships no behaviour |
+
+Subject is imperative mood, lower case, no trailing period. Scopes in use: `domain`,
+`devices`, `infra`, `tests`, `e2e`, `specs`, `deps`. Spec-driven work keeps **one atomic
+commit per task** — never batch tasks into one commit.
+
+**Merge via pull request, squash strategy.** Open a PR with `gh pr create`, fill in
+`.github/pull_request_template.md`, and let the user review and merge. PRs are
+**squash-merged**, so the PR title becomes the commit on `main` and must itself be a
+valid conventional-commit subject. Per-task commits are preserved in the PR, not on
+`main` — record any commit SHAs that matter (e.g. in `validation.md`) as
+pre-squash references.
+
 ## Project Structure
 
 ```text
