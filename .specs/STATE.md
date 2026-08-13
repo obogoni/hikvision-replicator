@@ -203,6 +203,19 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Date**: 2026-08-12
 - **Status**: active
 
+### AD-025
+- **Decision**: **Git workflow is branch-per-change, Conventional Commits, merged into `main` only through a squash-merged pull request.**
+  - **No direct commits to `main`** — the sole exception is an explicit, in-the-moment instruction from the user for that specific commit. A general approval of a task is not such an instruction.
+  - **Branch naming** is `<type>/<kebab-slug>`, reusing the commit type vocabulary (`feat/device-registry`, `fix/ip-normalization`, `chore/repo-conventions`).
+  - **Commit messages** follow Conventional Commits — `type(scope): subject` with the standard type set (`feat` `fix` `docs` `test` `refactor` `perf` `build` `ci` `chore`); **scope is optional but encouraged**, drawn from `domain` · `devices` · `infra` · `tests` · `e2e` · `specs` · `deps`. Subject is imperative, lower case, no trailing period.
+  - **Merging** happens via `gh pr create` against `.github/pull_request_template.md`, reviewed and merged by the user, using **squash merge**. The PR title therefore becomes the `main` commit and must itself be a valid conventional-commit subject.
+  - **Enforcement is documentary, not mechanical** — CLAUDE.md plus this entry plus the PR template. No commit-msg or pre-commit hooks.
+- **Reason**: The spec-driven workflow already produces one atomic commit per task, which makes per-branch history a genuine audit trail of requirement → task → commit; a PR is where that trail gets reviewed. Squash keeps `main` readable at one commit per shipped change while the granular history survives on the PR. Documentary enforcement was chosen over hooks because hooks need per-clone installation (`core.hooksPath`) and would block the agent mid-task with no reviewer present.
+- **Trade-off**: Squashing means the per-task SHAs recorded in `validation.md` files are **pre-squash references** that do not resolve on `main` after merge — they remain reachable only via the PR. Documentary enforcement also means nothing mechanically prevents a stray commit on `main`; the rule holds only as long as CLAUDE.md is honoured. Stacked branches (work based on an unmerged branch) require a manual rebase once the base squash-merges.
+- **Scope**: Whole repository — every branch, commit, and merge, by any contributor or agent. Adds `.github/pull_request_template.md` and a Git Workflow section to `CLAUDE.md`.
+- **Date**: 2026-08-13
+- **Status**: active
+
 ---
 
 ## Handoff
@@ -211,9 +224,9 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Phase / Task**: Execute finished. 24 tasks, 28 commits on `feat/device-registry`. Three Verifier iterations; every gap closed and mutation-verified.
 - **Completed**: spec.md (confirmed) · design.md (approved) · tasks.md (24 ✅) · validation.md (iteration 3) · 25 of 26 requirements verified, DEV-26 deferred by decision. **169 in-process tests** (81 unit / 88 integration, Testcontainers PostgreSQL) + 9 e2e. Build reports zero NuGet advisory warnings.
 - **In-progress** (file:line): none
-- **Next step**: **Merge `feat/device-registry` into `main`** (not yet merged, never pushed), then specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
+- **Next step**: **Review and squash-merge the `feat/device-registry` PR into `main`** (branch is pushed and in sync with `origin`; merging now goes through a PR per AD-025), then rebase `chore/repo-conventions` onto the new `main` and specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
 - **Blockers**: none.
 - **Verification findings worth carrying forward**: all three gaps were *missing assertions over correct production code*, not bugs. Mutation testing found every one; the passing gate found none. Lessons L-001…L-005 in `lessons.json` are all `candidate` — promotion needs corroboration from a second feature, so `user-registry` is where they get tested.
 - **Open decisions**: Phase 2 still needs three numbers — device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
 - **Uncommitted files**: none
-- **Branch**: `feat/device-registry`
+- **Branch**: `chore/repo-conventions` (stacked on `feat/device-registry`; needs `git rebase --onto main feat/device-registry chore/repo-conventions` once that PR squash-merges)
