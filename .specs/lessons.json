@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 13,
+  "next_id": 14,
   "lessons": [
     {
       "id": "L-001",
@@ -222,6 +222,24 @@
       ],
       "created": "2026-08-17T21:10:09Z",
       "last_seen": "2026-08-17T21:10:09Z"
+    },
+    {
+      "id": "L-013",
+      "key": "gate_fail::require a status check only after its workflow is on the default branch requiring it earlier deadlocks every in flight pr which triggers no run and so reports no check",
+      "text": "Require a status check only after its workflow is on the default branch; requiring it earlier deadlocks every in-flight PR, which triggers no run and so reports no check.",
+      "signal": "gate_fail",
+      "scope": "ci",
+      "status": "candidate",
+      "features": [
+        "branch-protection"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        ".github/workflows/ci.yml / PR #8 (ci)"
+      ],
+      "created": "2026-08-17T21:30:56Z",
+      "last_seen": "2026-08-17T21:30:56Z"
     }
   ]
 }
