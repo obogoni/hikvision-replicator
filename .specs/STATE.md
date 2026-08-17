@@ -201,7 +201,7 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Trade-off**: Two levels mean some rules are asserted twice, so a domain change can require edits in both a unit and an integration test. It also invites drift where a branch is unit-tested but never proven reachable through the API — mitigated by keeping AC-level coverage at the integration layer for **every** endpoint, so unit tests add depth rather than replacing endpoint coverage.
 - **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.E2ETests/**`, `docs/test-patterns.md`. Amends AD-019's default-level clause.
 - **Date**: 2026-08-12
-- **Status**: active
+- **Status**: active — the layer definitions stand; **where each level lives is amended by AD-026**, which gives each its own project and retires the `[Trait("Category", "Unit")]` marker. Paths named above are pre-AD-026.
 
 ### AD-025
 - **Decision**: **Git workflow is branch-per-change, Conventional Commits, merged into `main` only through a squash-merged pull request.**
@@ -214,6 +214,20 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Trade-off**: Squashing means the per-task SHAs recorded in `validation.md` files are **pre-squash references** that do not resolve on `main` after merge — they remain reachable only via the PR. Documentary enforcement also means nothing mechanically prevents a stray commit on `main`; the rule holds only as long as CLAUDE.md is honoured. Stacked branches (work based on an unmerged branch) require a manual rebase once the base squash-merges.
 - **Scope**: Whole repository — every branch, commit, and merge, by any contributor or agent. Adds `.github/pull_request_template.md` and a Git Workflow section to `CLAUDE.md`.
 - **Date**: 2026-08-13
+- **Status**: active
+
+### AD-026
+- **Decision**: **Each test level gets its own project, and the project name declares the level.**
+  - `HikvisionReplicator.Tests` — **unit**. Pure logic, no I/O. References neither Testcontainers nor a web host, so it cannot compile a test that needs Docker. Folders mirror the Api tree (`Domain/`, `Infrastructure/`).
+  - `HikvisionReplicator.IntegrationTests` — **integration**. In-process through the HTTP surface against Testcontainers PostgreSQL (AD-019), and the home of `PostgresFixture` and `TestWebApplicationFactory`.
+  - `HikvisionReplicator.E2E` — **e2e**. NUnit + Playwright against a live API. Directory, csproj filename and root namespace all match the assembly name.
+  - **`[Trait("Category", "Unit")]` is retired.** The Docker-free gate is `dotnet test src/HikvisionReplicator.Tests` — a whole project, no `--filter`.
+  - **Class names carry no level suffix**; the assembly disambiguates. `DeviceEndpointsTests` therefore exists in both the integration and e2e projects.
+- **Reason**: AD-024 defines three levels but only two projects existed to hold them, so "which level is this test?" was answered by a folder plus an attribute that every new unit test had to remember. An omitted attribute silently dropped a test from the fast gate — a failure mode with no signal. A project boundary cannot be forgotten: the unit project's package list makes an I/O test a compile error rather than a convention violation.
+- **Trade-off**: The full gate is now two commands instead of one, and package pins that matter to both suites (EF Core, kept in step with the Api) are duplicated across two csproj files and can drift. The unit project keeps EF Core pins it does not directly use, purely to suppress MSB3277 assembly conflicts from the Api reference — a non-obvious dependency that a future cleanup could remove and reintroduce 44 warnings.
+- **Consequence found during execution**: splitting the assemblies removed the scheduling cover that was hiding a real test-isolation defect. `TracingTests` asserted `Assert.Single` over a span sink that receives spans process-wide, and a parallel class's `GET /api/devices` made it fail deterministically once the 81 unit tests no longer occupied the parallel worker slots. Fixed in `98765c4` by correlating on a `traceparent` the class alone provokes. **A gate that passes because of thread scheduling is not evidence** — see `docs/test-patterns.md` § Test isolation.
+- **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.IntegrationTests/**`, `src/HikvisionReplicator.E2E/**`, `HikvisionReplicator.slnx`, `CLAUDE.md`, `README.md`, `docs/test-patterns.md`, `.github/pull_request_template.md`, `.specs/ARCHITECTURE.md`. Amends AD-024's "where each level lives" clause; AD-024's layer definitions are unchanged.
+- **Date**: 2026-08-17
 - **Status**: active
 
 ---
