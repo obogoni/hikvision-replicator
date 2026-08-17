@@ -84,6 +84,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: sensor M2 (tests)
 - last seen: 2026-08-17T21:10:09Z
 
+### L-013 — Require a status check only after its workflow is on the default branch; requiring it earlier deadlocks every in-flight PR, which triggers no run and so reports no check.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `ci` · harmful: 0
+- features: branch-protection
+- evidence: .github/workflows/ci.yml / PR #8 (ci)
+- last seen: 2026-08-17T21:30:56Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
