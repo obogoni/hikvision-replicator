@@ -294,6 +294,16 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Date**: 2026-08-17
 - **Status**: active
 
+### AD-029
+- **Decision**: **Retire `.specs/ARCHITECTURE.md`.** Its *descriptive* half — solution layout, API layer map, domain model, cross-cutting table, feature inventory, commands — is **deleted rather than migrated**: it restated the code and `CLAUDE.md`, and both are authoritative where it was not. Its *judgment* half is promoted:
+  - the device write-path flow and the database-is-the-authority rule → `CLAUDE.md` § Vertical Slice Structure;
+  - the Known Gaps backlog → `ROADMAP.md` § Known Gaps, plus `OD-7` for the AES-GCM migration.
+- **Reason**: The file was chartered by AD-012 (itself superseded by AD-013) under the **pre-v3** `tlc-spec-driven` layout, which prescribed `.specs/codebase/{STACK,ARCHITECTURE,CONVENTIONS,STRUCTURE,TESTING,INTEGRATIONS,CONCERNS}.md` as the output of a one-shot `map codebase` run — a bootstrap artifact, never a maintained document. Skill **v3** (upstream `9b3ec067`, 2026-06-25, a `BREAKING CHANGE`) removed the entire brownfield flow on stated grounds: *"Design reads live code via the Knowledge Verification Chain and flags concerns inline in `design.md`"*, and it retargeted Knowledge-Verification Step 2 from `.specs/codebase/` to `.specs/STATE.md`. The `map codebase` trigger was removed with it. The installed skill therefore contains **zero** references to the file — it appears in no `.specs` structure, no context-loading list, and no read hook, so nothing loaded it and no step refreshed it. The predicted staleness had already arrived: the file recorded **"3 projects"** against a 4-project solution, and carried no trace of AD-027's `.editorconfig`, `Directory.Build.props`, or `.github/workflows/ci.yml` — because AD-027's scope named `CLAUDE.md` and not the map.
+- **Trade-off**: The layer map's dependency-direction annotation and its per-file purpose comments are lost as prose and must now be read from the tree and the code; `CLAUDE.md` § Project Structure is deliberately coarser. A newcomer loses the single-page orientation document. Accepted because an orientation document that nothing loads and nothing refreshes **misleads more than it orients** — both drift instances above read as current to anyone trusting the file. This is a **deliberate divergence in one direction only**: `ROADMAP.md` is *kept* despite v3 also dropping it, because v3 offers no home for open decisions (`OD-NNN`) and the Handoff's one-line summary is not one.
+- **Scope**: `.specs/ARCHITECTURE.md` (deleted), `.specs/ROADMAP.md`, `.specs/STATE.md`, `CLAUDE.md`. AD-012's and AD-026's references to the file are left intact as audit trail per the supersession rule — they record what was true then.
+- **Date**: 2026-08-17
+- **Status**: active
+
 ---
 
 ## Handoff
