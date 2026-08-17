@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 8,
+  "next_id": 13,
   "lessons": [
     {
       "id": "L-001",
@@ -119,17 +119,109 @@
       "text": "Compare build warnings with --no-incremental before claiming none were introduced; an up-to-date incremental build re-reports zero warnings even when the code still emits them.",
       "signal": "gate_fail",
       "scope": "build",
+      "status": "confirmed",
+      "features": [
+        "test-project-conventions",
+        "code-style-enforcement"
+      ],
+      "recurrence": 2,
+      "harmful": 0,
+      "evidence": [
+        "src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj (build)",
+        "AC-1 / dotnet build --no-incremental (build)"
+      ],
+      "created": "2026-08-17T13:50:37Z",
+      "last_seen": "2026-08-17T21:10:08Z"
+    },
+    {
+      "id": "L-008",
+      "key": "gate_fail::never take a warning census from a build that did not succeed a failing project aborts the build before dependent projects compile so their warnings are invisible",
+      "text": "Never take a warning census from a build that did not succeed; a failing project aborts the build before dependent projects compile, so their warnings are invisible.",
+      "signal": "gate_fail",
+      "scope": "build",
       "status": "candidate",
       "features": [
-        "test-project-conventions"
+        "code-style-enforcement"
       ],
       "recurrence": 1,
       "harmful": 0,
       "evidence": [
-        "src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj (build)"
+        "AnalysisMode measurement (build)"
       ],
-      "created": "2026-08-17T13:50:37Z",
-      "last_seen": "2026-08-17T13:50:37Z"
+      "created": "2026-08-17T21:10:08Z",
+      "last_seen": "2026-08-17T21:10:08Z"
+    },
+    {
+      "id": "L-009",
+      "key": "gate_fail::use dotnet format whitespace never bare dotnet format bare also runs analyzer fixers which stamped obsolete onto test fixtures to silence a deprecated api advisory",
+      "text": "Use 'dotnet format whitespace', never bare 'dotnet format': bare also runs analyzer fixers, which stamped [Obsolete] onto test fixtures to silence a deprecated-API advisory.",
+      "signal": "gate_fail",
+      "scope": "build",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "src/HikvisionReplicator.IntegrationTests/PostgresFixture.cs:16 (build)"
+      ],
+      "created": "2026-08-17T21:10:09Z",
+      "last_seen": "2026-08-17T21:10:09Z"
+    },
+    {
+      "id": "L-010",
+      "key": "gate_fail::in editorconfig globs use cs not cs the latter requires at least one directory level and silently skips files sitting in a project root",
+      "text": "In .editorconfig globs use '**.cs' not '**/*.cs'; the latter requires at least one directory level and silently skips files sitting in a project root.",
+      "signal": "gate_fail",
+      "scope": "config",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        ".editorconfig (config)"
+      ],
+      "created": "2026-08-17T21:10:09Z",
+      "last_seen": "2026-08-17T21:10:09Z"
+    },
+    {
+      "id": "L-011",
+      "key": "spec_precision_gap::an acceptance criterion demanding zero diagnostics contradicts a design that accepts warnings say zero errors and enumerate the accepted warnings",
+      "text": "An acceptance criterion demanding 'zero diagnostics' contradicts a design that accepts warnings; say 'zero errors' and enumerate the accepted warnings.",
+      "signal": "spec_precision_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AC-1 (specs)"
+      ],
+      "created": "2026-08-17T21:10:09Z",
+      "last_seen": "2026-08-17T21:10:09Z"
+    },
+    {
+      "id": "L-012",
+      "key": "surviving_mutant::every discrimination sensor pass needs at least one must fail mutation a mutation applied to a wrong path reports a pass indistinguishable from a real one",
+      "text": "Every discrimination-sensor pass needs at least one must-fail mutation; a mutation applied to a wrong path reports a pass indistinguishable from a real one.",
+      "signal": "surviving_mutant",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "sensor M2 (tests)"
+      ],
+      "created": "2026-08-17T21:10:09Z",
+      "last_seen": "2026-08-17T21:10:09Z"
     }
   ]
 }

@@ -39,7 +39,7 @@ existing gate commands on every pull request. `dotnet format` is retained as the
 
 | AC | Criterion | Verification |
 |---|---|---|
-| AC-1 | A clean solution build succeeds with zero `IDE`/`CA` diagnostics. | `dotnet build HikvisionReplicator.slnx --no-incremental` → exit 0, no `IDE`/`CA` lines |
+| AC-1 | A clean solution build succeeds with zero `IDE`/`CA` **errors**. The 10 `CA` **warnings** CSE-08 accepts are expected and enumerated below. | `dotnet build HikvisionReplicator.slnx --no-incremental` → exit 0, no `error IDE`/`error CA` lines |
 | AC-2 | An injected formatting violation **fails** the build with `error IDE0055`. | inject bad whitespace → clean build → exit 1 and `error IDE0055`; revert |
 | AC-3 | The failure requires no extra flag — plain `dotnet build` is sufficient. | AC-2's command carries no `-p:` or `-warnaserror` |
 | AC-4 | `dotnet format` fixes an injected violation and the build goes green again. | inject → `dotnet format` → clean build exit 0 |
@@ -51,7 +51,20 @@ existing gate commands on every pull request. `dotnet format` is retained as the
 ## Out of Scope
 
 - Fixing the 8 pre-existing warnings (4 × `NU1903` transitive SSH.NET advisory via Testcontainers, 4 × `CS0618`). Pre-existing; belongs to a `build(deps)` change.
-- Fixing the ~22 code-quality findings that `AnalysisMode=Recommended` surfaces. Real refactoring work, triaged separately — see CSE-08.
+- Fixing the 10 code-quality findings that `AnalysisMode=Recommended` surfaces. Real refactoring work, triaged separately — see CSE-08. Enumerated so they stay a tracked list rather than an anonymous warning cloud:
+
+  | Rule | Location | What |
+  |---|---|---|
+  | `CA1001` | `IntegrationTests/CredentialLeakageTests.cs:62`, `ErrorHandlingTests.cs:16`, `PostgresFixture.cs:16` | Type owns a disposable field but is not `IDisposable` |
+  | `CA1848` | `Api/Infrastructure/GlobalExceptionHandler.cs:32` | Use `LoggerMessage` delegates |
+  | `CA1725` | `Api/Infrastructure/DeviceConfiguration.cs:19` | Parameter name should match the base declaration |
+  | `CA1716` | `Api/Shared/Errors.cs:1` | Namespace segment matches a reserved language keyword |
+  | `CA1711` | `IntegrationTests/PostgresFixture.cs:96` | Reserved type-name suffix |
+  | `CA1710` | `IntegrationTests/TracingTests.cs:16` | Collection type should end in `Collection` |
+  | `CA1305` | `IntegrationTests/ErrorHandlingTests.cs:88` | Specify `IFormatProvider` |
+  | `CA1310` | `IntegrationTests/HarnessTests.cs:49` | Specify `StringComparison` for correctness |
+
+  Seven of the ten are in `IntegrationTests`, so clearing them touches test code, not the Api.
 - Consolidating `TargetFramework` / `Nullable` / `ImplicitUsings` out of the four `.csproj` files into `Directory.Build.props`. Deferred: this feature adds only analysis properties.
 - `.git-blame-ignore-revs`. Only 5 lines are reformatted, so blame damage is negligible; the convention becomes worthwhile at the first wide sweep.
 - Any git hook, `PostToolUse` hook, or pre-commit tooling.
