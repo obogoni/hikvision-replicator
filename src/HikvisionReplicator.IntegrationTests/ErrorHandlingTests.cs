@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
 /// Boots the application against a real PostgreSQL container so startup succeeds, then

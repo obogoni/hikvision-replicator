@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
 /// Boots the real application against the Testcontainers database. Overrides are added

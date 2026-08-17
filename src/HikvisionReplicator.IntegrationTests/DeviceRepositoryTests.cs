@@ -4,7 +4,7 @@ using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
 /// The database is the authority for address uniqueness (AD-022, DEV-06), so these tests

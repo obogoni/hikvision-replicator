@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>Keeps every span the application exports, for inspection.</summary>
 public sealed class InMemorySpanSink : ICollection<Activity>
