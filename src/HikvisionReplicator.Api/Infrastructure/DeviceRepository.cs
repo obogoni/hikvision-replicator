@@ -44,8 +44,8 @@ public class DeviceRepository(AppDbContext dbContext)
     private static bool IsAddressConflict(DbUpdateException exception) =>
         exception.InnerException
             is PostgresException
-            {
-                SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: DeviceConfiguration.AddressIndexName,
-            };
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: DeviceConfiguration.AddressIndexName,
+        };
 }
