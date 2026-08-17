@@ -2,7 +2,6 @@ using HikvisionReplicator.Api.Domain;
 
 namespace HikvisionReplicator.Tests.Domain;
 
-[Trait("Category", "Unit")]
 public class DeviceUpdateTests
 {
     private static readonly DateTime CreatedOn = new(2026, 8, 12, 10, 0, 0, DateTimeKind.Utc);
