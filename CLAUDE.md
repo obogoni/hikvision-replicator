@@ -80,6 +80,26 @@ their own PR. The exact protection payload lives in AD-025; check live state wit
 gh api repos/obogoni/hikvision-replicator/branches/main/protection
 ```
 
+## Spec-Driven Validation (AD-028)
+
+**Feature-level validation runs as a fresh sub-agent, not as a self-check.** After the last
+task of a feature is committed, dispatch the `tlc-spec-driven` **Verifier** as a separate
+sub-agent — this is a standing instruction, so no further permission is needed for it.
+
+**Author ≠ verifier.** The agent that wrote the code and the spec is the wrong one to confirm
+they agree: a blind spot that shaped the implementation shaped the acceptance criteria too.
+The Verifier receives only `spec.md`, the commit range, and the test files, and re-derives
+coverage **evidence-or-zero** — every criterion needs a cited `file:line` plus the assertion
+expression, or it counts as uncovered no matter how confident anyone is.
+
+This was skipped on `test-project-conventions` and `code-style-enforcement`, and the cost is
+recorded: `code-style-enforcement`'s `AC-1` demanded "zero diagnostics" while the same spec
+accepted 10 `CA` warnings. The author wrote both halves, and that same intent papered over the
+contradiction; it was caught incidentally, not by design.
+
+The standalone fallback in `validate.md` is for when a sub-agent genuinely cannot run. Using
+it is a **deviation to declare in `validation.md` and the PR**, not a normal path.
+
 ## Project Structure
 
 ```text

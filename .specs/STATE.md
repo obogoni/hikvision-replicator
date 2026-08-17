@@ -281,6 +281,19 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Date**: 2026-08-17
 - **Status**: active
 
+### AD-028
+- **Decision**: **Feature-level validation runs as a fresh Verifier sub-agent — author ≠ verifier — and this entry is the standing authorisation for it.**
+  - After the last task of a feature is committed, the orchestrator dispatches the `tlc-spec-driven` **Verifier** as a separate sub-agent. It is not prompted for and needs no per-feature permission.
+  - The Verifier receives only `spec.md`, the commit range, and the test files. It re-derives coverage **evidence-or-zero**: every acceptance criterion needs a cited `file:line` plus the assertion expression, or it counts as uncovered.
+  - It also runs the **discrimination sensor** (inject a behaviour-level fault in scratch state, confirm the tests kill it, discard the mutation) and writes `validation.md`.
+  - The **standalone fallback** in `validate.md` remains available for when a sub-agent genuinely cannot run, but using it is a **deviation to declare** in `validation.md` and in the PR — not a normal path.
+- **Reason**: The agent that writes the code also writes the spec and the tests, so a blind spot that shaped the implementation shaped the acceptance criteria too; checking your own work applies the very reasoning that may have produced the gap. Two consecutive features ran without it, and the cost is concrete rather than theoretical: `code-style-enforcement`'s `AC-1` demanded "zero `IDE`/`CA` diagnostics" while the same spec's Out of Scope section accepted 10 `CA` warnings. Verifying it literally would have failed the feature; verifying it loosely would have passed a vague assertion. The author wrote both halves, and that same intent papered over the contradiction — it was caught incidentally during the sensor pass, not by design. A verifier reading `spec.md` cold sees only the text.
+- **Reason this needed a decision at all**: the skill already mandates the Verifier, but the session's operating instructions forbid spawning sub-agents unless the user requests one, and the two rules deadlocked — so validation silently degraded to a self-check twice while being flagged as an exception each time. A caveat repeated every feature stops carrying information. This entry converts it into a standing request, which is the condition the operating instruction actually asks for.
+- **Trade-off**: A second agent costs tokens and wall-clock on every feature, and it will sometimes disagree with the author over things that are matters of taste rather than defects — its output is a ranked gap list to triage, not a verdict to obey. The fix→re-verify loop is bounded to 3 iterations before escalating, so a stubborn disagreement cannot spin. Note also that this clause is **documentary only**: unlike AD-025's branch protection or AD-027's build gate, no repository setting can enforce that a sub-agent was actually dispatched — it holds as long as this file is honoured.
+- **Scope**: Every feature validated under `tlc-spec-driven`. Adds a § Spec-Driven Validation section to `CLAUDE.md`. Does not change what the Verifier does, only that it is dispatched and pre-authorised.
+- **Date**: 2026-08-17
+- **Status**: active
+
 ---
 
 ## Handoff
