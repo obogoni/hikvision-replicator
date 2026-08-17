@@ -234,11 +234,11 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 
 ## Handoff
 
-- **Feature**: `test-project-conventions` — **complete** (AD-026). `device-registry` remains complete and unmerged.
-- **Phase / Task**: Execute finished. 7 commits on `refactor/test-project-layout` (`267ab4a`…`866683c`). Validation ran as a standalone self-check, **not** an independent sub-agent — author ≠ verifier was not satisfied this round.
+- **Feature**: `test-project-conventions` — **complete** (AD-026). `device-registry` is merged to `main` (PR #1).
+- **Phase / Task**: Execute finished. The 8 atomic per-task commits live permanently in **PR #4** on branch `refactor/test-project-layout` (`267ab4a`…`004de20`) — that is where the SHAs cited in `validation.md` resolve. Validation ran as a standalone self-check, **not** an independent sub-agent — author ≠ verifier was not satisfied this round.
 - **Completed**: spec.md (confirmed) · validation.md (PASS, 11/11 ACs, 3/3 mutants killed). One project per test level: `.Tests` (81 unit, no Docker) · `.IntegrationTests` (88) · `.E2E` (9). `[Trait("Category","Unit")]` retired; gates run whole projects.
 - **In-progress** (file:line): none
-- **Next step**: **Merge PR A then PR B** (see Branch below), then specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
+- **Next step**: **Merge PR #5** (see Branch below), **deleting its branch on merge**, then specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
 - **Blockers**: none.
 - **Verification findings worth carrying forward**:
   - Splitting the assemblies exposed a **real test-isolation defect** that scheduling had hidden: `TracingTests` asserted `Assert.Single` over a span sink that receives spans process-wide, and a parallel class's `GET /api/devices` broke it deterministically once the 81 unit tests stopped occupying the worker slots. Fixed in `267ab4a`. **A gate that passes because of thread scheduling is not evidence** — this is the second feature running to corroborate that theme.
@@ -247,7 +247,9 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Correction to the previous handoff**: it claimed the build reports zero NuGet advisory warnings. It does not — a clean `--no-incremental` build at `314f616` emits **4 NU1903** (SSH.NET 2025.1.0, high severity, via Testcontainers) plus 4 CS0618. `846a190` cleared the *direct* advisories, not this transitive one. Unchanged by this branch, and worth its own `build(deps)` change.
 - **Open decisions**: Phase 2 still needs three numbers — device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
 - **Uncommitted files**: none
-- **Branch**: two stacked branches off the post-merge `main` (`96a64f2`):
-  - **PR A** — `docs/conventional-commits` (`314f616`): restores AD-025 to `main`. **It was never on `main`**: the original PR #2 was opened against `feat/device-registry` instead of `main`, and `feat/device-registry` had already been squash-merged, so the AD-025 docs, the PR template, and the CLAUDE.md Git Workflow section were stranded. Merge this first.
-  - **PR B** — `refactor/test-project-layout` (`267ab4a`…`866683c`): this feature, stacked on PR A. Merge second.
-  - `chore/repo-conventions` is retained locally as the pre-rebase original; delete it once both PRs land.
+- **Branch**: `refactor/test-project-levels` → **PR #5**, based directly on `main`. Single squash commit re-landing PR #4's content.
+- **Stacked-PR hazard — hit twice, do not hit a third time**: a PR whose base is another *branch* merges into that branch, not into `main`. GitHub retargets a stacked PR to `main` only when its base branch is **deleted** on merge.
+  - **PR #2** (`chore/repo-conventions` → `feat/device-registry`) stranded AD-025 off `main`; recovered by PR #3.
+  - **PR #4** (`refactor/test-project-layout` → `docs/conventional-commits`) stranded this whole feature off `main`; recovered by PR #5.
+  - **Rule going forward**: open PRs against `main` unless a stack is genuinely required, and when one is, either merge the base PR *with branch deletion* or retarget the child to `main` before merging. Verify after every merge with `git ls-tree -d --name-only origin/main src/` — read `main`, not the PR's "Merged" badge.
+- **Stale branches to delete once PR #5 lands** (all merged or superseded, and each one is a re-stranding risk): `chore/repo-conventions`, `docs/conventional-commits`, `refactor/test-project-layout`, `feat/device-registry`.
