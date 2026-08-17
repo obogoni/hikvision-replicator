@@ -52,15 +52,15 @@ Each HTTP request produces a trace with child spans for EF Core SQL statements.
 
 ```bash
 # Pure-logic tests — the only ones that need nothing running
-dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"
-
-# Everything in-process — starts a PostgreSQL container per test collection
 dotnet test src/HikvisionReplicator.Tests
+
+# In-process through the HTTP surface — starts a PostgreSQL container per test collection
+dotnet test src/HikvisionReplicator.IntegrationTests
 
 # Out-of-process, against a live API
 docker compose up -d
 dotnet run --project src/HikvisionReplicator.Api      # in another shell
-dotnet test src/HikvisionReplicator.E2ETests
+dotnet test src/HikvisionReplicator.E2E
 ```
 
 The integration suite provisions its own PostgreSQL through Testcontainers, so it needs a

@@ -201,7 +201,7 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Trade-off**: Two levels mean some rules are asserted twice, so a domain change can require edits in both a unit and an integration test. It also invites drift where a branch is unit-tested but never proven reachable through the API — mitigated by keeping AC-level coverage at the integration layer for **every** endpoint, so unit tests add depth rather than replacing endpoint coverage.
 - **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.E2ETests/**`, `docs/test-patterns.md`. Amends AD-019's default-level clause.
 - **Date**: 2026-08-12
-- **Status**: active
+- **Status**: active — the layer definitions stand; **where each level lives is amended by AD-026**, which gives each its own project and retires the `[Trait("Category", "Unit")]` marker. Paths named above are pre-AD-026.
 
 ### AD-025
 - **Decision**: **Git workflow is branch-per-change, Conventional Commits, merged into `main` only through a squash-merged pull request.**
@@ -216,17 +216,38 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 - **Date**: 2026-08-13
 - **Status**: active
 
+### AD-026
+- **Decision**: **Each test level gets its own project, and the project name declares the level.**
+  - `HikvisionReplicator.Tests` — **unit**. Pure logic, no I/O. References neither Testcontainers nor a web host, so it cannot compile a test that needs Docker. Folders mirror the Api tree (`Domain/`, `Infrastructure/`).
+  - `HikvisionReplicator.IntegrationTests` — **integration**. In-process through the HTTP surface against Testcontainers PostgreSQL (AD-019), and the home of `PostgresFixture` and `TestWebApplicationFactory`.
+  - `HikvisionReplicator.E2E` — **e2e**. NUnit + Playwright against a live API. Directory, csproj filename and root namespace all match the assembly name.
+  - **`[Trait("Category", "Unit")]` is retired.** The Docker-free gate is `dotnet test src/HikvisionReplicator.Tests` — a whole project, no `--filter`.
+  - **Class names carry no level suffix**; the assembly disambiguates. `DeviceEndpointsTests` therefore exists in both the integration and e2e projects.
+- **Reason**: AD-024 defines three levels but only two projects existed to hold them, so "which level is this test?" was answered by a folder plus an attribute that every new unit test had to remember. An omitted attribute silently dropped a test from the fast gate — a failure mode with no signal. A project boundary cannot be forgotten: the unit project's package list makes an I/O test a compile error rather than a convention violation.
+- **Trade-off**: The full gate is now two commands instead of one, and package pins that matter to both suites (EF Core, kept in step with the Api) are duplicated across two csproj files and can drift. The unit project keeps EF Core pins it does not directly use, purely to suppress MSB3277 assembly conflicts from the Api reference — a non-obvious dependency that a future cleanup could remove and reintroduce 44 warnings.
+- **Consequence found during execution**: splitting the assemblies removed the scheduling cover that was hiding a real test-isolation defect. `TracingTests` asserted `Assert.Single` over a span sink that receives spans process-wide, and a parallel class's `GET /api/devices` made it fail deterministically once the 81 unit tests no longer occupied the parallel worker slots. Fixed in `267ab4a` by correlating on a `traceparent` the class alone provokes. **A gate that passes because of thread scheduling is not evidence** — see `docs/test-patterns.md` § Test isolation.
+- **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.IntegrationTests/**`, `src/HikvisionReplicator.E2E/**`, `HikvisionReplicator.slnx`, `CLAUDE.md`, `README.md`, `docs/test-patterns.md`, `.github/pull_request_template.md`, `.specs/ARCHITECTURE.md`. Amends AD-024's "where each level lives" clause; AD-024's layer definitions are unchanged.
+- **Date**: 2026-08-17
+- **Status**: active
+
 ---
 
 ## Handoff
 
-- **Feature**: `device-registry` (Phase 1, item 1) — **complete**
-- **Phase / Task**: Execute finished. 24 tasks, 28 commits on `feat/device-registry`. Three Verifier iterations; every gap closed and mutation-verified.
-- **Completed**: spec.md (confirmed) · design.md (approved) · tasks.md (24 ✅) · validation.md (iteration 3) · 25 of 26 requirements verified, DEV-26 deferred by decision. **169 in-process tests** (81 unit / 88 integration, Testcontainers PostgreSQL) + 9 e2e. Build reports zero NuGet advisory warnings.
+- **Feature**: `test-project-conventions` — **complete** (AD-026). `device-registry` remains complete and unmerged.
+- **Phase / Task**: Execute finished. 7 commits on `refactor/test-project-layout` (`267ab4a`…`866683c`). Validation ran as a standalone self-check, **not** an independent sub-agent — author ≠ verifier was not satisfied this round.
+- **Completed**: spec.md (confirmed) · validation.md (PASS, 11/11 ACs, 3/3 mutants killed). One project per test level: `.Tests` (81 unit, no Docker) · `.IntegrationTests` (88) · `.E2E` (9). `[Trait("Category","Unit")]` retired; gates run whole projects.
 - **In-progress** (file:line): none
-- **Next step**: **Review and squash-merge the `feat/device-registry` PR into `main`** (branch is pushed and in sync with `origin`; merging now goes through a PR per AD-025), then rebase `chore/repo-conventions` onto the new `main` and specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
+- **Next step**: **Merge PR A then PR B** (see Branch below), then specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
 - **Blockers**: none.
-- **Verification findings worth carrying forward**: all three gaps were *missing assertions over correct production code*, not bugs. Mutation testing found every one; the passing gate found none. Lessons L-001…L-005 in `lessons.json` are all `candidate` — promotion needs corroboration from a second feature, so `user-registry` is where they get tested.
+- **Verification findings worth carrying forward**:
+  - Splitting the assemblies exposed a **real test-isolation defect** that scheduling had hidden: `TracingTests` asserted `Assert.Single` over a span sink that receives spans process-wide, and a parallel class's `GET /api/devices` broke it deterministically once the 81 unit tests stopped occupying the worker slots. Fixed in `267ab4a`. **A gate that passes because of thread scheduling is not evidence** — this is the second feature running to corroborate that theme.
+  - `device-registry`'s findings still stand: all three gaps were missing assertions over correct production code, found by mutation and not by the passing gate.
+  - Lessons L-001…L-007 in `lessons.json` are all `candidate`. L-006 (process-wide sinks) and L-007 (incremental builds hide warnings) came from this feature; `user-registry` is where the earlier five get tested.
+- **Correction to the previous handoff**: it claimed the build reports zero NuGet advisory warnings. It does not — a clean `--no-incremental` build at `314f616` emits **4 NU1903** (SSH.NET 2025.1.0, high severity, via Testcontainers) plus 4 CS0618. `846a190` cleared the *direct* advisories, not this transitive one. Unchanged by this branch, and worth its own `build(deps)` change.
 - **Open decisions**: Phase 2 still needs three numbers — device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
 - **Uncommitted files**: none
-- **Branch**: `chore/repo-conventions` (stacked on `feat/device-registry`; needs `git rebase --onto main feat/device-registry chore/repo-conventions` once that PR squash-merges)
+- **Branch**: two stacked branches off the post-merge `main` (`96a64f2`):
+  - **PR A** — `docs/conventional-commits` (`314f616`): restores AD-025 to `main`. **It was never on `main`**: the original PR #2 was opened against `feat/device-registry` instead of `main`, and `feat/device-registry` had already been squash-merged, so the AD-025 docs, the PR template, and the CLAUDE.md Git Workflow section were stranded. Merge this first.
+  - **PR B** — `refactor/test-project-layout` (`267ab4a`…`866683c`): this feature, stacked on PR A. Merge second.
+  - `chore/repo-conventions` is retained locally as the pre-rebase original; delete it once both PRs land.

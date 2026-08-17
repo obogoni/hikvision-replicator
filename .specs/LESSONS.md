@@ -44,6 +44,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: validation.md iteration 3 mutation M2 — Infrastructure/DeviceRepository.cs:35 (SaveChangesAsync(cancellationToken) -> SaveChangesAsync()), suite green (repository)
 - last seen: 2026-08-12T16:33:45Z
 
+### L-006 — A test reading a process-wide sink (span exporter, static logger, ActivitySource listener) must filter to traffic it provoked itself; otherwise a parallel test class's requests decide whether it passes.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `observability` · harmful: 0
+- features: test-project-conventions
+- evidence: src/HikvisionReplicator.IntegrationTests/TracingTests.cs:187 (observability)
+- last seen: 2026-08-17T13:50:36Z
+
+### L-007 — Compare build warnings with --no-incremental before claiming none were introduced; an up-to-date incremental build re-reports zero warnings even when the code still emits them.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `build` · harmful: 0
+- features: test-project-conventions
+- evidence: src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj (build)
+- last seen: 2026-08-17T13:50:37Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

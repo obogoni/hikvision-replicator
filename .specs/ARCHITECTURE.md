@@ -41,8 +41,9 @@ hikvision-replicator/
 ├── scripts/lessons.py                # lessons bookkeeping (do not hand-edit output)
 └── src/
     ├── HikvisionReplicator.Api/
-    ├── HikvisionReplicator.Tests/        # xUnit · unit + integration · Testcontainers PostgreSQL
-    └── HikvisionReplicator.E2ETests/     # NUnit + Playwright APIRequest · needs live API
+    ├── HikvisionReplicator.Tests/             # xUnit · unit · pure logic, no Docker
+    ├── HikvisionReplicator.IntegrationTests/  # xUnit · HTTP surface · Testcontainers PostgreSQL
+    └── HikvisionReplicator.E2E/               # NUnit + Playwright APIRequest · needs live API
 ```
 
 ---
@@ -195,10 +196,11 @@ Device (aggregate)
 | **Replication queue + worker** | — | **not built** — Phase 2 | — |
 | **Device push (ISAPI)** | — | **not built** — Phase 3 | — |
 
-**Test coverage:** 151 xUnit tests — 69 unit (`Tests/Domain/`, `Category=Unit`, no Docker)
-and 82 integration through the HTTP surface against Testcontainers PostgreSQL — plus 9
-NUnit/Playwright E2E tests against a live API. The level is chosen by layer per AD-024;
-see [`docs/test-patterns.md`](../docs/test-patterns.md).
+**Test coverage:** 169 xUnit tests — 81 unit (`HikvisionReplicator.Tests`, no Docker) and
+88 integration through the HTTP surface against Testcontainers PostgreSQL
+(`HikvisionReplicator.IntegrationTests`) — plus 9 NUnit/Playwright E2E tests against a
+live API (`HikvisionReplicator.E2E`). The level is chosen by layer per AD-024 and declared
+by the project per AD-026; see [`docs/test-patterns.md`](../docs/test-patterns.md).
 
 ---
 
@@ -235,9 +237,9 @@ docs, and the stray connection-string-named artifact. What remains:
 docker compose up -d                                        # PostgreSQL + Tempo + Grafana
 dotnet build HikvisionReplicator.slnx
 dotnet run   --project src/HikvisionReplicator.Api          # http://localhost:5000
-dotnet test  src/HikvisionReplicator.Tests --filter "Category=Unit"   # pure logic, no Docker
-dotnet test  src/HikvisionReplicator.Tests                  # + integration, needs a Docker daemon
-dotnet test  src/HikvisionReplicator.E2ETests               # requires a running API
+dotnet test  src/HikvisionReplicator.Tests                  # pure logic, no Docker
+dotnet test  src/HikvisionReplicator.IntegrationTests       # needs a Docker daemon
+dotnet test  src/HikvisionReplicator.E2E                    # requires a running API
 dotnet ef migrations add <Name> --project src/HikvisionReplicator.Api
 python3 scripts/lessons.py list --status confirmed          # load lessons at Specify/Design
 ```

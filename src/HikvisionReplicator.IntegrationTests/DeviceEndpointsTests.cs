@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 [Collection(PostgresCollection.Name)]
 public class DeviceEndpointsTests(PostgresFixture fixture) : IAsyncLifetime

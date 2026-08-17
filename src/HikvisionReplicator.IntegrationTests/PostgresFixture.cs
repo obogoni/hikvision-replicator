@@ -5,7 +5,7 @@ using Respawn;
 using Respawn.Graph;
 using Testcontainers.PostgreSql;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
 /// One PostgreSQL container per test collection (AD-019). The schema is created by the

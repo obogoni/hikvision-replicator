@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
 using NUnit.Framework;
 
-namespace HikvisionReplicator.E2ETests;
+namespace HikvisionReplicator.E2E;
 
 internal sealed record DeviceResponse(
     [property: JsonPropertyName("id")] int Id,

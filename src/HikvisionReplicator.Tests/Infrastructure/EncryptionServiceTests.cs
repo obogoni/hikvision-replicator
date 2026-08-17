@@ -1,9 +1,8 @@
 using HikvisionReplicator.Api.Infrastructure;
 using Microsoft.Extensions.Options;
 
-namespace HikvisionReplicator.Tests.Domain;
+namespace HikvisionReplicator.Tests.Infrastructure;
 
-[Trait("Category", "Unit")]
 public class EncryptionServiceTests
 {
     private static EncryptionService WithValidKey()
