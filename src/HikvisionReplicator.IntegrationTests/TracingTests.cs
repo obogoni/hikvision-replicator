@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>Keeps every span the application exports, for inspection.</summary>
 public sealed class InMemorySpanSink : ICollection<Activity>
@@ -96,6 +96,15 @@ public class TracingTests(PostgresFixture fixture) : IAsyncLifetime
 
     private readonly InMemorySpanSink _spanSink = new();
 
+    /// <summary>
+    /// The exporter is attached to a <c>TracerProvider</c>, but the listener a provider installs
+    /// on <c>Microsoft.AspNetCore</c> is process-wide — so this sink also receives spans from
+    /// every other test host alive in the process, including classes running in a parallel
+    /// collection. Correlating on a trace this class alone provokes is what makes "the span" a
+    /// well-defined thing to assert on.
+    /// </summary>
+    private readonly ActivityTraceId _testTraceId = ActivityTraceId.CreateRandom();
+
     private WebApplicationFactory<Program> _factory = null!;
     private string _storedCiphertext = string.Empty;
 
@@ -118,7 +127,7 @@ public class TracingTests(PostgresFixture fixture) : IAsyncLifetime
         });
 
         using var client = _factory.CreateClient();
-        var id = await RegisterDeviceAsync(client);
+        var id = await RegisterDeviceAsync(client, _testTraceId);
 
         await using var db = fixture.CreateDbContext();
         _storedCiphertext = await db
@@ -135,20 +144,31 @@ public class TracingTests(PostgresFixture fixture) : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    private static async Task<int> RegisterDeviceAsync(HttpClient client)
+    private static async Task<int> RegisterDeviceAsync(HttpClient client, ActivityTraceId traceId)
     {
-        var response = await client.PostAsJsonAsync(
-            "/api/devices",
-            new
-            {
-                name = "Traced Reader",
-                ipAddress = "192.168.9.11",
-                httpPort = 80,
-                username = "admin",
-                password = SentinelPassword,
-                faceCapacity = 10_000,
-            }
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/devices")
+        {
+            Content = JsonContent.Create(
+                new
+                {
+                    name = "Traced Reader",
+                    ipAddress = "192.168.9.11",
+                    httpPort = 80,
+                    username = "admin",
+                    password = SentinelPassword,
+                    faceCapacity = 10_000,
+                }
+            ),
+        };
+
+        // W3C propagation: the server span adopts this trace, which is what lets the assertions
+        // below tell this request's spans apart from every other host's.
+        request.Headers.Add(
+            "traceparent",
+            $"00-{traceId}-{ActivitySpanId.CreateRandom()}-01"
         );
+
+        var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -167,10 +187,18 @@ public class TracingTests(PostgresFixture fixture) : IAsyncLifetime
     }
 
     private List<Activity> RequestSpans() =>
-        [.. _spanSink.Spans.Where(span => span.Source.Name == AspNetCoreSource)];
+        [
+            .. _spanSink.Spans.Where(span =>
+                span.Source.Name == AspNetCoreSource && span.TraceId == _testTraceId
+            ),
+        ];
 
     private List<Activity> DatabaseSpans() =>
-        [.. _spanSink.Spans.Where(span => span.Source.Name == EntityFrameworkCoreSource)];
+        [
+            .. _spanSink.Spans.Where(span =>
+                span.Source.Name == EntityFrameworkCoreSource && span.TraceId == _testTraceId
+            ),
+        ];
 
     private List<string> SpanAttributes() =>
         [

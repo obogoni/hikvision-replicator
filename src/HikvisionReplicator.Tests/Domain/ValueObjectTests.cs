@@ -3,7 +3,6 @@ using HikvisionReplicator.Api.Shared;
 
 namespace HikvisionReplicator.Tests.Domain;
 
-[Trait("Category", "Unit")]
 public class ValueObjectTests
 {
     // ─── IP address (DEV-04, A-1, A-2) ────────────────────────────────────

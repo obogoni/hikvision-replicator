@@ -1,6 +1,6 @@
 using HikvisionReplicator.Api.Domain;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 [Collection(PostgresCollection.Name)]
 public class HarnessTests(PostgresFixture fixture) : IAsyncLifetime

@@ -2,7 +2,6 @@ using HikvisionReplicator.Api.Domain;
 
 namespace HikvisionReplicator.Tests.Domain;
 
-[Trait("Category", "Unit")]
 public class DeviceCreateTests
 {
     private static readonly DateTime Now = new(2026, 8, 12, 10, 30, 0, DateTimeKind.Utc);

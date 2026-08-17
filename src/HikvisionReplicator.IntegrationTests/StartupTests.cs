@@ -8,7 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Trace;
 
-namespace HikvisionReplicator.Tests;
+namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
 /// The behaviours that are decided while the application is starting, not while it is
