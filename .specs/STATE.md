@@ -86,7 +86,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: SQLite-backed Hangfire limits throughput and multi-instance deployment.
 - **Scope**: `Features/**/*Job.cs`, `Program.cs`
 - **Date**: 2026-08-02
-- **Status**: active
+- **Status**: superseded by AD-030
 
 ### AD-011
 - **Decision**: Default test level is in-process integration tests (xUnit + `TestWebApplicationFactory` + in-memory SQLite) exercising the HTTP surface; Playwright/NUnit E2E tests cover the same routes against a live API. Test names describe behaviour in plain English per [`docs/test-patterns.md`](../docs/test-patterns.md) — no HTTP verbs, no status codes, no method names.
@@ -110,7 +110,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: Discards working, tested code for the seven shipped slices and repeats that effort.
 - **Scope**: Whole repository — supersedes AD-012.
 - **Date**: 2026-08-02
-- **Status**: active
+- **Status**: active — the rewrite decision stands, but the **stack clause above is historical** and amended twice: the database by **AD-018** (PostgreSQL from the first commit, never SQLite) and the job runner by **AD-030** (none mandated; OD-3 open). Do not read "SQLite" or "Hangfire" here as current.
 
 ### AD-014
 - **Decision**: The product goal is **live synchronization of users to devices, performant and fault-tolerant**, driven by the stadium scenario: a spectator who buys a ticket minutes before an event must be able to enter by facial recognition. Latency from `POST /api/users` to enrolled-on-all-devices is the primary quality attribute; resilience to individual offline readers is the second.
@@ -302,6 +302,14 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Reason**: The file was chartered by AD-012 (itself superseded by AD-013) under the **pre-v3** `tlc-spec-driven` layout, which prescribed `.specs/codebase/{STACK,ARCHITECTURE,CONVENTIONS,STRUCTURE,TESTING,INTEGRATIONS,CONCERNS}.md` as the output of a one-shot `map codebase` run — a bootstrap artifact, never a maintained document. Skill **v3** (upstream `9b3ec067`, 2026-06-25, a `BREAKING CHANGE`) removed the entire brownfield flow on stated grounds: *"Design reads live code via the Knowledge Verification Chain and flags concerns inline in `design.md`"*, and it retargeted Knowledge-Verification Step 2 from `.specs/codebase/` to `.specs/STATE.md`. The `map codebase` trigger was removed with it. The installed skill therefore contains **zero** references to the file — it appears in no `.specs` structure, no context-loading list, and no read hook, so nothing loaded it and no step refreshed it. The predicted staleness had already arrived: the file recorded **"3 projects"** against a 4-project solution, and carried no trace of AD-027's `.editorconfig`, `Directory.Build.props`, or `.github/workflows/ci.yml` — because AD-027's scope named `CLAUDE.md` and not the map.
 - **Trade-off**: The layer map's dependency-direction annotation and its per-file purpose comments are lost as prose and must now be read from the tree and the code; `CLAUDE.md` § Project Structure is deliberately coarser. A newcomer loses the single-page orientation document. Accepted because an orientation document that nothing loads and nothing refreshes **misleads more than it orients** — both drift instances above read as current to anyone trusting the file. This is a **deliberate divergence in one direction only**: `ROADMAP.md` is *kept* despite v3 also dropping it, because v3 offers no home for open decisions (`OD-NNN`) and the Handoff's one-line summary is not one.
 - **Scope**: `.specs/ARCHITECTURE.md` (deleted), `.specs/ROADMAP.md`, `.specs/STATE.md`, `CLAUDE.md`. AD-012's and AD-026's references to the file are left intact as audit trail per the supersession rule — they record what was true then.
+- **Date**: 2026-08-17
+- **Status**: active
+
+### AD-030
+- **Decision**: **No job runner is mandated, and none is in the solution.** AD-010's "deferred work runs as Hangfire jobs (SQLite storage)" rule is superseded and no longer binds. How deferred replication work is executed remains an **open decision — `ROADMAP.md` OD-3** — to be resolved during Phase 2 against the derived load, not inherited now. `replication-queue` and `replication-worker` may not assume Hangfire. This amends the job-runner half of AD-013's carried-over stack, exactly as AD-018 amended its database half.
+- **Reason**: AD-010 was reverse-engineered on 2026-08-02 from the pre-rewrite implementation and recorded as `active`, but AD-013 discarded that implementation and no rewrite feature has reintroduced a job runner — there is no Hangfire package reference, no `*Job.cs`, and no enqueue call anywhere in `src/`. Its storage clause was independently invalidated by AD-018, which is why OD-3 was *reopened* rather than answered: Hangfire-on-PostgreSQL is a recommendation to validate under load, not a decision taken. Left `active`, the entry read as a standing mandate that contradicted both `CLAUDE.md` ("Hangfire is not in the solution; the job runner is decided in Phase 2") and OD-3 itself. **A decision log whose `active` entries disagree with the always-loaded instructions is worse than no log** — a reader cannot tell which side is stale, and the log is the side that claims authority. Found while auditing duplication between `CLAUDE.md` and the now-retired architecture map (AD-029); the map was the only artifact stating the true position, and deleting it left the contradiction with nothing to correct it.
+- **Trade-off**: Phase 2 starts with no default, so `replication-worker` must resolve OD-3 as part of its own design instead of inheriting an answer, and that design work is now on the critical path of the product's core capability. Accepted: AD-014 makes propagation throughput the primary quality attribute, and the superseded "default" was picked for an implementation that no longer exists, storing state in a database that is no longer used. An inherited answer that was never validated against the derived load (`50,000 × D` operations) is not a saving.
+- **Scope**: `.specs/STATE.md` (supersedes AD-010; annotates AD-013's stack clause as historical), `.specs/ROADMAP.md` OD-3. Binds `replication-queue` and `replication-worker`.
 - **Date**: 2026-08-17
 - **Status**: active
 
