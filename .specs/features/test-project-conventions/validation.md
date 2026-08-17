@@ -2,7 +2,10 @@
 
 **Date**: 2026-08-17
 **Spec**: `.specs/features/test-project-conventions/spec.md`
-**Diff range**: `fce3995..19449e9` (branch `chore/repo-conventions`, 6 commits)
+**Diff range**: `314f616..b22172b` (branch `refactor/test-project-layout`, 6 commits, plus
+`866683c` adding this report). These are **pre-squash references** on that branch and will
+not resolve on `main` after merge (AD-025). Commit *bodies* on the branch cite the
+pre-rebase SHAs these were cherry-picked from — the content is identical.
 **Verifier**: standalone fresh-eyes pass — sub-agent dispatch was unavailable in this
 session, so the independent checks in `validate.md` (spec-anchored evidence, discrimination
 sensor, code-quality review) were run directly. **Author ≠ verifier is therefore not
@@ -15,12 +18,12 @@ satisfied**; this report is a self-check and should be read as one.
 | Task | Commit | Status | Notes |
 | --- | --- | --- | --- |
 | Baseline the gate | — | ✅ Done | 81 / 88 / 169 confirmed by run, not by handoff |
-| Fix tracing isolation | `98765c4` | ✅ Done | Unplanned — see Deviations |
-| Create IntegrationTests | `bf09dba` | ✅ Done | 9 files moved as git renames |
-| Trim Tests to unit-only | `77b741b` | ✅ Done | EF Core pins retained, see Deviations |
-| Rename E2ETests → E2E | `e130c8f` | ✅ Done | Directory, csproj, namespace together |
-| Update developer docs | `0f0f9b1` | ✅ Done | CLAUDE, README, test-patterns, PR template |
-| Record AD-026 | `19449e9` | ✅ Done | AD-024 marked amended; ARCHITECTURE.md refreshed |
+| Fix tracing isolation | `267ab4a` | ✅ Done | Unplanned — see Deviations |
+| Create IntegrationTests | `0d033af` | ✅ Done | 9 files moved as git renames |
+| Trim Tests to unit-only | `ecc8371` | ✅ Done | EF Core pins retained, see Deviations |
+| Rename E2ETests → E2E | `e1dad50` | ✅ Done | Directory, csproj, namespace together |
+| Update developer docs | `183fdf7` | ✅ Done | CLAUDE, README, test-patterns, PR template |
+| Record AD-026 | `b22172b` | ✅ Done | AD-024 marked amended; ARCHITECTURE.md refreshed |
 
 ---
 
@@ -37,7 +40,7 @@ test suite is not what proves them; the cited commands are.
 | TPC-02 unit project references no Testcontainers / Respawn / Mvc.Testing | absent from csproj | `grep -E "Testcontainers\|Respawn\|Mvc.Testing" src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj` → no match | ✅ PASS |
 | TPC-03 integration project holds the 7 I/O classes + 2 fixtures | 9 files | `find src/HikvisionReplicator.IntegrationTests -name '*.cs'` → exactly those 9 | ✅ PASS |
 | TPC-04 e2e dir, csproj, namespace all read `.E2E` | no `E2ETests` path or namespace remains | `src/HikvisionReplicator.E2E/HikvisionReplicator.E2E.csproj`; `DeviceEndpointsTests.cs:7` — `namespace HikvisionReplicator.E2E;` | ✅ PASS |
-| TPC-05 no test content change beyond namespace / usings / trait | only those lines differ | `git diff 98765c4 HEAD -M -- '*.cs'` → 11 namespace lines + 4 `[Trait]` deletions, **0 other lines** | ✅ PASS |
+| TPC-05 no test content change beyond namespace / usings / trait | only those lines differ | `git diff 267ab4a HEAD -M -- '*.cs'` → 11 namespace lines + 4 `[Trait]` deletions, **0 other lines** | ✅ PASS |
 | TPC-06 Docker-free gate passes, 81 tests | 81 passed, no container start | `DOCKER_HOST=unix:///nonexistent/docker.sock dotnet test src/HikvisionReplicator.Tests` → `Passed: 81, Failed: 0` | ✅ PASS |
 | TPC-07 integration gate passes, 88 tests | 88 passed | `dotnet test src/HikvisionReplicator.IntegrationTests` → `Passed: 88, Failed: 0` | ✅ PASS |
 | TPC-08 e2e gate passes, 9 tests | 9 passed | `dotnet test src/HikvisionReplicator.E2E` against live API → `Passed: 9, Failed: 0` | ✅ PASS |
@@ -86,7 +89,7 @@ could not have failed this way — an omitted attribute produced no signal at al
 - **Test count before**: 169 in-process + 9 e2e
 - **Test count after**: 81 + 88 = 169 in-process + 9 e2e
 - **Delta**: 0 — this feature adds no tests and deletes none, which is the intent
-- **Build warnings**: 4 CS0618 + 4 NU1903, **identical to `fce3995`** (verified by building
+- **Build warnings**: 4 CS0618 + 4 NU1903, **identical to `314f616`** (verified by building
   a pristine worktree of HEAD with `--no-incremental`). Both pre-date this branch.
 
 ---
@@ -107,7 +110,7 @@ could not have failed this way — an omitted attribute produced no signal at al
 
 ## Deviations
 
-1. **Unplanned fix commit `98765c4`.** The spec put "changing any test's behaviour" out of
+1. **Unplanned fix commit `267ab4a`.** The spec put "changing any test's behaviour" out of
    scope, but the split made `TracingTests` fail deterministically (3/3) where HEAD passed
    (3/3). Root cause: a `TracerProvider`'s listener on `Microsoft.AspNetCore` is
    process-wide, so the in-memory sink collected spans from `DatabaseUnreachableTests`,
@@ -155,5 +158,6 @@ mutation-verified.
 - TPC-06 used an unreachable `DOCKER_HOST` rather than a stopped daemon.
 - Lessons L-006 and L-007 are `candidate` and need corroboration from a second feature.
 
-**Next steps**: rebase onto `main` once the `feat/device-registry` PR squash-merges, then
-open the PR for this branch.
+**Next steps**: merge PR A (`docs/conventional-commits`, restoring AD-025 to `main` — it
+was lost because its original PR #2 targeted `feat/device-registry` instead of `main`),
+then merge this branch's PR B on top.
