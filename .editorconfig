@@ -1,0 +1,53 @@
+# Single source of truth for style and formatting (AD-027).
+#
+# Severity is set HERE, per rule — never with -warnaserror on the command line. A clean
+# build already emits 4 NU1903 (transitive SSH.NET advisory via Testcontainers) and
+# 4 CS0618; -warnaserror would turn those pre-existing warnings into build failures.
+#
+# Enforcement is switched on by EnforceCodeStyleInBuild in Directory.Build.props, so no
+# build flag is ever required. Fix violations with:  dotnet format
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.cs]
+indent_size = 4
+
+# IDE0055 is the whole formatting layer expressed as one diagnostic. As an error it makes
+# `dotnet build` the formatting gate, which removes the need for a separate
+# `dotnet format --verify-no-changes` step in CI.
+dotnet_diagnostic.IDE0055.severity = error
+
+# File-scoped namespaces — CLAUDE.md § Code Style.
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning
+
+[*.{csproj,props,targets,slnx}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+# Trailing double-space is a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+# EF Core scaffolds these; they must never fail a build or be reformatted by hand.
+[src/HikvisionReplicator.Api/Infrastructure/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.category-Style.severity = none
+
+# Test methods are named in plain English with underscores — docs/test-patterns.md § Naming
+# Tests. CA1707 ("identifiers should not contain underscores") contradicts that convention
+# and fires 304 times across the test projects; it is wrong here, not the names.
+#
+# Glob note: `**.cs` — NOT `**/*.cs`. The latter requires at least one directory level and
+# so misses test files sitting directly in a project root, leaving 18 CA1707 behind.
+[src/HikvisionReplicator.{Tests,IntegrationTests,E2E}/**.cs]
+dotnet_diagnostic.CA1707.severity = none
