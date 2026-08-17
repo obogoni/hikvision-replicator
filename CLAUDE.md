@@ -45,6 +45,21 @@ valid conventional-commit subject. Per-task commits are preserved in the PR, not
 `main` — record any commit SHAs that matter (e.g. in `validation.md`) as
 pre-squash references.
 
+**Base every PR on `main`.** A PR whose base is another *branch* merges into that branch,
+**not** into `main` — GitHub retargets a child only when the base branch is deleted on
+merge. This stranded work off `main` twice (PR #2, PR #4). Stack only when genuinely
+required; when you do, merge the base PR with its branch deleted, or retarget the child to
+`main` first. **After any merge, verify `main` itself** — a "Merged" badge only means
+something merged somewhere:
+
+```bash
+git fetch --prune && git log --oneline -3 origin/main && git ls-tree -d --name-only origin/main src/
+```
+
+Squash-only and auto-delete are enforced by repository settings, not just by this file
+(AD-025): `gh repo edit --enable-squash-merge=true --enable-merge-commit=false
+--enable-rebase-merge=false --delete-branch-on-merge`.
+
 ## Project Structure
 
 ```text
