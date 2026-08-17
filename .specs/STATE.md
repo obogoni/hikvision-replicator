@@ -5,7 +5,8 @@
 Project-level decisions every future feature must follow or explicitly supersede.
 AD-001…AD-012 were **reverse-engineered** from the existing codebase on 2026-08-02
 when spec-driven development was adopted — they document conventions already in
-force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
+force, not new choices. The architecture map they once pointed at is retired (AD-029) —
+read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ### AD-001
 - **Decision**: Features are organised as vertical slices under `Features/{Resource}/{Operation}/`, three files each — `{Op}Service.Interface.cs`, `{Op}Service.cs`, `{Op}Service.Endpoint.cs`.
