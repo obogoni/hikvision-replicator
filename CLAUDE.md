@@ -10,9 +10,19 @@ job runner is decided in Phase 2.
 
 ## Git Workflow (AD-025)
 
-**Never commit directly to `main`.** The only exception is an explicit, in-the-moment
-instruction from the user to do so — a general "go ahead" on a task is not that
-instruction. If you are on `main` and about to commit, stop and branch first.
+**Never commit directly to `main` — and the server now enforces it.** Branch protection
+rejects a direct push outright:
+
+```
+remote: - Changes must be made through a pull request.
+remote: - Required status check "build-and-test" is expected.
+ ! [remote rejected] HEAD -> main (push declined due to repository rule violations)
+```
+
+So if you are on `main` and about to commit, branch first — otherwise you will do the work
+and then discover it cannot be pushed. `enforce_admins=true`, so being the repo owner does
+not exempt you. Note that `git push --dry-run` does **not** test this: a dry run sends no
+pack, so protection never evaluates it and the push appears to succeed.
 
 **One branch per change.** Branch off `main`, named `<type>/<kebab-slug>` using the same
 type vocabulary as the commit message — `feat/device-registry`, `fix/ip-normalization`,
@@ -59,6 +69,16 @@ git fetch --prune && git log --oneline -3 origin/main && git ls-tree -d --name-o
 Squash-only and auto-delete are enforced by repository settings, not just by this file
 (AD-025): `gh repo edit --enable-squash-merge=true --enable-merge-commit=false
 --enable-rebase-merge=false --delete-branch-on-merge`.
+
+**A PR cannot merge until CI passes.** `build-and-test` is a required status check with
+`strict=true`, so a branch must also be up to date with `main` first — if another PR merges
+ahead of yours, update from `main` and let CI re-run. A PR is required but needs **no
+approval** (`required_approving_review_count=0`), because a solo maintainer cannot approve
+their own PR. The exact protection payload lives in AD-025; check live state with:
+
+```bash
+gh api repos/obogoni/hikvision-replicator/branches/main/protection
+```
 
 ## Project Structure
 
