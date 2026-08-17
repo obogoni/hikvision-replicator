@@ -234,13 +234,17 @@ force, not new choices. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map.
 
 ## Handoff
 
-- **Feature**: `device-registry` (Phase 1, item 1) — **complete**
-- **Phase / Task**: Execute finished. 24 tasks, 28 commits on `feat/device-registry`. Three Verifier iterations; every gap closed and mutation-verified.
-- **Completed**: spec.md (confirmed) · design.md (approved) · tasks.md (24 ✅) · validation.md (iteration 3) · 25 of 26 requirements verified, DEV-26 deferred by decision. **169 in-process tests** (81 unit / 88 integration, Testcontainers PostgreSQL) + 9 e2e. Build reports zero NuGet advisory warnings.
+- **Feature**: `test-project-conventions` — **complete** (AD-026). `device-registry` remains complete and unmerged.
+- **Phase / Task**: Execute finished. 6 commits on `chore/repo-conventions` (`98765c4`…`19449e9`). Validation ran as a standalone self-check, **not** an independent sub-agent — author ≠ verifier was not satisfied this round.
+- **Completed**: spec.md (confirmed) · validation.md (PASS, 11/11 ACs, 3/3 mutants killed). One project per test level: `.Tests` (81 unit, no Docker) · `.IntegrationTests` (88) · `.E2E` (9). `[Trait("Category","Unit")]` retired; gates run whole projects.
 - **In-progress** (file:line): none
-- **Next step**: **Review and squash-merge the `feat/device-registry` PR into `main`** (branch is pushed and in sync with `origin`; merging now goes through a PR per AD-025), then rebase `chore/repo-conventions` onto the new `main` and specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
+- **Next step**: **Review and squash-merge the `feat/device-registry` PR into `main`** (per AD-025), then rebase this branch — `git rebase --onto main feat/device-registry chore/repo-conventions` — open its PR, and specify Phase 1 item 2, `user-registry`. Resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec.
 - **Blockers**: none.
-- **Verification findings worth carrying forward**: all three gaps were *missing assertions over correct production code*, not bugs. Mutation testing found every one; the passing gate found none. Lessons L-001…L-005 in `lessons.json` are all `candidate` — promotion needs corroboration from a second feature, so `user-registry` is where they get tested.
+- **Verification findings worth carrying forward**:
+  - Splitting the assemblies exposed a **real test-isolation defect** that scheduling had hidden: `TracingTests` asserted `Assert.Single` over a span sink that receives spans process-wide, and a parallel class's `GET /api/devices` broke it deterministically once the 81 unit tests stopped occupying the worker slots. Fixed in `98765c4`. **A gate that passes because of thread scheduling is not evidence** — this is the second feature running to corroborate that theme.
+  - `device-registry`'s findings still stand: all three gaps were missing assertions over correct production code, found by mutation and not by the passing gate.
+  - Lessons L-001…L-007 in `lessons.json` are all `candidate`. L-006 (process-wide sinks) and L-007 (incremental builds hide warnings) came from this feature; `user-registry` is where the earlier five get tested.
+- **Correction to the previous handoff**: it claimed the build reports zero NuGet advisory warnings. It does not — a clean `--no-incremental` build at `fce3995` emits **4 NU1903** (SSH.NET 2025.1.0, high severity, via Testcontainers) plus 4 CS0618. `846a190` cleared the *direct* advisories, not this transitive one. Unchanged by this branch, and worth its own `build(deps)` change.
 - **Open decisions**: Phase 2 still needs three numbers — device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
 - **Uncommitted files**: none
-- **Branch**: `chore/repo-conventions` (stacked on `feat/device-registry`; needs `git rebase --onto main feat/device-registry chore/repo-conventions` once that PR squash-merges)
+- **Branch**: `chore/repo-conventions` (stacked on `feat/device-registry`; needs the rebase above once that PR squash-merges)
