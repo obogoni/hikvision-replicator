@@ -21,8 +21,9 @@
 
 ```
 dotnet build HikvisionReplicator.slnx
-dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"    # unit, Docker-free
-dotnet test src/HikvisionReplicator.Tests                             # full, needs Docker
+dotnet test src/HikvisionReplicator.Tests               # unit, Docker-free
+dotnet test src/HikvisionReplicator.IntegrationTests    # integration, needs Docker
+dotnet test src/HikvisionReplicator.E2E                 # e2e, needs a running API
 ```
 
 - Unit: <!-- N passed --> · Integration: <!-- N passed --> · E2E: <!-- N passed / not run -->

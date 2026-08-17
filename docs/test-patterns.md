@@ -3,23 +3,41 @@
 ## Choosing the test level
 
 Source: `.specs/STATE.md` — **AD-024** (active, 2026-08-12), which amends AD-019's
-"integration is the default level" clause.
+"integration is the default level" clause, and **AD-026** (active, 2026-08-17), which gives
+each level its own project.
 
-**The level is chosen by layer, not uniformly.**
+**The level is chosen by layer, not uniformly — and the project you put a test in is what
+declares the level you chose.**
 
-| Layer | Level | Where | Depth |
+| Layer | Level | Project | Depth |
 |---|---|---|---|
-| Pure logic with no I/O — domain aggregates, value objects, `EncryptionService`, options validation | **unit** | `src/HikvisionReplicator.Tests/Domain/`, marked `[Trait("Category", "Unit")]` | All branches, 1:1 with the spec's acceptance criteria, every listed edge case |
-| Anything touching I/O or wiring — feature slices and their routes, repositories and specifications, startup behaviour, cross-cutting handlers | **integration** | `src/HikvisionReplicator.Tests/`, in-process through the HTTP surface against Testcontainers PostgreSQL | Every route: happy path, every listed edge case, every documented error path |
-| The HTTP surface out of process | **e2e** | `src/HikvisionReplicator.E2ETests/` | A thin confirmation of each route — one happy path and one error path. Not a coverage layer |
+| Pure logic with no I/O — domain aggregates, value objects, `EncryptionService`, options validation | **unit** | `src/HikvisionReplicator.Tests/`, folders mirroring the Api tree (`Domain/`, `Infrastructure/`) | All branches, 1:1 with the spec's acceptance criteria, every listed edge case |
+| Anything touching I/O or wiring — feature slices and their routes, repositories and specifications, startup behaviour, cross-cutting handlers | **integration** | `src/HikvisionReplicator.IntegrationTests/`, in-process through the HTTP surface against Testcontainers PostgreSQL | Every route: happy path, every listed edge case, every documented error path |
+| The HTTP surface out of process | **e2e** | `src/HikvisionReplicator.E2E/` | A thin confirmation of each route — one happy path and one error path. Not a coverage layer |
 
 Two rules keep the split honest:
 
-- The `[Trait("Category", "Unit")]` marker exists so the pure-logic tests run **without
-  Docker** — that is the fast feedback loop.
+- The unit project **references neither Testcontainers nor a web host**, so the pure-logic
+  tests run without Docker — that is the fast feedback loop, and it is enforced by what
+  the project can compile rather than by a marker a new test might forget.
 - Unit tests **add depth; they never replace endpoint coverage.** Every route keeps its
   acceptance-criterion coverage at the integration layer, so a branch can never be
   unit-tested but unproven through the API.
+
+## Test isolation in the integration project
+
+The integration suite runs several hosts in one process, and some diagnostics are
+**process-wide rather than per-host**. An OpenTelemetry `TracerProvider` installs its
+listener on the global `Microsoft.AspNetCore` `ActivitySource`, so an in-memory span
+exporter receives spans from *every* host alive in the process — including test classes in
+a different xUnit collection running in parallel.
+
+Assert on something that identifies your own traffic. `TracingTests` sends a `traceparent`
+for a trace only it provokes and filters spans on that trace id; asserting on a
+process-wide collection without such a filter passes or fails on scheduling luck.
+
+The same caution applies to any other ambient sink — static loggers, `ActivitySource`
+listeners, environment variables.
 
 Why split at all: branch-level domain behaviour is only observable indirectly through
 HTTP. The two defects the rewrite fixed in `Device` — IP normalization and the
@@ -67,4 +85,6 @@ Group by resource and test scope:
 - `DeviceEndpointsTests` — integration tests for device HTTP endpoints
 - `UserEndpointsTests` — integration tests for user HTTP endpoints
 
-E2E test classes follow the same convention under `HikvisionReplicator.E2ETests`.
+Class names carry no level suffix — the project does. `DeviceEndpointsTests` therefore
+exists in both `HikvisionReplicator.IntegrationTests` and `HikvisionReplicator.E2E`, and
+the assembly tells them apart.

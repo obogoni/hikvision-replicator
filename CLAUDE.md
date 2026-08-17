@@ -56,8 +56,9 @@ src/
 │   ├── Infrastructure/   ← EF Core, migrations, repositories, encryption, exception handler
 │   ├── Shared/           ← IAggregateRoot, IRepository<T>, error records, ports
 │   └── Program.cs
-├── HikvisionReplicator.Tests/      ← xUnit — unit tests under Domain/, integration tests at the root
-└── HikvisionReplicator.E2ETests/   ← NUnit + Playwright, against a live API
+├── HikvisionReplicator.Tests/             ← xUnit — unit only, pure logic, no Docker
+├── HikvisionReplicator.IntegrationTests/  ← xUnit — through the HTTP surface, Testcontainers
+└── HikvisionReplicator.E2E/               ← NUnit + Playwright, against a live API
 ```
 
 ## Commands
@@ -68,7 +69,7 @@ dotnet restore
 dotnet build HikvisionReplicator.slnx
 dotnet ef database update --project src/HikvisionReplicator.Api   # migrations live in Api/Infrastructure/Migrations
 dotnet run --project src/HikvisionReplicator.Api           # http://localhost:5000
-dotnet test src/HikvisionReplicator.E2ETests               # E2E tests (requires a running API)
+dotnet test src/HikvisionReplicator.E2E                    # E2E tests (requires a running API)
 ```
 
 The API applies its migrations itself at startup, so `dotnet ef database update` is only
@@ -77,17 +78,19 @@ needed to migrate a database out of band.
 ### Gate commands
 
 ```bash
-# Docker-free — pure logic only (AD-024)
-dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"
+# Docker-free — pure logic only (AD-024, AD-026)
+dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests
 
 # Full — needs a Docker daemon for Testcontainers PostgreSQL (AD-019)
-dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests
+dotnet build HikvisionReplicator.slnx \
+  && dotnet test src/HikvisionReplicator.Tests \
+  && dotnet test src/HikvisionReplicator.IntegrationTests
 ```
 
 ### E2E setup
 
 ```bash
-dotnet build src/HikvisionReplicator.E2ETests
+dotnet build src/HikvisionReplicator.E2E
 ```
 
 The suite drives the API through Playwright's `IAPIRequestContext`, which needs only the
@@ -96,7 +99,7 @@ Installing browsers (`playwright.ps1 install`, or `playwright install` after
 `dotnet tool install --global Microsoft.Playwright.CLI`) is only needed if browser-driven
 tests are ever added.
 
-Override base URL: `E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2ETests`
+Override base URL: `E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2E`
 
 ## Code Style
 
@@ -158,7 +161,11 @@ Each feature lives under `Features/{Resource}/{Operation}/` — three files, no 
 ## Tests
 
 Before writing any test, read [`docs/test-patterns.md`](docs/test-patterns.md) — it holds
-both the **"Choosing the test level"** rules (AD-024: unit for pure no-I/O logic under
-`Tests/Domain/` with `[Trait("Category", "Unit")]`, integration through the HTTP surface
-for slices, repositories, and startup, E2E as a thin out-of-process confirmation) and the
-behaviour-based naming convention.
+both the **"Choosing the test level"** rules (AD-024: unit for pure no-I/O logic,
+integration through the HTTP surface for slices, repositories, and startup, E2E as a thin
+out-of-process confirmation) and the behaviour-based naming convention.
+
+**The project a test lives in is what declares its level** (AD-026) — `.Tests` for unit,
+`.IntegrationTests` for integration, `.E2E` for end-to-end. There is no category trait;
+choosing the project is choosing the level, so put a new test in the project whose
+dependencies it is allowed to have. A test that needs Docker cannot compile in `.Tests`.
