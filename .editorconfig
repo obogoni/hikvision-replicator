@@ -5,7 +5,8 @@
 # 4 CS0618; -warnaserror would turn those pre-existing warnings into build failures.
 #
 # Enforcement is switched on by EnforceCodeStyleInBuild in Directory.Build.props, so no
-# build flag is ever required. Fix violations with:  dotnet format
+# build flag is ever required. Fix violations with:  dotnet format whitespace
+# (not bare `dotnet format` — see the warning in Directory.Build.props)
 
 root = true
 

@@ -1,0 +1,33 @@
+<!--
+  Repo-wide analysis settings (AD-027). MSBuild imports this into every project under the
+  repository root, which is the point: enforcement must not depend on an agent remembering
+  a command-line flag. `dotnet build` alone is the style gate.
+
+  Severities live in .editorconfig, never here and never as -warnaserror. A clean build
+  already emits 4 NU1903 (transitive SSH.NET advisory via Testcontainers) and 4 CS0618,
+  so -warnaserror would fail the build on pre-existing, unrelated warnings.
+
+  Fix formatting with:  dotnet format whitespace
+
+  NOT bare `dotnet format`. Bare format also runs the analyzer fixers, and with
+  AnalysisMode=Recommended those make semantic edits: on this repo it "fixed" the
+  deprecated Testcontainers PostgreSqlBuilder call by stamping [Obsolete] onto
+  PostgresFixture and UnreachableDatabaseFixture, which silences a real advisory by
+  marking the consumer obsolete. `whitespace` is what IDE0055 needs and changes nothing else.
+-->
+<Project>
+
+  <PropertyGroup>
+    <!-- Runs the IDE#### code-style analyzers during compilation. Off by default for
+         command-line builds, which is why the repo previously enforced nothing. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- CA#### code-quality rules. `Recommended` currently surfaces 10 findings, all
+         warnings and all enumerated in .specs/features/code-style-enforcement/spec.md.
+         Pinned level, so a future SDK cannot change the rule set without a deliberate
+         edit here. Ratchet upward as the findings are cleared; never big-bang to `All`. -->
+    <AnalysisLevel>10.0</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+  </PropertyGroup>
+
+</Project>
