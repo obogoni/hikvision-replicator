@@ -1,4 +1,15 @@
 services:
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=hikvision
+      - POSTGRES_PASSWORD=hikvision
+      - POSTGRES_DB=hikvision
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   tempo:
     image: grafana/tempo:latest
     command: ["-config.file=/etc/tempo.yaml"]
@@ -24,5 +35,6 @@ services:
       - tempo
 
 volumes:
+  postgres-data:
   tempo-data:
   grafana-data:

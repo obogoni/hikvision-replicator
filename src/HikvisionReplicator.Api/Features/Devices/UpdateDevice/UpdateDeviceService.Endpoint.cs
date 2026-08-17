@@ -16,12 +16,12 @@ public static class UpdateDeviceServiceEndpoint
                 "/api/devices/{id:int}",
                 async (
                     int id,
-                    UpdateDeviceRequest req,
-                    IUpdateDeviceService svc,
+                    UpdateDeviceRequest request,
+                    IUpdateDeviceService service,
                     CancellationToken ct
                 ) =>
                 {
-                    var result = await svc.ExecuteAsync(id, req, ct);
+                    var result = await service.ExecuteAsync(id, request, ct);
                     return result.Match(
                         response => Results.Ok(response),
                         validationError => validationError.ToMinimalApiResult(),
@@ -31,6 +31,7 @@ public static class UpdateDeviceServiceEndpoint
                 }
             )
             .WithTags("Devices");
+
         return app;
     }
 }

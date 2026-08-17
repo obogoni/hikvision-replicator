@@ -1,22 +1,25 @@
 # Hikvision Replicator
 
-ASP.NET Core 10 Minimal API for managing Hikvision devices and users.
+ASP.NET Core 10 Minimal API for managing Hikvision devices.
 
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [Docker](https://www.docker.com/) (for local observability stack)
+- [Docker](https://www.docker.com/) — **required**, not optional. It provides the
+  PostgreSQL database the API runs against, the PostgreSQL instance the integration tests
+  provision through Testcontainers, and the local observability stack.
 
 ## Running locally
 
-### 1. Start the observability stack
+### 1. Start the backing services
 
-Tempo (trace storage) and Grafana (UI) run in Docker:
+PostgreSQL, Tempo (trace storage), and Grafana (UI) all run in Docker:
 
 ```bash
 docker compose up -d
 ```
 
+- PostgreSQL: `localhost:5432` (database `hikvision`, user `hikvision`)
 - Grafana UI: http://localhost:3000
 - Tempo OTLP gRPC: `localhost:4317`
 
@@ -26,10 +29,13 @@ docker compose up -d
 dotnet run --project src/HikvisionReplicator.Api
 ```
 
-The API starts on http://localhost:5000. The SQLite database is created automatically on first run.
+The API starts on http://localhost:5000 and applies its EF Core migrations at startup, so
+an empty database becomes a working one with no manual step.
 
 - OpenAPI spec: http://localhost:5000/openapi/v1.json
 - Scalar UI: http://localhost:5000/scalar/v1
+
+Both documentation endpoints are served in the Development environment only.
 
 ## Viewing traces
 
@@ -45,16 +51,35 @@ Each HTTP request produces a trace with child spans for EF Core SQL statements.
 ## Running tests
 
 ```bash
-dotnet test
+# Pure-logic tests — the only ones that need nothing running
+dotnet test src/HikvisionReplicator.Tests --filter "Category=Unit"
+
+# Everything in-process — starts a PostgreSQL container per test collection
+dotnet test src/HikvisionReplicator.Tests
+
+# Out-of-process, against a live API
+docker compose up -d
+dotnet run --project src/HikvisionReplicator.Api      # in another shell
+dotnet test src/HikvisionReplicator.E2ETests
 ```
 
-Tests use an in-memory SQLite database and do not require Docker.
+The integration suite provisions its own PostgreSQL through Testcontainers, so it needs a
+**running Docker daemon** but not `docker compose up`. The E2E suite needs both the
+compose stack and a running API; override its target with
+`E2E_BASE_URL=http://staging:5000`.
+
+See [`docs/test-patterns.md`](docs/test-patterns.md) for which level a new test belongs at.
 
 ## Configuration
 
 | File | Purpose |
 |---|---|
-| `appsettings.Development.json` | Local dev overrides (SQLite path, dev encryption key, OTLP endpoint) |
-| `appsettings.json` | Production defaults — replace the encryption key before deploying |
+| `appsettings.Development.json` | Local dev overrides (connection string, dev encryption key, OTLP endpoint) |
+| `appsettings.json` | Production defaults — `Encryption:Key` ships **empty on purpose** and must be set to a Base64-encoded 32-byte key before deploying |
 
-The OTLP exporter is only active when `OpenTelemetry:OtlpEndpoint` is set. If Docker isn't running, the API starts normally without tracing.
+`Encryption:Key` is validated while the application starts: a missing or wrong-length key
+aborts startup with a diagnostic naming the setting, rather than failing on the first
+device registration.
+
+The OTLP exporter is only active when `OpenTelemetry:OtlpEndpoint` is set. Without it the
+API starts normally, just without tracing.

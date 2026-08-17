@@ -6,6 +6,9 @@ namespace HikvisionReplicator.Api.Domain;
 
 public sealed class Port : ValueObject
 {
+    public const int Minimum = 1;
+    public const int Maximum = 65535;
+
     public int Value { get; }
 
     private Port(int value) => Value = value;
@@ -17,7 +20,7 @@ public sealed class Port : ValueObject
         if (value is null)
             return new ValidationError(Errors.Field, Errors.Required);
 
-        if (value < 1 || value > 65535)
+        if (value < Minimum || value > Maximum)
             return new ValidationError(Errors.Field, Errors.OutOfRange);
 
         return new Port(value.Value);

@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "promote_threshold": 2,
+  "window_days": 45,
+  "quarantine_threshold": 2,
+  "next_id": 6,
+  "lessons": [
+    {
+      "id": "L-001",
+      "key": "surviving_mutant::assert the observable side effect itself not the di registration that is supposed to produce it",
+      "text": "Assert the observable side effect itself, not the DI registration that is supposed to produce it.",
+      "signal": "surviving_mutant",
+      "scope": "observability",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 1 mutation 7 — Program.cs:56-57 (.AddAspNetCoreInstrumentation / .AddEntityFrameworkCoreInstrumentation removed, suite green) (observability)"
+      ],
+      "created": "2026-08-12T16:24:04Z",
+      "last_seen": "2026-08-12T16:24:04Z"
+    },
+    {
+      "id": "L-002",
+      "key": "ac_gap::when an acceptance criterion names several channels assert the outcome in every named channel not only the convenient ones",
+      "text": "When an acceptance criterion names several channels, assert the outcome in every named channel, not only the convenient ones.",
+      "signal": "ac_gap",
+      "scope": "security",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 1 — DEV-07 trace-attribute clause had no file:line (security)"
+      ],
+      "created": "2026-08-12T16:24:04Z",
+      "last_seen": "2026-08-12T16:24:04Z"
+    },
+    {
+      "id": "L-003",
+      "key": "surviving_mutant::assert both the omitted case and the blank case for every required field on every route that accepts it",
+      "text": "Assert both the omitted case and the blank case for every required field, on every route that accepts it.",
+      "signal": "surviving_mutant",
+      "scope": "validation",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 2 mutation M11 — RegisterDeviceService.cs:23 (blank password accepted at registration, suite green) (validation)"
+      ],
+      "created": "2026-08-12T16:24:04Z",
+      "last_seen": "2026-08-12T16:24:04Z"
+    },
+    {
+      "id": "L-004",
+      "key": "surviving_mutant::assert for every independently updatable field that changing only that field advances the update timestamp a test on one representative field does not cover the others",
+      "text": "Assert, for every independently-updatable field, that changing only that field advances the update timestamp — a test on one representative field does not cover the others.",
+      "signal": "surviving_mutant",
+      "scope": "domain",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 3 mutations M3/M4 — Domain/Device.cs:171-175 (FaceCapacity) and :153-157 (HttpPort) changed-guard's changed=true removed independently, suite green on both (domain)"
+      ],
+      "created": "2026-08-12T16:33:45Z",
+      "last_seen": "2026-08-12T16:33:45Z"
+    },
+    {
+      "id": "L-005",
+      "key": "surviving_mutant::assert cancellationtoken is honored on write paths with a pre cancelled token expecting the operation to abort not merely that the parameter is threaded through method signatures",
+      "text": "Assert CancellationToken is honored on write paths with a pre-cancelled token expecting the operation to abort, not merely that the parameter is threaded through method signatures.",
+      "signal": "surviving_mutant",
+      "scope": "repository",
+      "status": "candidate",
+      "features": [
+        "device-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration 3 mutation M2 — Infrastructure/DeviceRepository.cs:35 (SaveChangesAsync(cancellationToken) -> SaveChangesAsync()), suite green (repository)"
+      ],
+      "created": "2026-08-12T16:33:45Z",
+      "last_seen": "2026-08-12T16:33:45Z"
+    }
+  ]
+}

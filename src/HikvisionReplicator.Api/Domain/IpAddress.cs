@@ -17,10 +17,12 @@ public sealed class IpAddress : ValueObject
         if (string.IsNullOrWhiteSpace(value))
             return new ValidationError(Errors.Field, Errors.Required);
 
-        if (!System.Net.IPAddress.TryParse(value, out _))
+        if (!System.Net.IPAddress.TryParse(value, out var parsed))
             return new ValidationError(Errors.Field, Errors.InvalidFormat);
 
-        return new IpAddress(value);
+        // Store the normalized form so that non-canonical spellings of one address
+        // (192.168.001.001 and 192.168.1.1) share a single unique-index key.
+        return new IpAddress(parsed.ToString());
     }
 
     internal static IpAddress FromPersistence(string value) => new(value);

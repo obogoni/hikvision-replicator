@@ -1,26 +1,21 @@
 using System.Security.Cryptography;
 using System.Text;
+using HikvisionReplicator.Api.Shared;
+using Microsoft.Extensions.Options;
 
 namespace HikvisionReplicator.Api.Infrastructure;
 
-public interface IEncryptionService
-{
-    string Encrypt(string plaintext);
-    string Decrypt(string ciphertext);
-}
-
-public class EncryptionService : IEncryptionService
+/// <summary>
+/// AES-256-CBC with a fresh IV per call. Ciphertext format: base64(IV):base64(ciphertext).
+/// </summary>
+public sealed class EncryptionService : IEncryptionService
 {
     private readonly byte[] _key;
 
-    public EncryptionService(IConfiguration configuration)
+    public EncryptionService(IOptions<EncryptionOptions> options)
     {
-        var keyBase64 =
-            configuration["Encryption:Key"]
-            ?? throw new InvalidOperationException("Encryption:Key is not configured.");
-        _key = Convert.FromBase64String(keyBase64);
-        if (_key.Length != 32)
-            throw new InvalidOperationException("Encryption:Key must be a 32-byte Base64 string.");
+        // The key is validated at startup (EncryptionOptionsValidator + ValidateOnStart).
+        _key = Convert.FromBase64String(options.Value.Key!);
     }
 
     public string Encrypt(string plaintext)

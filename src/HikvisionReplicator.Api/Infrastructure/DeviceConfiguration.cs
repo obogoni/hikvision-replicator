@@ -7,12 +7,23 @@ namespace HikvisionReplicator.Api.Infrastructure;
 
 public class DeviceConfiguration : IEntityTypeConfiguration<Device>
 {
+    /// <summary>
+    /// The unique index that makes the device address the authority for DEV-05/DEV-06.
+    /// Named explicitly so the repository can recognise the constraint violation it
+    /// raises and translate it into a ConflictError (AD-022).
+    /// </summary>
+    public const string AddressIndexName = "IX_devices_IpAddress_HttpPort";
+
+    public const string TableName = "devices";
+
     public void Configure(EntityTypeBuilder<Device> entity)
     {
+        entity.ToTable(TableName);
+
         entity.HasKey(d => d.Id);
         entity.Property(d => d.Id).ValueGeneratedOnAdd();
-        entity.Property(d => d.Name).IsRequired().HasMaxLength(100);
-        entity.Property(d => d.Username).IsRequired().HasMaxLength(100);
+        entity.Property(d => d.Name).IsRequired().HasMaxLength(Device.MaxNameLength);
+        entity.Property(d => d.Username).IsRequired().HasMaxLength(Device.MaxUsernameLength);
         entity.Property(d => d.EncryptedPassword).IsRequired();
         entity.Property(d => d.CreatedAt).IsRequired();
         entity.Property(d => d.UpdatedAt).IsRequired();
@@ -22,8 +33,8 @@ public class DeviceConfiguration : IEntityTypeConfiguration<Device>
             .IsRequired()
             .HasConversion(
                 new ValueConverter<IpAddress, string>(
-                    ip => ip.Value,
-                    str => IpAddress.FromPersistence(str)
+                    ipAddress => ipAddress.Value,
+                    value => IpAddress.FromPersistence(value)
                 )
             );
 
@@ -31,9 +42,25 @@ public class DeviceConfiguration : IEntityTypeConfiguration<Device>
             .Property(d => d.HttpPort)
             .IsRequired()
             .HasConversion(
-                new ValueConverter<Port, int>(port => port.Value, val => Port.FromPersistence(val))
+                new ValueConverter<Port, int>(
+                    httpPort => httpPort.Value,
+                    value => Port.FromPersistence(value)
+                )
             );
 
-        entity.HasIndex(d => new { d.IpAddress, d.HttpPort }).IsUnique();
+        entity
+            .Property(d => d.FaceCapacity)
+            .IsRequired()
+            .HasConversion(
+                new ValueConverter<FaceCapacity, int>(
+                    faceCapacity => faceCapacity.Value,
+                    value => FaceCapacity.FromPersistence(value)
+                )
+            );
+
+        entity
+            .HasIndex(d => new { d.IpAddress, d.HttpPort })
+            .IsUnique()
+            .HasDatabaseName(AddressIndexName);
     }
 }

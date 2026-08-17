@@ -5,12 +5,16 @@ namespace HikvisionReplicator.Api.Domain;
 
 public class Device : IAggregateRoot
 {
+    public const int MaxNameLength = 100;
+    public const int MaxUsernameLength = 100;
+
     public int Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public IpAddress IpAddress { get; private set; } = null!;
     public Port HttpPort { get; private set; } = null!;
     public string Username { get; private set; } = string.Empty;
     public string EncryptedPassword { get; private set; } = string.Empty;
+    public FaceCapacity FaceCapacity { get; private set; } = null!;
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -22,6 +26,7 @@ public class Device : IAggregateRoot
         Port httpPort,
         string username,
         string encryptedPassword,
+        FaceCapacity faceCapacity,
         DateTime now
     )
     {
@@ -30,6 +35,7 @@ public class Device : IAggregateRoot
         HttpPort = httpPort;
         Username = username;
         EncryptedPassword = encryptedPassword;
+        FaceCapacity = faceCapacity;
         CreatedAt = now;
         UpdatedAt = now;
     }
@@ -40,83 +46,136 @@ public class Device : IAggregateRoot
         int? httpPort,
         string? username,
         string encryptedPassword,
+        int? faceCapacity,
         DateTime now
     )
     {
         if (string.IsNullOrWhiteSpace(name))
             return new ValidationError(Errors.NameField, Errors.NameRequired);
-        if (name.Length > 100)
+        if (name.Length > MaxNameLength)
             return new ValidationError(Errors.NameField, Errors.NameTooLong);
 
         var ipResult = IpAddress.Create(ipAddress);
-        if (ipResult.TryPickT1(out var ipErr, out var ip))
-            return ipErr;
+        if (ipResult.TryPickT1(out var ipError, out var ip))
+            return ipError;
 
         var portResult = Port.Create(httpPort);
-        if (portResult.TryPickT1(out var portErr, out var port))
-            return portErr;
+        if (portResult.TryPickT1(out var portError, out var port))
+            return portError;
 
         if (string.IsNullOrWhiteSpace(username))
             return new ValidationError(Errors.UsernameField, Errors.UsernameRequired);
-        if (username.Length > 100)
+        if (username.Length > MaxUsernameLength)
             return new ValidationError(Errors.UsernameField, Errors.UsernameTooLong);
 
-        return new Device(name, ip, port, username, encryptedPassword, now);
+        var capacityResult = FaceCapacity.Create(faceCapacity);
+        if (capacityResult.TryPickT1(out var capacityError, out var capacity))
+            return capacityError;
+
+        return new Device(name, ip, port, username, encryptedPassword, capacity, now);
     }
 
+    /// <summary>
+    /// Applies the supplied fields; a null field means "leave unchanged" (DEV-18).
+    /// Every field is validated before any is assigned, so a rejected update leaves
+    /// the aggregate untouched (DEV-19). <see cref="UpdatedAt"/> advances only when a
+    /// value actually differs from the current one (DEV-23).
+    /// </summary>
     public OneOf<Success, ValidationError> Update(
         string? name,
         string? ipAddress,
         int? httpPort,
         string? username,
-        string? encryptedPassword
+        string? encryptedPassword,
+        int? faceCapacity,
+        DateTime now
     )
     {
+        // ── Validate everything first — no assignment happens above this line ──
         if (name is not null)
         {
-            if (name.Length == 0)
+            if (string.IsNullOrWhiteSpace(name))
                 return new ValidationError(Errors.NameField, Errors.NameEmpty);
-            if (name.Length > 100)
+            if (name.Length > MaxNameLength)
                 return new ValidationError(Errors.NameField, Errors.NameTooLong);
         }
 
-        IpAddress? newIp = null;
+        IpAddress? newIpAddress = null;
         if (ipAddress is not null)
         {
             var ipResult = IpAddress.Create(ipAddress);
-            if (ipResult.TryPickT1(out var ipErr, out var ip))
-                return ipErr;
-            newIp = ip;
+            if (ipResult.TryPickT1(out var ipError, out var ip))
+                return ipError;
+            newIpAddress = ip;
         }
 
-        Port? newPort = null;
+        Port? newHttpPort = null;
         if (httpPort is not null)
         {
             var portResult = Port.Create(httpPort);
-            if (portResult.TryPickT1(out var portErr, out var port))
-                return portErr;
-            newPort = port;
+            if (portResult.TryPickT1(out var portError, out var port))
+                return portError;
+            newHttpPort = port;
         }
 
         if (username is not null)
         {
-            if (username.Length == 0)
+            if (string.IsNullOrWhiteSpace(username))
                 return new ValidationError(Errors.UsernameField, Errors.UsernameEmpty);
-            if (username.Length > 100)
+            if (username.Length > MaxUsernameLength)
                 return new ValidationError(Errors.UsernameField, Errors.UsernameTooLong);
         }
 
-        if (name is not null)
+        FaceCapacity? newFaceCapacity = null;
+        if (faceCapacity is not null)
+        {
+            var capacityResult = FaceCapacity.Create(faceCapacity);
+            if (capacityResult.TryPickT1(out var capacityError, out var capacity))
+                return capacityError;
+            newFaceCapacity = capacity;
+        }
+
+        // ── Everything is valid: apply only what actually differs ──
+        var changed = false;
+
+        if (name is not null && name != Name)
+        {
             Name = name;
-        if (newIp is not null)
-            IpAddress = newIp;
-        if (newPort is not null)
-            HttpPort = newPort;
-        if (username is not null)
+            changed = true;
+        }
+
+        if (newIpAddress is not null && newIpAddress != IpAddress)
+        {
+            IpAddress = newIpAddress;
+            changed = true;
+        }
+
+        if (newHttpPort is not null && newHttpPort != HttpPort)
+        {
+            HttpPort = newHttpPort;
+            changed = true;
+        }
+
+        if (username is not null && username != Username)
+        {
             Username = username;
-        if (encryptedPassword is not null)
+            changed = true;
+        }
+
+        if (encryptedPassword is not null && encryptedPassword != EncryptedPassword)
+        {
             EncryptedPassword = encryptedPassword;
-        UpdatedAt = DateTime.UtcNow;
+            changed = true;
+        }
+
+        if (newFaceCapacity is not null && newFaceCapacity != FaceCapacity)
+        {
+            FaceCapacity = newFaceCapacity;
+            changed = true;
+        }
+
+        if (changed)
+            UpdatedAt = now;
 
         return new Success();
     }

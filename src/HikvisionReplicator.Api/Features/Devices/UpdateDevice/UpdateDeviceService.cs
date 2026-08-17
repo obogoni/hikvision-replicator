@@ -1,52 +1,64 @@
-using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Domain.Specs;
-using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
 namespace HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 
-public class UpdateDeviceService(IRepository<Device> repo, IEncryptionService enc)
-    : IUpdateDeviceService
+public class UpdateDeviceService(
+    IDeviceRepository repository,
+    IEncryptionService encryptionService,
+    TimeProvider timeProvider
+) : IUpdateDeviceService
 {
+    public const string DeviceNotFound = "Device not found.";
+    public const string PasswordField = "password";
+    public const string PasswordEmpty = "Password cannot be empty.";
+
     public async Task<
         OneOf<DeviceResponse, ValidationError, NotFoundError, ConflictError>
-    > ExecuteAsync(int id, UpdateDeviceRequest req, CancellationToken cancellationToken)
+    > ExecuteAsync(int id, UpdateDeviceRequest request, CancellationToken cancellationToken)
     {
-        var device = await repo.GetByIdAsync(id, cancellationToken);
+        var device = await repository.GetByIdAsync(id, cancellationToken);
         if (device is null)
-            return new NotFoundError($"Device with id '{id}' was not found.");
+            return new NotFoundError(DeviceNotFound);
 
-        var originalIp = device.IpAddress.Value;
-        var originalPort = device.HttpPort.Value;
+        // Omitting the password leaves the stored ciphertext alone; supplying one
+        // replaces it. There is no way to clear it, since it is mandatory (A-7).
+        string? encryptedPassword = null;
+        if (request.Password is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Password))
+                return new ValidationError(PasswordField, PasswordEmpty);
 
-        string? encryptedPassword = string.IsNullOrEmpty(req.Password)
-            ? null
-            : enc.Encrypt(req.Password);
+            encryptedPassword = encryptionService.Encrypt(request.Password);
+        }
 
+        // Update validates every field before assigning any of them, so a rejected
+        // update leaves the aggregate — and therefore the row — untouched (DEV-19).
         var updateResult = device.Update(
-            req.Name,
-            req.IpAddress,
-            req.HttpPort,
-            req.Username,
-            encryptedPassword
+            request.Name,
+            request.IpAddress,
+            request.HttpPort,
+            request.Username,
+            encryptedPassword,
+            request.FaceCapacity,
+            timeProvider.GetUtcNow().UtcDateTime
         );
         if (updateResult.TryPickT1(out var validationError, out _))
             return validationError;
 
-        if (device.IpAddress.Value != originalIp || device.HttpPort.Value != originalPort)
-        {
-            var conflict = await repo.AnyAsync(
-                new DeviceByAddressSpec(device.IpAddress, device.HttpPort, id),
-                cancellationToken
-            );
-            if (conflict)
-                return new ConflictError(
-                    $"A device with address {device.IpAddress.Value}:{device.HttpPort.Value} is already registered."
-                );
-        }
+        // The device's own address is never a conflict with itself (DEV-20).
+        var addressTaken = await repository.AnyAsync(
+            new DeviceByAddressExcludingSpec(device.IpAddress, device.HttpPort, device.Id),
+            cancellationToken
+        );
+        if (addressTaken)
+            return new ConflictError(IDeviceRepository.AddressAlreadyRegistered);
 
-        await repo.UpdateAsync(device, cancellationToken);
+        var saveResult = await repository.SaveIfAddressFreeAsync(cancellationToken);
+        if (saveResult.TryPickT1(out var conflictError, out _))
+            return conflictError;
+
         return DeviceResponse.FromEntity(device);
     }
 }
