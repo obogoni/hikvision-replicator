@@ -48,6 +48,24 @@ decision in Phase 2.
 | ~~OD-6~~ | **RESOLVED — higher-capacity hardware** (AD-021). AD-015's all-users-to-all-devices rule stands; scoping stays out of scope. Carries a standing risk: the fleet runs near 100% of each device's face library with no headroom, and the 10,000-face bench unit cannot validate full-scale enrolment. Mitigated by the mandatory `Device.FaceCapacity` guard. | — | — |
 | OD-4 | **Face image storage.** 10 GB of BLOBs inside the transactional database bloats it and slows every query. | Store images outside the row (filesystem/object store), keep a content hash on `User` for change detection and dedup. Decide in `user-registry`. | Phase 1 |
 | OD-5 | **Live-sync latency SLO.** "A few minutes" needs a number to be testable — it becomes an acceptance criterion. | Propose: p95 under 30s from `POST /api/users` to enrolled on all healthy devices. Confirm or replace. | Phase 2 |
+| OD-7 | **Ciphertext format for device passwords.** AES-256-CBC (AD-008) gives confidentiality but no integrity check, so a tampered ciphertext fails at decrypt time rather than being detected (assumption A-8 of `device-registry`). | Move to AES-GCM behind a **versioned ciphertext prefix**. Decide before the first production deployment — a format migration is far cheaper while no real credentials are stored than after. | First production deploy |
+
+---
+
+## Known Gaps
+
+Current-state debts of the shipped code, promoted from the retired `ARCHITECTURE.md` § 8
+(AD-029). The rewrite already closed the defects the pre-rewrite implementation carried —
+`EnsureCreated()` alongside migrations, the racy read-then-write uniqueness check,
+unnormalized IP storage, and the unconditional `UpdatedAt` advance. What remains:
+
+| Gap | Standing | Closes with |
+|---|---|---|
+| **The product's core capability does not exist yet.** Nothing replicates a user to a device: no user catalogue, no replication queue, no worker, no ISAPI client. | By design — Phases 1–3 exist to build exactly this. | features 2–5 |
+| **No auth, no rate limiting.** Every endpoint is anonymous, including the ones that accept and store device credentials. Accepted for now (assumption A-6 of `device-registry`) with a hard deployment constraint: **this must not reach a routable network before `api-auth` ships.** | Accepted risk, bounded by the deployment constraint. | feature 9 `api-auth` |
+| **AES-256-CBC carries no integrity check.** `EncryptionService` provides confidentiality only; a tampered ciphertext surfaces as a decrypt failure rather than as detected tampering. | Open — sequencing matters, see `OD-7`. | `OD-7`, before first deploy |
+| **The device catalogue is unpaginated.** `GET /api/devices` returns a bare array, which pins the empty case to `[]`. DEV-26 ships as a paged shape behind query parameters or a `v2` route — never by mutating this response. | Specified and deliberately unbuilt (P3). | not scheduled |
+| **Face capacity is declared but not enforced.** `Device.FaceCapacity` is modelled and validated; the guard that refuses a replication which would overfill a device is the **required** AD-021 mitigation, not an optional extra. Silent enrolment failure at a turnstile is this system's worst failure mode. | Mandatory. | feature 3 `replication-queue` |
 
 ---
 

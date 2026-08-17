@@ -234,6 +234,30 @@ Each feature lives under `Features/{Resource}/{Operation}/` — three files, no 
 | `{Operation}Service.cs` | Service implementation |
 | `{Operation}Service.Endpoint.cs` | DI registration (`UseXxx()`) + route mapping (`MapXxx()`) |
 
+### Request flow (write path)
+
+How the three files compose at runtime — `POST /api/devices` is the reference shape:
+
+```text
+HTTP POST /api/devices
+  → MapRegisterDevice() minimal-api delegate  (injects IRegisterDeviceService, CancellationToken ct)
+  → IRegisterDeviceService.ExecuteAsync(request, ct)
+       ├─ reject a blank plaintext password         [the aggregate only ever sees ciphertext]
+       ├─ IEncryptionService.Encrypt(password)
+       ├─ Device.Create(..., now)  → OneOf<Device, ValidationError>     [now from TimeProvider, AD-023]
+       ├─ IDeviceRepository.AnyAsync(new DeviceByAddressSpec(...), ct)  → friendly ConflictError
+       └─ IDeviceRepository.AddIfAddressFreeAsync(device, ct)
+              └─ 23505 on the named address index → the same ConflictError   [AD-022]
+  → OneOf<...>.Match(response => Results.Created(...), err => err.ToMinimalApiResult())
+```
+
+**The database is the authority on uniqueness — the pre-check is not (AD-022).** The
+specification pre-check exists only to produce a friendlier message; a registration that
+races past it still comes back `409`, never `500`. Translate the provider's constraint
+violation into a `ConflictError` **inside the repository** so services never catch
+`PostgresException`. That translation keys off a **named** index, so renaming an index
+silently degrades a 409 into a 500 unless a test covers it.
+
 ## CancellationToken
 
 `ExecuteAsync` must accept `CancellationToken cancellationToken` as last parameter (required — no default) and pass it to every async call. Endpoints declare `CancellationToken ct`; ASP.NET Core injects it automatically.
