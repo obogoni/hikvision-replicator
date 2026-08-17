@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 14,
+  "next_id": 20,
   "lessons": [
     {
       "id": "L-001",
@@ -240,6 +240,114 @@
       ],
       "created": "2026-08-17T21:30:56Z",
       "last_seen": "2026-08-17T21:30:56Z"
+    },
+    {
+      "id": "L-014",
+      "key": "surviving_mutant::a rule specific dotnet diagnostic id severity outranks any dotnet analyzer diagnostic category severity regardless of section order so a category none cannot exempt a rule set to error use generated code true",
+      "text": "A rule-specific dotnet_diagnostic.<ID>.severity outranks any dotnet_analyzer_diagnostic.category-*.severity regardless of section order, so a category 'none' cannot exempt a rule set to error; use generated_code = true.",
+      "signal": "surviving_mutant",
+      "scope": "config",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md P8 (.editorconfig:45) (config)"
+      ],
+      "created": "2026-08-17T22:19:57Z",
+      "last_seen": "2026-08-17T22:19:57Z"
+    },
+    {
+      "id": "L-015",
+      "key": "spec_precision_gap::when execution changes the command a criterion names amend the criterion text too a stale acceptance criterion instructs future readers to run the command the implementation forbids",
+      "text": "When execution changes the command a criterion names, amend the criterion text too; a stale acceptance criterion instructs future readers to run the command the implementation forbids.",
+      "signal": "spec_precision_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AC-4 (specs)"
+      ],
+      "created": "2026-08-17T22:19:57Z",
+      "last_seen": "2026-08-17T22:19:57Z"
+    },
+    {
+      "id": "L-016",
+      "key": "spec_precision_gap::record the exact command and the dedup basis next to any measured diagnostic count raw log line counts msbuild s n warning s summary and distinct sites all give different numbers",
+      "text": "Record the exact command and the dedup basis next to any measured diagnostic count; raw log-line counts, MSBuild's 'N Warning(s)' summary, and distinct sites all give different numbers.",
+      "signal": "spec_precision_gap",
+      "scope": "build",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AC-8 (build)"
+      ],
+      "created": "2026-08-17T22:19:57Z",
+      "last_seen": "2026-08-17T22:19:57Z"
+    },
+    {
+      "id": "L-017",
+      "key": "spec_precision_gap::an up to date incremental build re reports nothing even when a config change since the last build would now make the diagnostic an error the cache hinges on whether the previous build succeeded not on the diagnostic s severity",
+      "text": "An up-to-date incremental build re-reports nothing even when a config change since the last build would now make the diagnostic an error; the cache hinges on whether the previous build succeeded, not on the diagnostic's severity.",
+      "signal": "spec_precision_gap",
+      "scope": "build",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AD-027 L-007 sequence: warning-severity build succeeds, then -warnaserror incremental build reports 0 (build)"
+      ],
+      "created": "2026-08-17T22:19:57Z",
+      "last_seen": "2026-08-17T22:19:57Z"
+    },
+    {
+      "id": "L-018",
+      "key": "ac_gap::when a requirement promises the path to a stricter setting is recorded with measured costs measure the stricter setting itself measuring only the current and looser rungs leaves the ratchet unpriced",
+      "text": "When a requirement promises the path to a stricter setting is recorded with measured costs, measure the stricter setting itself; measuring only the current and looser rungs leaves the ratchet unpriced.",
+      "signal": "ac_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "CSE-08 (specs)"
+      ],
+      "created": "2026-08-17T22:19:57Z",
+      "last_seen": "2026-08-17T22:19:57Z"
+    },
+    {
+      "id": "L-019",
+      "key": "spec_precision_gap::verify a ci workflow by citing a real completed run not by parsing its yaml a parse validates neither the action refs nor that any step executes",
+      "text": "Verify a CI workflow by citing a real completed run, not by parsing its YAML; a parse validates neither the action refs nor that any step executes.",
+      "signal": "spec_precision_gap",
+      "scope": "ci",
+      "status": "candidate",
+      "features": [
+        "code-style-enforcement"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AC-7 (ci)"
+      ],
+      "created": "2026-08-17T22:19:57Z",
+      "last_seen": "2026-08-17T22:19:57Z"
     }
   ]
 }

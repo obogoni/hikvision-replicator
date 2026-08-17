@@ -90,6 +90,42 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: .github/workflows/ci.yml / PR #8 (ci)
 - last seen: 2026-08-17T21:30:56Z
 
+### L-014 — A rule-specific dotnet_diagnostic.<ID>.severity outranks any dotnet_analyzer_diagnostic.category-*.severity regardless of section order, so a category 'none' cannot exempt a rule set to error; use generated_code = true.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `config` · harmful: 0
+- features: code-style-enforcement
+- evidence: validation.md P8 (.editorconfig:45) (config)
+- last seen: 2026-08-17T22:19:57Z
+
+### L-015 — When execution changes the command a criterion names, amend the criterion text too; a stale acceptance criterion instructs future readers to run the command the implementation forbids.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: code-style-enforcement
+- evidence: AC-4 (specs)
+- last seen: 2026-08-17T22:19:57Z
+
+### L-016 — Record the exact command and the dedup basis next to any measured diagnostic count; raw log-line counts, MSBuild's 'N Warning(s)' summary, and distinct sites all give different numbers.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `build` · harmful: 0
+- features: code-style-enforcement
+- evidence: AC-8 (build)
+- last seen: 2026-08-17T22:19:57Z
+
+### L-017 — An up-to-date incremental build re-reports nothing even when a config change since the last build would now make the diagnostic an error; the cache hinges on whether the previous build succeeded, not on the diagnostic's severity.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `build` · harmful: 0
+- features: code-style-enforcement
+- evidence: AD-027 L-007 sequence: warning-severity build succeeds, then -warnaserror incremental build reports 0 (build)
+- last seen: 2026-08-17T22:19:57Z
+
+### L-018 — When a requirement promises the path to a stricter setting is recorded with measured costs, measure the stricter setting itself; measuring only the current and looser rungs leaves the ratchet unpriced.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: code-style-enforcement
+- evidence: CSE-08 (specs)
+- last seen: 2026-08-17T22:19:57Z
+
+### L-019 — Verify a CI workflow by citing a real completed run, not by parsing its YAML; a parse validates neither the action refs nor that any step executes.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `ci` · harmful: 0
+- features: code-style-enforcement
+- evidence: AC-7 (ci)
+- last seen: 2026-08-17T22:19:57Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
