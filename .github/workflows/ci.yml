@@ -1,0 +1,48 @@
+# The gate (AD-027). Local enforcement is advisory — per-machine, and an agent can always
+# skip it. This workflow is the only thing standing between a branch and `main`.
+#
+# There is deliberately no `dotnet format --verify-no-changes` step: IDE0055 is an error in
+# .editorconfig and EnforceCodeStyleInBuild is set in Directory.Build.props, so the build
+# below IS the formatting gate. No flags are passed here for the same reason — if this
+# workflow needed a special flag to catch a violation, local builds would not catch it.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore HikvisionReplicator.slnx
+
+      # --no-incremental is insurance, not ceremony: an up-to-date incremental build
+      # re-reports zero diagnostics even when the code still violates them (lesson L-007).
+      # A fresh runner should never hit that, but the flag makes the guarantee explicit.
+      - name: Build (also the code-style gate)
+        run: dotnet build HikvisionReplicator.slnx --no-restore --no-incremental
+
+      - name: Unit tests
+        run: dotnet test src/HikvisionReplicator.Tests --no-build --verbosity normal
+
+      # Testcontainers spins up postgres:17-alpine against the Docker daemon that is
+      # preinstalled on ubuntu-latest (AD-019). E2E is excluded — it needs a live API.
+      - name: Integration tests
+        run: dotnet test src/HikvisionReplicator.IntegrationTests --no-build --verbosity normal

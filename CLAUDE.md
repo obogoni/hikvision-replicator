@@ -92,6 +92,9 @@ needed to migrate a database out of band.
 
 ### Gate commands
 
+The `dotnet build` in each gate is **also the code-style gate** (AD-027) — no extra lint step,
+no flags. Both commands are unchanged by that decision; they simply now fail on bad formatting.
+
 ```bash
 # Docker-free — pure logic only (AD-024, AD-026)
 dotnet build HikvisionReplicator.slnx && dotnet test src/HikvisionReplicator.Tests
@@ -101,6 +104,9 @@ dotnet build HikvisionReplicator.slnx \
   && dotnet test src/HikvisionReplicator.Tests \
   && dotnet test src/HikvisionReplicator.IntegrationTests
 ```
+
+`.github/workflows/ci.yml` runs the full gate on every PR to `main` and is the enforcement
+boundary — local runs are advisory (AD-027).
 
 ### E2E setup
 
@@ -117,6 +123,35 @@ tests are ever added.
 Override base URL: `E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2E`
 
 ## Code Style
+
+**Formatting is enforced by the compiler, not by discipline (AD-027).** `.editorconfig` at the
+repo root is the single source of style rules, and `Directory.Build.props` sets
+`EnforceCodeStyleInBuild`, so **every** `dotnet build` is the style gate — there is no flag to
+remember and no separate lint command. `IDE0055` is an **error**: bad formatting fails the build.
+
+Fix violations with:
+
+```bash
+dotnet format whitespace              # the whole solution
+dotnet format whitespace --folder src/HikvisionReplicator.Api/Shared   # faster, one folder
+```
+
+**Never use bare `dotnet format`.** It also runs the analyzer fixers, which make semantic
+edits — on this repo it "fixed" the deprecated Testcontainers `PostgreSqlBuilder` call by
+stamping `[Obsolete]` onto `PostgresFixture` and `UnreachableDatabaseFixture`, silencing a real
+advisory by marking the consumer obsolete. `whitespace` is all `IDE0055` needs.
+
+**An up-to-date incremental build re-reports zero diagnostics even when the code still violates
+them** (lesson L-007). The trustworthy signal is the **first** build after a change; add
+`--no-incremental` when a build's silence is being used as evidence.
+
+`AnalysisMode` is `Recommended`, pinned to `AnalysisLevel` `10.0`. It currently surfaces 10 `CA`
+findings, all warnings, all enumerated in
+`.specs/features/code-style-enforcement/spec.md`. Ratchet rules upward as those are cleared —
+never jump to `All`. Severity belongs in `.editorconfig`, **never** `-warnaserror`: a clean build
+already emits 4 `NU1903` and 4 `CS0618`, which `-warnaserror` would turn into failures.
+
+Conventions the rules do not mechanically cover:
 
 - File-scoped namespaces, primary constructors where appropriate
 - Endpoints grouped via `MapGroup` + `MapXxxEndpoints()` extension methods

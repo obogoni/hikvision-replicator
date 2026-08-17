@@ -8,7 +8,11 @@
 
 Corroborated across multiple features. Safe to apply as guidance.
 
-_none_
+### L-007 — Compare build warnings with --no-incremental before claiming none were introduced; an up-to-date incremental build re-reports zero warnings even when the code still emits them.
+- signal: `gate_fail` · recurrence: 2 feature(s) · scope: `build` · harmful: 0
+- features: test-project-conventions, code-style-enforcement
+- evidence: src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj (build) (+1 more)
+- last seen: 2026-08-17T21:10:08Z
 
 ## Candidates (under observation — do NOT load as guidance yet)
 
@@ -50,11 +54,35 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: src/HikvisionReplicator.IntegrationTests/TracingTests.cs:187 (observability)
 - last seen: 2026-08-17T13:50:36Z
 
-### L-007 — Compare build warnings with --no-incremental before claiming none were introduced; an up-to-date incremental build re-reports zero warnings even when the code still emits them.
+### L-008 — Never take a warning census from a build that did not succeed; a failing project aborts the build before dependent projects compile, so their warnings are invisible.
 - signal: `gate_fail` · recurrence: 1 feature(s) · scope: `build` · harmful: 0
-- features: test-project-conventions
-- evidence: src/HikvisionReplicator.Tests/HikvisionReplicator.Tests.csproj (build)
-- last seen: 2026-08-17T13:50:37Z
+- features: code-style-enforcement
+- evidence: AnalysisMode measurement (build)
+- last seen: 2026-08-17T21:10:08Z
+
+### L-009 — Use 'dotnet format whitespace', never bare 'dotnet format': bare also runs analyzer fixers, which stamped [Obsolete] onto test fixtures to silence a deprecated-API advisory.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `build` · harmful: 0
+- features: code-style-enforcement
+- evidence: src/HikvisionReplicator.IntegrationTests/PostgresFixture.cs:16 (build)
+- last seen: 2026-08-17T21:10:09Z
+
+### L-010 — In .editorconfig globs use '**.cs' not '**/*.cs'; the latter requires at least one directory level and silently skips files sitting in a project root.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `config` · harmful: 0
+- features: code-style-enforcement
+- evidence: .editorconfig (config)
+- last seen: 2026-08-17T21:10:09Z
+
+### L-011 — An acceptance criterion demanding 'zero diagnostics' contradicts a design that accepts warnings; say 'zero errors' and enumerate the accepted warnings.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: code-style-enforcement
+- evidence: AC-1 (specs)
+- last seen: 2026-08-17T21:10:09Z
+
+### L-012 — Every discrimination-sensor pass needs at least one must-fail mutation; a mutation applied to a wrong path reports a pass indistinguishable from a real one.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: code-style-enforcement
+- evidence: sensor M2 (tests)
+- last seen: 2026-08-17T21:10:09Z
 
 ## Quarantined (failed when applied — ignore)
 
