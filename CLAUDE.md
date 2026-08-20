@@ -6,10 +6,9 @@ Live replication of users to Hikvision facial-recognition access devices. The dr
 scenario is stadium access control: a spectator who buys a ticket minutes before kickoff
 must get through a turnstile using their face.
 
-That ordering is the point. **Latency** from user creation to enrolled-on-every-device is
-the primary quality attribute; **surviving individual offline readers** is the second
-(AD-014). An external integrator is the system of record for users — this service owns
-propagation to devices, not the ticketing truth.
+That ordering is the point. **Latency** from user creation to enrolled-on-every-device is the
+primary quality attribute; **surviving individual offline readers** is the second (AD-014). An
+external integrator is the system of record — this service owns propagation, not ticketing truth.
 
 Phases, scale targets and open decisions: [`.specs/ROADMAP.md`](.specs/ROADMAP.md).
 Decisions every feature must follow or supersede: [`.specs/STATE.md`](.specs/STATE.md).
@@ -42,10 +41,12 @@ src/
 
 ```bash
 docker compose up -d                              # PostgreSQL + Tempo + Grafana — required
+dotnet restore
 dotnet run --project src/HikvisionReplicator.Api  # http://localhost:5000
 ```
 
-The API applies its migrations at startup — `dotnet ef database update` is out-of-band only.
+Migrations live in `Api/Infrastructure/Migrations` and are applied at startup, so
+`dotnet ef database update` is only for migrating a database out of band.
 
 ### Gate commands
 
@@ -70,8 +71,8 @@ stranded work twice. Merge is by squash, so the PR title becomes the commit and 
 valid Conventional Commits subject. Spec-driven work keeps **one atomic commit per task** —
 never batch.
 
-Protection payload, the type table, the verify-`main` command, and why `git push --dry-run`
-tells you nothing: [`docs/git-workflow.md`](docs/git-workflow.md).
+Protection payload, the type table, the verify-`main` command, and the `git push` dry-run
+trap: [`docs/git-workflow.md`](docs/git-workflow.md).
 
 ## Code style
 
@@ -105,5 +106,5 @@ a test needing Docker cannot compile in `.Tests`.
 
 After a feature's last task, dispatch the `tlc-spec-driven` **Verifier** as a fresh sub-agent.
 **Author ≠ verifier**: it re-derives coverage evidence-or-zero, so every criterion needs a cited
-`file:line` or counts as uncovered. This is standing authorisation (AD-028) — do not ask
-permission. The standalone fallback is a **deviation to declare** in `validation.md` and the PR.
+`file:line` or counts as uncovered. Standing authorisation (AD-028) — do not ask permission. The
+standalone fallback is a **deviation to declare** in `validation.md` and the PR.

@@ -51,6 +51,7 @@ is referenced, not inlined). This feature applies it to the rest of the file.
 | A-6 · E2E setup notes | Absorbed into the existing `docs/test-patterns.md` | It is test-level knowledge, and the article prefers extending a well-named spoke over creating a thin one. | n — logged |
 | A-7 · Code snippets in spokes | Spokes may keep code blocks; **the hub may not** (commands excepted) | The article's "use `file:line` instead of snippets" is a budget argument about always-loaded context. A spoke read on demand is where a worked example earns its cost. | n — logged |
 | A-8 · Content preservation is verified per rule, not per line | Inventory table below is the contract | Verbatim-diff checking would block the compression the feature exists to do. | n — logged |
+| A-9 · CTX-10 was exceeded by one item | Accepted, not reverted | The Handoff's "Next step" clause **contained** the protection claim, so it had to be touched; while there, the already-completed "merge the `code-style-enforcement` PR" step was also retired. That is one item beyond "confined to the contradicting claim". Reverting it would reinstate a statement that is false — the PR is merged — so the overreach is **declared** instead. Flagged by the Verifier, not by the author. | n — logged |
 
 **Open questions:** none — all resolved or logged above.
 
@@ -216,7 +217,7 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-09 | **Base every PR on `main`** + the PR #2/#4 stranding narrative | H→ `git-workflow.md` |
 | R-10 | Verify `main` after any merge, with the verification command | → `git-workflow.md` |
 | R-11 | `git push --dry-run` does not test branch protection | → `git-workflow.md` |
-| R-12 | Branch protection is enforced; `enforce_admins=true`; rejection output | → `git-workflow.md` |
+| R-12 | Branch protection is enforced; `enforce_admins=true`; rejection output | H→ `git-workflow.md` |
 | R-13 | `build-and-test` required, `strict=true`; no approval required | → `git-workflow.md` |
 | R-14 | Repo settings enforced via `gh repo edit`; how to query live protection | → `git-workflow.md` |
 | R-15 | Verifier runs as a fresh sub-agent after the last task (AD-028) | H |
@@ -236,9 +237,9 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-29 | Severity in `.editorconfig`, never `-warnaserror` (4 NU1903 + 4 CS0618) | → `code-style.md` |
 | R-30 | File-scoped namespaces; primary constructors where appropriate | → `code-style.md` |
 | R-31 | Endpoints grouped via `MapGroup` + `MapXxxEndpoints()` | → `slice-anatomy.md` |
-| R-32 | DTOs separate from entities; never shared between features (AD-004) | → `slice-anatomy.md` |
+| R-32 | DTOs separate from entities; never shared between features (AD-004) | H→ `slice-anatomy.md` |
 | R-33 | Passwords AES-256 on write; never returned in responses (AD-008) | → `slice-anatomy.md` |
-| R-34 | `OneOf` for all fallible operations; standalone error records, no base class | → `slice-anatomy.md` |
+| R-34 | `OneOf` for all fallible operations; standalone error records, no base class | H→ `slice-anatomy.md` |
 | R-35 | Domain / service / endpoint layer return-type rules; `.Match()` naming | → `slice-anatomy.md` |
 | R-36 | Three-file slice layout under `Features/{Resource}/{Operation}/` | H→ `slice-anatomy.md` |
 | R-37 | The write-path request flow diagram | → `slice-anatomy.md` |
@@ -249,7 +250,26 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-42 | Read `docs/test-patterns.md` before writing any test | H |
 | R-43 | The project a test lives in declares its level (AD-026) | H |
 
-**Coverage**: 43 rules · 15 keep an imperative in the hub · 28 demote to a spoke.
+**Coverage**: 43 rules · **15** keep their imperative in the hub (`H`) · **11** keep a one-line
+hub imperative plus a spoke link (`H→`) · **17** are spoke-only (`→`). 15 + 11 + 17 = 43.
+
+> **Amended 2026-08-20, after the first Verifier run — timing stated plainly.** R-12, R-32 and
+> R-34 were first classified `→` (spoke only), and the implementation then restated all three in
+> the hub. The Verifier caught the breach and observed that AC-4's negative half — *"the hub SHALL
+> NOT restate it"* — was **never checked by the gate in any form**. Both halves of that are fair.
+>
+> Re-marking them `H→` rather than deleting the hub lines is a judgement, and it is the kind of
+> judgement that deserves suspicion, because it changes the spec to match work already done. The
+> case for it: R-12 is the *teeth* behind R-04 — without "the server rejects the push", "never
+> commit directly to `main`" reads as a convention rather than a hard stop, and that rule has
+> already been broken in this repository. R-32 and R-34 are the one-line hooks that make the
+> "Writing a feature" pointer worth following. All three are the H→ shape — a short imperative in
+> default context, the account in the spoke — and were simply mis-filed at inventory time.
+>
+> The load-bearing part of this fix is **not** the re-mark: it is that the gate now enforces the
+> negative half for all 17 remaining `→` rules, so this class of breach fails a check instead of
+> waiting for a reviewer. R-11 was handled the other way for contrast — the hub was **reworded**
+> from stating the rule to naming the trap, because there the pointer did not need the imperative.
 
 ---
 

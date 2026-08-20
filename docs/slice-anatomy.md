@@ -18,8 +18,7 @@ Each feature lives under `Features/{Resource}/{Operation}/` — three files, no 
 | `{Operation}Service.cs` | Service implementation |
 | `{Operation}Service.Endpoint.cs` | DI registration (`UseXxx()`) + route mapping (`MapXxx()`) |
 
-Adding an operation never edits an existing slice. See
-`src/HikvisionReplicator.Api/Features/Devices/RegisterDevice/` for the worked example.
+See `src/HikvisionReplicator.Api/Features/Devices/RegisterDevice/` for the worked example.
 
 - Endpoints are grouped via `MapGroup` + `MapXxxEndpoints()` extension methods.
 - **DTOs are separate from EF Core entities and are never shared between features**, even when
@@ -38,16 +37,11 @@ public record ConflictError(string Message);
 public readonly record struct Success;
 ```
 
-Exceptions are reserved for genuinely exceptional failures, not for expected error paths.
-
 **Domain layer** — factory methods return `OneOf<T, ValidationError>`; use `TryPickT1` for
-nested results. Aggregates keep private setters and a private EF constructor, and are only
-constructed through static `Create(...)` factories. Validation lives in the domain, not in DTO
-attributes.
+nested results.
 
 **Service layer** — return `Task<OneOf<Response, Error1, Error2...>>`, **never**
-`Task<IResult>`, so services stay transport-agnostic and directly testable. Infallible
-operations (e.g. list queries) return the value directly.
+`Task<IResult>`. Infallible operations (e.g. list queries) return the value directly.
 
 **Endpoint layer** — call `.Match()` with descriptive parameter names, never single-letter:
 
@@ -112,9 +106,8 @@ ASP.NET Core injects it automatically.
 
 `AppDbContext.OnModelCreating` calls `ApplyConfigurationsFromAssembly`, so an
 `IEntityTypeConfiguration<T>` added under `Infrastructure/` is picked up automatically — see
-`DeviceConfiguration.cs`. Value objects map through a `ValueConverter` plus an
-`internal static FromPersistence(...)`; enums persist as strings.
+`DeviceConfiguration.cs`.
 
-Time comes from an injected `TimeProvider`: services read `provider.GetUtcNow().UtcDateTime` and
-pass `now` **into** domain factories and mutators. Aggregates never call `DateTime.UtcNow`
-themselves, and timestamp fields advance only when a value actually changed.
+Value-object mapping, time handling and aggregate construction are **not restated here** — they
+are stated once in the decision log, at AD-005, AD-009 and AD-023. Read those rather than a copy
+that can drift out of step with them.

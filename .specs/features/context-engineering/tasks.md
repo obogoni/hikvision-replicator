@@ -256,8 +256,9 @@ demoted rules.
 
 **Done when**:
 - [ ] `wc -l CLAUDE.md` ≤ 110
-- [ ] ≤ 8 fenced blocks, every one a shell command block — no C#, no ASCII flow diagram
-- [ ] All 15 hub-resident rules present; all 8 `H→` rules named in one line; all four spokes linked
+- [ ] ≤ 8 fenced blocks, every one a shell command block or the project-structure tree — no C#,
+      no ASCII request-flow diagram (AC-2 as amended)
+- [ ] All 15 hub-resident rules present; all 11 `H→` rules named in one line; all four spokes linked
 - [ ] Every relative path referenced resolves to an existing file
 - [ ] Purpose stated within the first 20 lines; latency named primary, fault tolerance second;
       ROADMAP linked and **no scale numbers restated**
