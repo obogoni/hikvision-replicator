@@ -238,7 +238,7 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-30 | File-scoped namespaces; primary constructors where appropriate | → `code-style.md` |
 | R-31 | Endpoints grouped via `MapGroup` + `MapXxxEndpoints()` | → `slice-anatomy.md` |
 | R-32 | DTOs separate from entities; never shared between features (AD-004) | → `slice-anatomy.md` |
-| R-33 | Passwords AES-256 on write; never returned in responses (AD-008) | → `slice-anatomy.md` |
+| R-33 | Passwords AES-256 on write; never returned in responses (AD-008) | **deleted — not migrated** |
 | R-34 | `OneOf` for all fallible operations; standalone error records, no base class | → `slice-anatomy.md` |
 | R-35 | Domain / service / endpoint layer return-type rules; `.Match()` naming | → `slice-anatomy.md` |
 | R-36 | Three-file slice layout under `Features/{Resource}/{Operation}/` | H→ `slice-anatomy.md` |
@@ -251,7 +251,25 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-43 | The project a test lives in declares its level (AD-026) | H |
 
 **Coverage**: 43 rules · **15** keep their imperative in the hub (`H`) · **9** keep a one-line
-hub imperative plus a spoke link (`H→`) · **19** are spoke-only (`→`). 15 + 9 + 19 = 43.
+hub imperative plus a spoke link (`H→`) · **18** are spoke-only (`→`) · **1** is deleted rather
+than migrated (R-33). 15 + 9 + 18 + 1 = 43.
+
+> **R-33 deleted on review of PR #13, at the maintainer's direction.** In the pre-change
+> `CLAUDE.md` the password rule sat under § Code Style, in a list of "conventions the rules do not
+> mechanically cover" — which is not what it is. It is a **feature rule**, already stated by
+> `AD-008` and enforced by the code itself (`IEncryptionService`, and the write path in
+> `RegisterDeviceService`). Relocating it would have carried a third copy into `docs/`, which is
+> the second-authority drift this feature's own Edge Case 1 forbids.
+>
+> This is the **AD-029 precedent applied to a single rule**: that decision deleted the
+> architecture map's descriptive half rather than migrating it, because "it restated the code and
+> `CLAUDE.md`, and both are authoritative where it was not." Same test, same outcome.
+>
+> Deletion is therefore a **destination**, not a coverage gap: AC-3's evidence-or-zero rule is
+> satisfied by `AD-008` being the single authority. The gate asserts R-33 is absent from the hub
+> *and* every spoke, so it cannot drift back in. The write-path flow (R-37) still shows
+> `IEncryptionService.Encrypt(password)` as a **step**, because that is the request-flow diagram
+> carried over verbatim from the old hub, not a restatement of the rule.
 
 **The naming rule** (this is the test AC-4's negative half is judged against):
 

@@ -67,5 +67,5 @@ provenance and standing are recorded in `.specs/STATE.md` § Handoff, not restat
 - Primary constructors where appropriate
 
 Everything else about how a slice is written — endpoint grouping, DTO boundaries, the result
-pattern, password handling — is in [slice-anatomy.md](slice-anatomy.md), because those are
-structural rules rather than style ones.
+pattern — is in [slice-anatomy.md](slice-anatomy.md), because those are structural rules rather
+than style ones.

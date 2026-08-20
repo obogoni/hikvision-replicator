@@ -5,7 +5,7 @@ exists, so read the code rather than trusting this file where the two disagree.
 
 Sources: `.specs/STATE.md` — **AD-001** (slice layout), **AD-002**/**AD-003** (result pattern),
 **AD-004** (per-slice DTOs), **AD-006** (repositories and specifications), **AD-007**
-(cancellation), **AD-008** (password encryption), **AD-009** (EF configuration), **AD-022**
+(cancellation), **AD-009** (EF configuration), **AD-022**
 (the database is the authority), **AD-023** (time).
 
 ## The three files
@@ -81,12 +81,6 @@ Translate the provider's constraint violation into a `ConflictError` **inside th
 (`Infrastructure/DeviceRepository.cs`), so services never catch `PostgresException`. That
 translation keys off a **named** index — so renaming an index silently degrades a 409 into a 500
 unless a test covers it.
-
-## Passwords
-
-Device passwords are AES-256 encrypted on write via `IEncryptionService` — reversible, because
-the device needs the plaintext. **The encrypted value is never returned in any response**, and
-the aggregate only ever holds ciphertext.
 
 ## CancellationToken
 

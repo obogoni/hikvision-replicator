@@ -196,7 +196,8 @@ Specifications, EF Core (source text); AD-001…AD-009, AD-022 (linked)
 - Skill: `tlc-spec-driven`
 
 **Done when**:
-- [ ] Every rule R-31…R-41 appears and is citable by line
+- [ ] Every rule R-31…R-41 appears and is citable by line, **except R-33** — deleted rather
+      than migrated on review of PR #13; the gate asserts its absence everywhere
 - [ ] The write-path flow diagram survives intact, including the two bracketed annotations
       (ciphertext-only aggregate, `now` from `TimeProvider`)
 - [ ] The AD-022 rule keeps its consequence: renaming the named index degrades a 409 into a 500
