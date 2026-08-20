@@ -44,6 +44,25 @@ HTTP. The two defects the rewrite fixed in `Device` — IP normalization and the
 `UpdatedAt` change-guard — are exactly that shape, and "no change means no touch" is not
 cleanly assertable through a round-trip.
 
+## Running the E2E suite
+
+```bash
+dotnet build src/HikvisionReplicator.E2E
+dotnet test src/HikvisionReplicator.E2E        # requires a running API
+```
+
+The suite drives the API through Playwright's `IAPIRequestContext`, which needs only the node
+driver shipped in the NuGet package — **no browser download, and no `pwsh`, is required.**
+Installing browsers (`playwright.ps1 install`, or `playwright install` after
+`dotnet tool install --global Microsoft.Playwright.CLI`) is only needed if browser-driven tests
+are ever added, and none exist today.
+
+Point the suite at another host with `E2E_BASE_URL`:
+
+```bash
+E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2E
+```
+
 ## Naming Tests
 
 Source: [You are naming your tests wrong!](https://enterprisecraftsmanship.com/posts/you-naming-tests-wrong/)
