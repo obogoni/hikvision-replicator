@@ -46,7 +46,7 @@ dotnet run --project src/HikvisionReplicator.Api  # http://localhost:5000
 ```
 
 Migrations live in `Api/Infrastructure/Migrations` and are applied at startup, so
-`dotnet ef database update` is only for migrating a database out of band.
+`dotnet ef database update --project src/HikvisionReplicator.Api` is out-of-band only.
 
 ### Gate commands
 
@@ -88,9 +88,8 @@ Both incidents in full, plus the analyzer ratchet: [`docs/code-style.md`](docs/c
 
 ## Writing a feature
 
-Vertical slices under `Features/{Resource}/{Operation}/` — three files each, no shared DTOs,
-`OneOf` for every fallible operation. The full shape, the write-path flow, and why the database
-rather than the pre-check is the authority on uniqueness:
+Vertical slices under `Features/{Resource}/{Operation}/`, three files each. DTO boundaries, the
+result pattern, the write-path flow, and where uniqueness is really enforced:
 [`docs/slice-anatomy.md`](docs/slice-anatomy.md).
 
 ## Tests

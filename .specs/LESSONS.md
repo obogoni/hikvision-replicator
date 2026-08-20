@@ -126,6 +126,66 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: AC-7 (ci)
 - last seen: 2026-08-17T22:19:57Z
 
+### L-020 — When a spec inventories a compound rule as a list of items, give every item its own check; a gate that checks five of six sub-items silently blesses the missing one.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: context-engineering
+- evidence: spec.md R-20 / CTX-02 — 'dotnet restore' resolves to no file:line (specs)
+- last seen: 2026-08-20T15:02:45Z
+
+### L-021 — Scope a documentation check to the prose that states the rule, excluding fenced blocks and file trees, or an incidental mention of the topic will satisfy it.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md sensor M2b, M5b, M6 — regexes matched the project-structure tree in CLAUDE.md (docs)
+- last seen: 2026-08-20T15:02:45Z
+
+### L-022 — Assert the rule's imperative, not the presence of its topic word; a check that a term appears passes unchanged when the rule is inverted.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md sensor M7, M10, M14, M2b — inverted rules passed a keyword-presence gate (docs)
+- last seen: 2026-08-20T15:02:45Z
+
+### L-023 — Give every negative acceptance criterion its own check; a SHALL NOT with no check is an unverified claim, not a satisfied one.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md — AC-4 amended clause 'the hub SHALL NOT restate it' has no check and is breached at CLAUDE.md:64, :90, :91 (specs)
+- last seen: 2026-08-20T15:02:45Z
+
+### L-024 — When extracting a reference doc, source it only from the file being split; pulling extra text from the decision log creates a second authority that drifts.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md Edge Cases — docs/slice-anatomy.md:21,41,44-46,48-50,115-116,118-120 transcribe .specs/STATE.md AD-001/002/004/008/009/023 (docs) (+1 more)
+- last seen: 2026-08-20T15:25:57Z
+
+### L-025 — Write a regression check for the class of defect, not for the wording of the instance that was reported; a check matching the caught mutant's literal string passes on the next variant.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: context-engineering
+- evidence: validation.md sensor M13b, M19, M22 — checks written against the exact strings iteration 1's mutants used (tests)
+- last seen: 2026-08-20T15:25:57Z
+
+### L-026 — Assert that a rule is stated unconditionally; a check that the rule appears still passes when a qualifier is appended that guts it.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md sensor M05, M08 — 'applied at startup only in Development' and 'rejects the push only until CI reports' (docs)
+- last seen: 2026-08-20T15:25:57Z
+
+### L-027 — Score a mutant by which check failed, not by the gate's exit code, and keep mutations size-neutral when the artifact sits exactly on a size limit.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: context-engineering
+- evidence: validation.md sensor M12, M13 — killed by the <=110 line-count check, not by the AC-4 check under test (tests)
+- last seen: 2026-08-20T15:25:57Z
+
+### L-028 — When an amendment reclassifies inventory rows to match work already shipped, re-derive the whole classification; the loose boundary that mis-filed one row mis-filed others.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: context-engineering
+- evidence: spec.md:256-272 re-marked R-12/R-32/R-34 after the fact; R-38 is still marked → while stated at CLAUDE.md:92-93 (specs)
+- last seen: 2026-08-20T15:25:57Z
+
+### L-029 — Re-measure every figure a decision entry quotes about an artifact at the last commit that touches that artifact, not at the commit that first wrote the entry.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: context-engineering
+- evidence: .specs/STATE.md:322 says the hub landed at 109 lines; fa05813 made it 110 (specs)
+- last seen: 2026-08-20T15:25:57Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

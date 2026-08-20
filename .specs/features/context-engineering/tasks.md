@@ -14,7 +14,8 @@ discrimination sensor).
 **Spec**: `.specs/features/context-engineering/spec.md`
 **Context**: `.specs/features/context-engineering/context.md`
 **Design**: none — skipped, see `context.md` § Why Design Is Skipped
-**Status**: Done — all 7 tasks committed, awaiting Verifier
+**Status**: Done — 7 tasks committed, plus fix commits `fa05813` (Verifier iteration 1) and
+`27960df` (iteration 2). Pre-squash references: they resolve only through the PR.
 **Branch**: `docs/context-engineering`, off `origin/main` (`5c8d55d`)
 
 ---
@@ -127,20 +128,14 @@ PR #2/#4 narrative kept whole.
 **Tests**: doc-gate
 **Gate**: quick
 
+
+
+
+
+
+
+
 **Committed**: `2d3fbab` (pre-squash reference)
-
-**Committed**: `313dace` (pre-squash reference)
-
-**Committed**: `5263da6` (pre-squash reference)
-
-**Committed**: `ad82293` (pre-squash reference)
-
-**Committed**: `2843660` (pre-squash reference)
-
-**Committed**: `c000aab` (pre-squash reference)
-
-**Committed**: `ddc9e75` (pre-squash reference)
-
 **Commit**: `docs: extract the git workflow into its own reference`
 
 ---
@@ -173,6 +168,7 @@ narratives kept whole.
 **Tests**: doc-gate
 **Gate**: quick
 
+**Committed**: `313dace` (pre-squash reference)
 **Commit**: `docs: extract the code style rules into their own reference`
 
 ---
@@ -207,6 +203,7 @@ Specifications, EF Core (source text); AD-001…AD-009, AD-022 (linked)
 **Tests**: doc-gate
 **Gate**: quick
 
+**Committed**: `5263da6` (pre-squash reference)
 **Commit**: `docs: extract the vertical slice anatomy into its own reference`
 
 ---
@@ -235,6 +232,7 @@ and the `E2E_BASE_URL` override.
 **Tests**: doc-gate
 **Gate**: quick
 
+**Committed**: `ad82293` (pre-squash reference)
 **Commit**: `docs: fold the e2e setup notes into the test patterns reference`
 
 ---
@@ -267,6 +265,7 @@ demoted rules.
 **Tests**: doc-gate
 **Gate**: full
 
+**Committed**: `2843660` (pre-squash reference)
 **Commit**: `docs: restructure CLAUDE.md into a hub with topic spokes`
 
 ---
@@ -297,6 +296,7 @@ documentary and unenforced.
 **Tests**: doc-gate
 **Gate**: full
 
+**Committed**: `c000aab` (pre-squash reference)
 **Commit**: `docs(specs): record AD-031 splitting CLAUDE.md into a hub and spokes`
 
 ---
@@ -326,6 +326,7 @@ that claim and the "Next step" clause that depends on it.
 **Tests**: doc-gate + build
 **Gate**: build
 
+**Committed**: `ddc9e75` (pre-squash reference)
 **Commit**: `docs(specs): correct the handoff's stale branch-protection claim`
 
 ---

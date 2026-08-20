@@ -237,9 +237,9 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-29 | Severity in `.editorconfig`, never `-warnaserror` (4 NU1903 + 4 CS0618) | → `code-style.md` |
 | R-30 | File-scoped namespaces; primary constructors where appropriate | → `code-style.md` |
 | R-31 | Endpoints grouped via `MapGroup` + `MapXxxEndpoints()` | → `slice-anatomy.md` |
-| R-32 | DTOs separate from entities; never shared between features (AD-004) | H→ `slice-anatomy.md` |
+| R-32 | DTOs separate from entities; never shared between features (AD-004) | → `slice-anatomy.md` |
 | R-33 | Passwords AES-256 on write; never returned in responses (AD-008) | → `slice-anatomy.md` |
-| R-34 | `OneOf` for all fallible operations; standalone error records, no base class | H→ `slice-anatomy.md` |
+| R-34 | `OneOf` for all fallible operations; standalone error records, no base class | → `slice-anatomy.md` |
 | R-35 | Domain / service / endpoint layer return-type rules; `.Match()` naming | → `slice-anatomy.md` |
 | R-36 | Three-file slice layout under `Features/{Resource}/{Operation}/` | H→ `slice-anatomy.md` |
 | R-37 | The write-path request flow diagram | → `slice-anatomy.md` |
@@ -250,26 +250,31 @@ pointer, spoke keeps the detail; **→** = spoke only.
 | R-42 | Read `docs/test-patterns.md` before writing any test | H |
 | R-43 | The project a test lives in declares its level (AD-026) | H |
 
-**Coverage**: 43 rules · **15** keep their imperative in the hub (`H`) · **11** keep a one-line
-hub imperative plus a spoke link (`H→`) · **17** are spoke-only (`→`). 15 + 11 + 17 = 43.
+**Coverage**: 43 rules · **15** keep their imperative in the hub (`H`) · **9** keep a one-line
+hub imperative plus a spoke link (`H→`) · **19** are spoke-only (`→`). 15 + 9 + 19 = 43.
 
-> **Amended 2026-08-20, after the first Verifier run — timing stated plainly.** R-12, R-32 and
-> R-34 were first classified `→` (spoke only), and the implementation then restated all three in
-> the hub. The Verifier caught the breach and observed that AC-4's negative half — *"the hub SHALL
-> NOT restate it"* — was **never checked by the gate in any form**. Both halves of that are fair.
+**The naming rule** (this is the test AC-4's negative half is judged against):
+
+> A hub line may **name** what a spoke covers. It may **state** a rule only when that rule is
+> load-bearing for a rule the hub itself carries. Naming is the default; `H→` must be earned.
+
+> **Amended 2026-08-20, after Verifier iteration 1, then corrected after iteration 2.**
 >
-> Re-marking them `H→` rather than deleting the hub lines is a judgement, and it is the kind of
-> judgement that deserves suspicion, because it changes the spec to match work already done. The
-> case for it: R-12 is the *teeth* behind R-04 — without "the server rejects the push", "never
-> commit directly to `main`" reads as a convention rather than a hard stop, and that rule has
-> already been broken in this repository. R-32 and R-34 are the one-line hooks that make the
-> "Writing a feature" pointer worth following. All three are the H→ shape — a short imperative in
-> default context, the account in the spoke — and were simply mis-filed at inventory time.
+> Iteration 1 caught the hub restating three rules the inventory marked `→`, and caught that
+> AC-4's negative half was never checked by the gate. The author's response was to re-mark all
+> three `→ → H→`. Iteration 2 rejected that: it found a **fourth** breach the re-mark had missed
+> (R-38), and judged the handling *"convenient, not principled — in each case the author made the
+> smaller edit"*, since R-11 had been fixed by rewording the hub while R-12/R-32/R-34 were fixed
+> by rewriting the spec. That criticism is correct and is the reason the naming rule above now
+> exists instead of a case-by-case judgement.
 >
-> The load-bearing part of this fix is **not** the re-mark: it is that the gate now enforces the
-> negative half for all 17 remaining `→` rules, so this class of breach fails a check instead of
-> waiting for a reviewer. R-11 was handled the other way for contrast — the hub was **reworded**
-> from stating the rule to naming the trap, because there the pointer did not need the imperative.
+> Applying it: **R-32, R-34 and R-38 are reverted/left at `→` and the hub was reworded to name
+> them** — "DTO boundaries, the result pattern … and where uniqueness is really enforced" names
+> three spoke topics without stating any of them. **Only R-12 stays `H→`**, because it is the one
+> that passes the load-bearing test: it is the teeth behind R-04, and "never commit directly to
+> `main`" without "the server rejects the push" reads as a convention rather than a hard stop —
+> a rule this repository has already broken. Two of the three promotions are therefore withdrawn,
+> which is the larger edit, not the smaller one.
 
 ---
 
@@ -286,7 +291,7 @@ hub imperative plus a spoke link (`H→`) · **17** are spoke-only (`→`). 15 +
 | CTX-07 | P1: WHY in default context — latency primary, fault tolerance second | Implementing |
 | CTX-08 | P1: WHY in default context — links ROADMAP, does not restate scale numbers | Implementing |
 | CTX-09 | P2: Contradiction repair — protection claim agrees with live state | Implementing |
-| CTX-10 | P2: Contradiction repair — confined to the contradicting claim | Implementing |
+| CTX-10 | P2: Contradiction repair — confined to the contradicting claim | **Breached — declared (A-9)** |
 | CTX-11 | P2: AD-031 recorded in the established format | Implementing |
 | CTX-12 | P2: AD-031 states the hub-vs-spoke routing rule | Implementing |
 | CTX-13 | P2: AD-031 records the budget as documentary and unenforced | Implementing |

@@ -46,25 +46,20 @@ used as evidence — "this introduced no new warnings" — add `--no-incremental
 dotnet build HikvisionReplicator.slnx --no-incremental
 ```
 
-A related trap from the same feature: **never take a warning census from a build that did not
-succeed.** `AnalysisMode=Recommended` first measured as 3 findings; the true number is 10. The
-Api project's `IDE0055` errors aborted the build before the two test projects ever compiled.
-
 ## Analyzer rules
 
 `AnalysisMode` is `Recommended`, pinned to `AnalysisLevel` `10.0`. It currently surfaces **10
 `CA` findings, all warnings**, enumerated by rule and `file:line` in
-`.specs/features/code-style-enforcement/spec.md` — seven of them in `IntegrationTests`. That
-file is the enumeration; this one does not duplicate it.
+`.specs/features/code-style-enforcement/spec.md`. That file is the enumeration; this one does
+not duplicate it.
 
 **Ratchet rules upward as findings are cleared — never jump to `AnalysisMode=All`.**
 
 ### Severity belongs in `.editorconfig`, never in `-warnaserror`
 
-A clean `--no-incremental` build already emits **4 `NU1903`** (SSH.NET 2025.1.0, high severity,
-transitive via Testcontainers) and **4 `CS0618`**. `-warnaserror` would turn all eight into build
-failures, so severity is set per rule in `.editorconfig` instead. The `NU1903` advisories are
-real and worth their own `build(deps)` change — they are simply not this gate's job.
+A clean build already emits **4 `NU1903`** and **4 `CS0618`**. `-warnaserror` would turn all
+eight into build failures, so severity is set per rule in `.editorconfig` instead. Their
+provenance and standing are recorded in `.specs/STATE.md` § Handoff, not restated here.
 
 ## Conventions the rules do not mechanically cover
 

@@ -59,8 +59,8 @@ retargets a child PR only when the base branch is deleted on merge.
 badge and both times the commits landed on the intermediate branch instead of `main`. A merged
 badge only means something merged *somewhere*.
 
-Stack only when genuinely required. When you do, either merge the base PR with its branch
-deleted, or retarget the child to `main` before merging. **After any merge, verify `main`
+Stack only when genuinely required. When you do, merge the base PR with its branch deleted, or
+retarget the child to `main` first. **After any merge, verify `main`
 itself:**
 
 ```bash
@@ -107,8 +107,5 @@ gh repo edit --enable-squash-merge=true --enable-merge-commit=false \
   --enable-rebase-merge=false --delete-branch-on-merge
 ```
 
-These differ from a fresh clone's defaults, so check rather than assume:
-
-```bash
-gh repo view --json deleteBranchOnMerge,squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed
-```
+These differ from a fresh clone's defaults; `.specs/STATE.md` § Handoff records what to query
+before reasoning about merge behaviour.
