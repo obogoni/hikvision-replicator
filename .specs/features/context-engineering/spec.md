@@ -83,9 +83,19 @@ actually need rather than on reference material for work I am not doing.
 3. WHEN each rule in the inventory below is looked up THEN it SHALL resolve to a cited
    `file:line` in either `CLAUDE.md` or a named spoke — **evidence-or-zero**; a rule
    nobody can cite counts as lost regardless of confidence that it was moved.
-4. WHEN a rule's imperative lives in a spoke rather than the hub THEN the hub SHALL
-   still name it in one line and link the spoke — a rule may be *demoted* to a pointer,
-   never *dropped* to nothing.
+4. WHEN a rule is marked **`H→`** in the inventory THEN the hub SHALL state it in one
+   line and link its spoke. WHEN a rule is marked **`→`** THEN the hub SHALL NOT restate
+   it, but the spoke holding it SHALL be reachable from the hub by a link — no spoke is
+   orphaned, and no rule lands in a file the hub never names.
+
+   > **Amended 2026-08-20, before implementation.** As first written this criterion required
+   > *every* demoted rule to keep a one-line hub pointer. That contradicted the inventory in
+   > this same spec, whose legend defines `→` as **spoke only** and applies it to 20 of the
+   > 28 demoted rules — satisfying the original wording would have meant 28 pointer lines,
+   > rebuilding the bulk the feature exists to remove. The two halves were written by the
+   > same author and the shared intent hid the disagreement, which is precisely the defect
+   > AD-028 records for `code-style-enforcement`'s `AC-1`. Corrected to the inventory's
+   > actual three-way taxonomy; recorded rather than silently rewritten.
 5. WHEN any relative path referenced by `CLAUDE.md` is resolved THEN the target file
    SHALL exist.
 6. WHEN the spokes are read THEN each of the four failure narratives (stranded PRs
@@ -249,7 +259,7 @@ pointer, spoke keeps the detail; **→** = spoke only.
 |---|---|---|
 | CTX-01 | P1: Hub fits budget — ≤ 110 lines, ≤ 8 fenced blocks, shell only | Pending |
 | CTX-02 | P1: Hub fits budget — all 43 inventory rules resolve to a `file:line` | Pending |
-| CTX-03 | P1: Hub fits budget — every demoted rule keeps a one-line hub pointer | Pending |
+| CTX-03 | P1: Hub fits budget — `H→` rules keep a one-line hub pointer; every spoke is linked | Pending |
 | CTX-04 | P1: Hub fits budget — every referenced relative path exists | Pending |
 | CTX-05 | P1: Hub fits budget — four failure narratives survive with concrete detail | Pending |
 | CTX-06 | P1: WHY in default context — purpose stated in first 20 lines | Pending |
@@ -267,5 +277,5 @@ pointer, spoke keeps the detail; **→** = spoke only.
 
 - [ ] `CLAUDE.md` ≤ 110 lines with 43/43 inventory rules citable.
 - [ ] A reader of only `CLAUDE.md` can state what the product does and what makes it good.
-- [ ] Every rule demoted to a spoke is still named in the hub — no silent removals.
+- [ ] Every `H→` rule is still named in the hub, and every spoke is reachable from it — no silent removals.
 - [ ] `AD-031` answers "hub or spoke?" for the next convention without re-deriving it.
