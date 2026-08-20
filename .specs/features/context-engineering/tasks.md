@@ -14,7 +14,7 @@ discrimination sensor).
 **Spec**: `.specs/features/context-engineering/spec.md`
 **Context**: `.specs/features/context-engineering/context.md`
 **Design**: none — skipped, see `context.md` § Why Design Is Skipped
-**Status**: Draft
+**Status**: Done — all 7 tasks committed, awaiting Verifier
 **Branch**: `docs/context-engineering`, off `origin/main` (`5c8d55d`)
 
 ---
@@ -101,7 +101,7 @@ T6 → T7
 
 ## Task Breakdown
 
-### T1: Extract the Git workflow spoke
+### ✅ T1: Extract the Git workflow spoke
 
 **What**: Create `docs/git-workflow.md` holding the full AD-025 reference material now inlined in
 `CLAUDE.md` § Git Workflow — the commit-type table and scopes, squash-PR mechanics, the
@@ -127,11 +127,25 @@ PR #2/#4 narrative kept whole.
 **Tests**: doc-gate
 **Gate**: quick
 
+**Committed**: `2d3fbab` (pre-squash reference)
+
+**Committed**: `313dace` (pre-squash reference)
+
+**Committed**: `5263da6` (pre-squash reference)
+
+**Committed**: `ad82293` (pre-squash reference)
+
+**Committed**: `2843660` (pre-squash reference)
+
+**Committed**: `c000aab` (pre-squash reference)
+
+**Committed**: `ddc9e75` (pre-squash reference)
+
 **Commit**: `docs: extract the git workflow into its own reference`
 
 ---
 
-### T2: Extract the code-style spoke
+### ✅ T2: Extract the code-style spoke
 
 **What**: Create `docs/code-style.md` holding AD-027's enforcement model and the style hazards —
 `.editorconfig` as the single source, `EnforceCodeStyleInBuild`, `IDE0055` as an error, the
@@ -163,7 +177,7 @@ narratives kept whole.
 
 ---
 
-### T3: Extract the slice anatomy spoke
+### ✅ T3: Extract the slice anatomy spoke
 
 **What**: Create `docs/slice-anatomy.md` holding everything about how a vertical slice is built —
 the three-file layout, the `OneOf` result pattern and standalone error records, the per-layer
@@ -197,7 +211,7 @@ Specifications, EF Core (source text); AD-001…AD-009, AD-022 (linked)
 
 ---
 
-### T4: Absorb the E2E setup notes into the test-patterns spoke
+### ✅ T4: Absorb the E2E setup notes into the test-patterns spoke
 
 **What**: Add an E2E setup section to the existing `docs/test-patterns.md` — the `IAPIRequestContext`
 driver needing neither a browser download nor `pwsh`, when browser installation *would* be needed,
@@ -225,7 +239,7 @@ and the `E2E_BASE_URL` override.
 
 ---
 
-### T5: Rewrite CLAUDE.md as the hub
+### ✅ T5: Rewrite CLAUDE.md as the hub
 
 **What**: Replace `CLAUDE.md` with a ≤ 110-line hub: a purpose block stating the product and its two
 quality attributes, the stack, the project structure, the commands and both gate commands, the 15
@@ -256,7 +270,7 @@ demoted rules.
 
 ---
 
-### T6: Record AD-031
+### ✅ T6: Record AD-031
 
 **What**: Append `AD-031` to `.specs/STATE.md` § Decisions in the established six-field format,
 stating the hub-versus-spoke routing rule for future content and recording the line budget as
@@ -286,7 +300,7 @@ documentary and unenforced.
 
 ---
 
-### T7: Repair the branch-protection contradiction
+### ✅ T7: Repair the branch-protection contradiction
 
 **What**: Correct the `.specs/STATE.md` § Handoff claim that branch protection is **"Not
 configured"**. Live state confirms it is active and matches `CLAUDE.md` exactly — `strict=true`,

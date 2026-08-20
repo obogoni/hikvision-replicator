@@ -257,19 +257,19 @@ pointer, spoke keeps the detail; **→** = spoke only.
 
 | ID | Story | Status |
 |---|---|---|
-| CTX-01 | P1: Hub fits budget — ≤ 110 lines, ≤ 8 fenced blocks, shell only | Pending |
-| CTX-02 | P1: Hub fits budget — all 43 inventory rules resolve to a `file:line` | Pending |
-| CTX-03 | P1: Hub fits budget — `H→` rules keep a one-line hub pointer; every spoke is linked | Pending |
-| CTX-04 | P1: Hub fits budget — every referenced relative path exists | Pending |
-| CTX-05 | P1: Hub fits budget — four failure narratives survive with concrete detail | Pending |
-| CTX-06 | P1: WHY in default context — purpose stated in first 20 lines | Pending |
-| CTX-07 | P1: WHY in default context — latency primary, fault tolerance second | Pending |
-| CTX-08 | P1: WHY in default context — links ROADMAP, does not restate scale numbers | Pending |
-| CTX-09 | P2: Contradiction repair — protection claim agrees with live state | Pending |
-| CTX-10 | P2: Contradiction repair — confined to the contradicting claim | Pending |
-| CTX-11 | P2: AD-031 recorded in the established format | Pending |
-| CTX-12 | P2: AD-031 states the hub-vs-spoke routing rule | Pending |
-| CTX-13 | P2: AD-031 records the budget as documentary and unenforced | Pending |
+| CTX-01 | P1: Hub fits budget — ≤ 110 lines, ≤ 8 fenced blocks, shell only | Implementing |
+| CTX-02 | P1: Hub fits budget — all 43 inventory rules resolve to a `file:line` | Implementing |
+| CTX-03 | P1: Hub fits budget — `H→` rules keep a one-line hub pointer; every spoke is linked | Implementing |
+| CTX-04 | P1: Hub fits budget — every referenced relative path exists | Implementing |
+| CTX-05 | P1: Hub fits budget — four failure narratives survive with concrete detail | Implementing |
+| CTX-06 | P1: WHY in default context — purpose stated in first 20 lines | Implementing |
+| CTX-07 | P1: WHY in default context — latency primary, fault tolerance second | Implementing |
+| CTX-08 | P1: WHY in default context — links ROADMAP, does not restate scale numbers | Implementing |
+| CTX-09 | P2: Contradiction repair — protection claim agrees with live state | Implementing |
+| CTX-10 | P2: Contradiction repair — confined to the contradicting claim | Implementing |
+| CTX-11 | P2: AD-031 recorded in the established format | Implementing |
+| CTX-12 | P2: AD-031 states the hub-vs-spoke routing rule | Implementing |
+| CTX-13 | P2: AD-031 records the budget as documentary and unenforced | Implementing |
 
 ---
 
