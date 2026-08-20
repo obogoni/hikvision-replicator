@@ -313,6 +313,19 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Date**: 2026-08-17
 - **Status**: active
 
+### AD-031
+- **Decision**: **`CLAUDE.md` is a hub, not a manual.** It carries only what applies to *every* session and cannot be re-derived from the code; all reference material lives in named topic spokes under `docs/`, linked from the hub. The routing rule for any new content is three-way:
+  - **hub** — the rule binds every task regardless of what is being built (branch first, base every PR on `main`, one commit per task, the gate commands, the Verifier). It goes in `CLAUDE.md` in full;
+  - **hub one-liner + spoke** — the rule is a *hazard* whose imperative must be in default context but whose account is long (never bare `dotnet format`, `--no-incremental`, the PR-base trap). The imperative goes in the hub in one line; the incident goes in the spoke;
+  - **spoke only** — the rule matters only while doing one kind of work (slice structure, analyzer ratchet, protection payload). The hub links the spoke and says nothing more.
+
+  The hub's budget is **≤ 110 lines**; it landed at 109, down from 285. Spokes are `docs/git-workflow.md` (AD-025), `docs/code-style.md` (AD-027), `docs/slice-anatomy.md` (AD-001…AD-009, AD-022, AD-023) and the pre-existing `docs/test-patterns.md` (AD-024, AD-026). **A spoke never becomes a second authority**: where a decision entry in this file already states a rule, the spoke links the `AD-NNN` rather than copying it.
+- **Reason**: `CLAUDE.md` is loaded into every session by default, so every line is paid for on every task whether relevant or not, and the file had grown to 285 lines against a widely-cited 300-line practical ceiling. The distribution was the argument: **72 lines — a quarter of the file — were Git reference material**, and another 74 restated code that `src/` already holds, including a C# snippet of `Shared/Errors.cs` and an ASCII request-flow diagram. Meanwhile the file never stated **what the product does**: AD-014 makes propagation latency the primary quality attribute, and a session that never opened `ROADMAP.md` never learned it. The repository had already proved the pattern worked — `docs/test-patterns.md` was referenced rather than inlined, and nothing was lost by it. The relocation is deliberately **lossless**: `spec.md` inventories all 43 imperatives and assigns each a destination, and the feature's gate refuses any rule that cannot be cited as `file:line`.
+- **Trade-off**: A rule in a spoke is a rule Claude must choose to open, so demotion trades certainty of being read for budget — which is why hazards keep a one-line hub imperative rather than a bare pointer, and why the *universally* applicable Git rules stayed in the hub instead of following the rest of AD-025 into its spoke. The sharper limit is enforcement: **the ≤ 110-line ceiling is documentary only.** No repository setting, build step or CI check measures it, so nothing mechanically prevents the hub re-inflating one useful paragraph at a time — the same class of limitation AD-028 records for its own Verifier clause, and the reason the routing rule above is written as a rule a future author can apply rather than as a description of what was done once. A CI link-and-budget check is deferred, not rejected (`context-engineering` spec, assumption A-3).
+- **Scope**: `CLAUDE.md`, `docs/git-workflow.md`, `docs/code-style.md`, `docs/slice-anatomy.md`, `docs/test-patterns.md`. **Supersedes nothing.** AD-025, AD-027 and AD-024/AD-026 remain the authority on their own rules; this entry changes only where their *text* lives. AD-029's scope clause naming `CLAUDE.md` § Vertical Slice Structure now resolves to `docs/slice-anatomy.md`.
+- **Date**: 2026-08-20
+- **Status**: active
+
 ---
 
 ## Handoff
