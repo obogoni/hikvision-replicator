@@ -15,7 +15,7 @@ discrimination sensor).
 **Context**: `.specs/features/context-engineering/context.md`
 **Design**: none — skipped, see `context.md` § Why Design Is Skipped
 **Status**: Done — 7 tasks committed, plus fix commits `fa05813` (Verifier iteration 1) and
-`27960df` (iteration 2). Pre-squash references: they resolve only through the PR.
+`44a9420` (iteration 2). Pre-squash references: they resolve only through the PR.
 **Branch**: `docs/context-engineering`, off `origin/main` (`5c8d55d`)
 
 ---
@@ -33,9 +33,13 @@ applied literally: there is no unit, integration or E2E level at which a markdow
 observable.
 
 The default is therefore satisfied a level down rather than waived: **every acceptance criterion
-is discharged by a mechanical, binary check** run against the working tree, and each check's
-output is the evidence cited in `validation.md`. "Documentation, verified by inspection" is not
-an accepted outcome here — a criterion with no runnable check counts as uncovered, exactly as
+is discharged by a mechanical, binary check wherever one can be written** — line counts, fence
+languages, link resolution, per-rule citation, n-gram overlap. Some criteria cannot be reduced to
+one: **semantic** obligations such as AC-4's "the hub SHALL NOT restate it" survive paraphrase and
+are only reliably judged by a reader, so the author gate approximates them and the **Verifier's
+independent re-derivation is the real evidence**. An author gate's pass count is not AC evidence
+and must not be quoted as such. A criterion with neither a runnable check nor cited Verifier
+evidence counts as uncovered, exactly as
 AD-028's evidence-or-zero requires.
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
@@ -256,7 +260,7 @@ demoted rules.
 - [ ] `wc -l CLAUDE.md` ≤ 110
 - [ ] ≤ 8 fenced blocks, every one a shell command block or the project-structure tree — no C#,
       no ASCII request-flow diagram (AC-2 as amended)
-- [ ] All 15 hub-resident rules present; all 11 `H→` rules named in one line; all four spokes linked
+- [ ] All 15 hub-resident rules present; all 9 `H→` rules named in one line; all four spokes linked
 - [ ] Every relative path referenced resolves to an existing file
 - [ ] Purpose stated within the first 20 lines; latency named primary, fault tolerance second;
       ROADMAP linked and **no scale numbers restated**

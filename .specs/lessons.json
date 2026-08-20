@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 30,
+  "next_id": 35,
   "lessons": [
     {
       "id": "L-001",
@@ -453,10 +453,11 @@
       "recurrence": 1,
       "harmful": 0,
       "evidence": [
-        "validation.md sensor M13b, M19, M22 — checks written against the exact strings iteration 1's mutants used (tests)"
+        "validation.md sensor M13b, M19, M22 — checks written against the exact strings iteration 1's mutants used (tests)",
+        "validation.md § Sensor, M2/M11/M12/M18c/M1b vs M2b/M11b/M12b/M18b (tests)"
       ],
       "created": "2026-08-20T15:25:57Z",
-      "last_seen": "2026-08-20T15:25:57Z"
+      "last_seen": "2026-08-20T15:45:58Z"
     },
     {
       "id": "L-026",
@@ -529,6 +530,96 @@
       ],
       "created": "2026-08-20T15:25:57Z",
       "last_seen": "2026-08-20T15:25:57Z"
+    },
+    {
+      "id": "L-030",
+      "key": "surviving_mutant::a check that a rule is absent must match the rule s proposition not one token from its current wording a restatement in different words leaves the token unmatched and passes",
+      "text": "A check that a rule is absent must match the rule's proposition, not one token from its current wording; a restatement in different words leaves the token unmatched and passes.",
+      "signal": "surviving_mutant",
+      "scope": "docs",
+      "status": "candidate",
+      "features": [
+        "context-engineering"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Sensor, M15/M16/M17/M18/M28 (docs)"
+      ],
+      "created": "2026-08-20T15:45:58Z",
+      "last_seen": "2026-08-20T15:45:58Z"
+    },
+    {
+      "id": "L-031",
+      "key": "surviving_mutant::when a criterion requires a narrative to keep its concrete detail assert the wrong outcome it records not only the artifact it names",
+      "text": "When a criterion requires a narrative to keep its concrete detail, assert the wrong outcome it records, not only the artifact it names.",
+      "signal": "surviving_mutant",
+      "scope": "docs",
+      "status": "candidate",
+      "features": [
+        "context-engineering"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Sensor, M21/M22 (docs)"
+      ],
+      "created": "2026-08-20T15:45:58Z",
+      "last_seen": "2026-08-20T15:45:58Z"
+    },
+    {
+      "id": "L-032",
+      "key": "surviving_mutant::apply a duplication or corpus overlap check to every file the change touched not only to the files it created",
+      "text": "Apply a duplication or corpus-overlap check to every file the change touched, not only to the files it created.",
+      "signal": "surviving_mutant",
+      "scope": "docs",
+      "status": "candidate",
+      "features": [
+        "context-engineering"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Sensor, M27 (docs)"
+      ],
+      "created": "2026-08-20T15:45:58Z",
+      "last_seen": "2026-08-20T15:45:58Z"
+    },
+    {
+      "id": "L-033",
+      "key": "surviving_mutant::an author written gate s passing count measures the checks written not the faults they catch so never cite it as the evidence for an acceptance criterion",
+      "text": "An author-written gate's passing count measures the checks written, not the faults they catch, so never cite it as the evidence for an acceptance criterion.",
+      "signal": "surviving_mutant",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "context-engineering"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Code Quality; tasks.md:36-38 (specs)"
+      ],
+      "created": "2026-08-20T15:45:58Z",
+      "last_seen": "2026-08-20T15:45:58Z"
+    },
+    {
+      "id": "L-034",
+      "key": "ac_gap::when a repair must touch a clause that merely contains the defect narrow the edit to the defective clause retiring the surrounding statement breaks a confinement criterion even when the retirement is correct",
+      "text": "When a repair must touch a clause that merely contains the defect, narrow the edit to the defective clause; retiring the surrounding statement breaks a confinement criterion even when the retirement is correct.",
+      "signal": "ac_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "context-engineering"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "CTX-10; spec.md:294; .specs/STATE.md:337 (specs)"
+      ],
+      "created": "2026-08-20T15:45:58Z",
+      "last_seen": "2026-08-20T15:45:58Z"
     }
   ]
 }

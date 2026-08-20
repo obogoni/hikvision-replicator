@@ -159,8 +159,8 @@ Seen once or not yet corroborated. Tracked, not trusted.
 ### L-025 — Write a regression check for the class of defect, not for the wording of the instance that was reported; a check matching the caught mutant's literal string passes on the next variant.
 - signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
 - features: context-engineering
-- evidence: validation.md sensor M13b, M19, M22 — checks written against the exact strings iteration 1's mutants used (tests)
-- last seen: 2026-08-20T15:25:57Z
+- evidence: validation.md sensor M13b, M19, M22 — checks written against the exact strings iteration 1's mutants used (tests) (+1 more)
+- last seen: 2026-08-20T15:45:58Z
 
 ### L-026 — Assert that a rule is stated unconditionally; a check that the rule appears still passes when a qualifier is appended that guts it.
 - signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
@@ -185,6 +185,36 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - features: context-engineering
 - evidence: .specs/STATE.md:322 says the hub landed at 109 lines; fa05813 made it 110 (specs)
 - last seen: 2026-08-20T15:25:57Z
+
+### L-030 — A check that a rule is absent must match the rule's proposition, not one token from its current wording; a restatement in different words leaves the token unmatched and passes.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md § Sensor, M15/M16/M17/M18/M28 (docs)
+- last seen: 2026-08-20T15:45:58Z
+
+### L-031 — When a criterion requires a narrative to keep its concrete detail, assert the wrong outcome it records, not only the artifact it names.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md § Sensor, M21/M22 (docs)
+- last seen: 2026-08-20T15:45:58Z
+
+### L-032 — Apply a duplication or corpus-overlap check to every file the change touched, not only to the files it created.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md § Sensor, M27 (docs)
+- last seen: 2026-08-20T15:45:58Z
+
+### L-033 — An author-written gate's passing count measures the checks written, not the faults they catch, so never cite it as the evidence for an acceptance criterion.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: context-engineering
+- evidence: validation.md § Code Quality; tasks.md:36-38 (specs)
+- last seen: 2026-08-20T15:45:58Z
+
+### L-034 — When a repair must touch a clause that merely contains the defect, narrow the edit to the defective clause; retiring the surrounding statement breaks a confinement criterion even when the retirement is correct.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `specs` · harmful: 0
+- features: context-engineering
+- evidence: CTX-10; spec.md:294; .specs/STATE.md:337 (specs)
+- last seen: 2026-08-20T15:45:58Z
 
 ## Quarantined (failed when applied — ignore)
 
