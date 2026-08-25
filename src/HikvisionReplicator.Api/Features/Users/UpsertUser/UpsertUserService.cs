@@ -37,10 +37,8 @@ public class UpsertUserService(
         if (existing is null)
             return await CreateAsync(externalRef, request, cancellationToken);
 
-        // The resurrection half arrives with T21. Until then a tombstoned reference cannot be
-        // rewritten, and saying so is honest.
         if (existing.DeletedAt is not null)
-            return new ConflictError(IUserRepository.ExternalRefAlreadyRegistered);
+            return await RestoreAsync(existing, request, cancellationToken);
 
         return await UpdateAsync(existing, request, cancellationToken);
     }
@@ -138,6 +136,61 @@ public class UpsertUserService(
             return validationError;
 
         // A spectator re-sending its own access code is never a conflict with itself (USR-28).
+        if (
+            await repository.AnyAsync(
+                new ActiveUserByAccessCodeSpec(user.AccessCode, user.Id),
+                cancellationToken
+            )
+        )
+            return new ConflictError(IUserRepository.AccessCodeAlreadyInUse);
+
+        var saveResult = await repository.SaveIfKeysFreeAsync(cancellationToken);
+        if (saveResult.TryPickT1(out var conflictError, out _))
+            return conflictError;
+
+        return new UserUpdated(UserResponse.FromEntity(user));
+    }
+
+    /// <summary>
+    /// Brings a tombstoned spectator back (A-7, USR-34).
+    /// <para>
+    /// <b>A resurrection is a create for validation purposes.</b> The removal destroyed the face
+    /// picture, so there is no stored image for an omitted one to keep: A-4's "omitting it means
+    /// keep the stored image" has nothing to refer to, and a faceless spectator is exactly what
+    /// A-3 forbids. Every create-time rule is therefore re-imposed, the picture included.
+    /// </para>
+    /// <para>
+    /// It answers 200 rather than 201 because the row was never gone — the external reference
+    /// stayed registered and reserved throughout, which is why the tombstone could be found at
+    /// all. A-7 scopes the create-likeness to validation, and this is not validation.
+    /// </para>
+    /// </summary>
+    private async Task<
+        OneOf<UserCreated, UserUpdated, ValidationError, ConflictError>
+    > RestoreAsync(User user, UpsertUserRequest request, CancellationToken cancellationToken)
+    {
+        if (request.FacePicture is null || request.FacePicture.Length == 0)
+            return new ValidationError(FaceFingerprint.Errors.Field, User.Errors.PictureRequired);
+
+        var faceResult = NormalizeFace(request.FacePicture);
+        if (faceResult.TryPickT1(out var faceError, out var face))
+            return faceError;
+
+        // Restore validates everything before assigning anything, so a rejected resurrection
+        // leaves the tombstone exactly as it was. The picture is built fresh rather than
+        // replaced: the removal deleted the row, so there is nothing to load.
+        var restoreResult = user.Restore(
+            request.Name,
+            request.AccessCode,
+            face.Fingerprint,
+            face.Content,
+            timeProvider.GetUtcNow().UtcDateTime
+        );
+        if (restoreResult.TryPickT1(out var validationError, out _))
+            return validationError;
+
+        // Re-checked against active users, because the access code returned to the pool when the
+        // spectator was removed and another one may have taken it since (USR-06, A-5).
         if (
             await repository.AnyAsync(
                 new ActiveUserByAccessCodeSpec(user.AccessCode, user.Id),
