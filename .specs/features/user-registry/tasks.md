@@ -290,17 +290,21 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Eight permissively-licensed **non-face** photographs present per design § fixture bank: EXIF-rotated portrait (origin 6), ~4000×3000 large JPEG, 320×240 sub-floor thumbnail, PNG, grayscale, progressive JPEG, ICC-profiled, GPS-tagged
-- [ ] Three generated fixtures present: decode bomb, near-uniform image, not-an-image
-- [ ] `PROVENANCE.md` records **source URL and licence for every committed photograph** — a fixture with no provenance entry fails this task
-- [ ] **No fixture contains a human face** — stated and checked, per design § fixture bank
+- [ ] A committed generator script produces all eleven fixtures **deterministically** — same script, same bytes, every run and every machine
+- [ ] Generated outputs are **committed alongside the script**, so the golden hashes in T13 do not depend on regeneration being byte-stable
+- [ ] Content is **fractal/noise-based, never gradients or solid fills** — the derivative must compress like a photograph, or T13's 40 KB lower bound and downscale branch are untestable
+- [ ] Eight image fixtures per design § fixture bank: EXIF-rotated (origin 6), ~4000×3000 large, 320×240 sub-floor, PNG, grayscale, progressive, ICC-profiled, GPS-tagged
+- [ ] EXIF, ICC and GPS headers are **written onto** the generated images; GPS uses **fictional** coordinates, never a real location
+- [ ] Three pathological fixtures: decode bomb, near-uniform image, not-an-image
+- [ ] `PROVENANCE.md` records, per fixture, how it was generated and which criterion it exercises
+- [ ] **No fixture contains a human face**
 - [ ] Both test projects copy the assets to output (`CopyToOutputDirectory`)
 - [ ] A fixture-integrity unit test asserts every declared fixture resolves at runtime, is non-empty, and matches its declared format and dimensions — this is what catches a broken copy-to-output
 - [ ] Quick gate passes
 - [ ] ≥ 11 new unit tests pass (one per fixture) (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
-**Commit**: `test(assets): add face-picture fixture bank`
+**Commit**: `test(assets): add generated face-picture fixture bank`
 
 ---
 

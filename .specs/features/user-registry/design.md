@@ -327,33 +327,50 @@ compresses: a generated gradient encodes to a few kilobytes and would trip the "
 branch would never be reached. Zero-entropy input proves nothing about an entropy-dependent
 algorithm.
 
-**No faces are committed.** The normalizer is face-*agnostic* — it decodes, rotates, resizes and
-encodes, and nothing in it looks for a face (that is the spec's named known gap). The fixtures
-therefore need photographic entropy and real camera metadata, not faces. A git repository is
-append-only in practice, so a committed face would be permanent biometric data with no consent
-trail; permissively-licensed non-face photographs exercise every branch identically.
+**No faces, and no photographs either — every fixture is generated.** The normalizer is
+face-*agnostic*: it decodes, rotates, resizes and encodes, and nothing in it looks for a face
+(that is the spec's named known gap). So the fixtures need photographic *entropy* and real
+metadata structures, not real photographs.
 
-Fixtures live in a repo-root `tests/assets/` folder, **linked into both test projects** as copied
-content rather than becoming a fifth solution project. `tests/assets/PROVENANCE.md` records each
-file's source and licence.
+Entropy is produced procedurally — fractal/noise content compresses like a photograph, unlike the
+gradients and solid fills that made "generate everything" a bad idea in the first place. EXIF,
+ICC and GPS are **written** onto the generated images, since those are constructible headers, not
+camera magic.
+
+> **This reverses an earlier decision, and the cost is real.** Committed photographs would have
+> carried authentic camera encoder output — genuine chroma-subsampling choices, real ICC profiles,
+> true progressive encoding. Generated fixtures do not. **Real-device encoder quirks therefore go
+> untested until Phase 3**, and that is now part of A-13's standing verification obligation:
+> `isapi-device-client` must exercise the normalizer against real camera files, not only against
+> this bank. Recorded so nobody later reads a green suite as proof of real-world coverage.
+>
+> What was bought in exchange: no licence provenance to research, no binaries in an append-only
+> history, no GPS coordinates of a real location committed to a public repository, and a bank that
+> regenerates deterministically from code.
+
+Fixtures are generated into `tests/assets/` by a committed script and **the outputs are committed
+too**, so the golden hashes stay meaningful and the suite does not depend on regeneration being
+byte-stable across machines. They are **linked into both test projects** as copied content rather
+than becoming a fifth solution project. `tests/assets/PROVENANCE.md` records, for each fixture,
+how it was generated and what it exercises.
 
 | Fixture | Origin | Exercises |
 | ------- | ------ | --------- |
-| EXIF-rotated portrait (origin 6) | photo | USR-13 rotation; the **oriented-dimensions** floor check |
-| Large landscape, ~4000×3000, ~4 MB | photo | Ceiling downscale, multi-step ladder, USR-18 no-crop |
-| Sub-floor thumbnail, 320×240 | photo | USR-17 reject-not-upscale |
-| PNG | photo | USR-12 non-JPEG input → canonical JPEG |
-| Grayscale | photo | sRGB conversion |
-| Progressive JPEG | photo | Baseline output |
-| ICC-profiled / wide-gamut | photo | Colour-space normalization |
-| GPS-tagged | photo | USR-14 metadata stripping |
+| EXIF-rotated portrait (origin 6) | generated + written EXIF | USR-13 rotation; the **oriented-dimensions** floor check |
+| Large fractal image, ~4000×3000 | generated | Ceiling downscale, multi-step ladder, USR-18 no-crop |
+| Sub-floor thumbnail, 320×240 | generated | USR-17 reject-not-upscale |
+| PNG | generated | USR-12 non-JPEG input → canonical JPEG |
+| Grayscale | generated | sRGB conversion |
+| Progressive JPEG | generated (`-interlace Plane`) | Baseline output |
+| ICC-profiled | generated + written ICC | Colour-space normalization |
+| GPS-tagged | generated + **fictional** coordinates | USR-14 metadata stripping |
 | Decode bomb — tiny file, enormous declared dimensions | **generated** | USR-20 pre-allocation cap. Cannot be found in the wild. |
 | Near-uniform image | **generated** | The sub-40 KB rejection path |
 | Not an image at all | **generated** | USR-21 |
 
 ### Golden output hashes
 
-Each photographic fixture records its **expected derivative hash**, asserted by a unit test. This
+Each fixture records its **expected derivative hash**, asserted by a unit test. This
 is the direct proof of the USR-26 determinism invariant and the only thing that catches a silent
 change in normalization output during a refactor.
 
