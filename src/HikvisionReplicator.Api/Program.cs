@@ -3,6 +3,7 @@ using HikvisionReplicator.Api.Features.Devices.ListDevices;
 using HikvisionReplicator.Api.Features.Devices.RegisterDevice;
 using HikvisionReplicator.Api.Features.Devices.RemoveDevice;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
+using HikvisionReplicator.Api.Features.Users.UpsertUser;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,8 @@ builder
     .ValidateOnStart();
 
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
+// Stateless and CPU-bound, so one instance serves every request (A-14).
+builder.Services.AddSingleton<IFaceImageNormalizer, SkiaFaceImageNormalizer>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -44,6 +47,8 @@ builder.UseGetDevice();
 builder.UseListDevices();
 builder.UseUpdateDevice();
 builder.UseRemoveDevice();
+
+builder.UseUpsertUser();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -100,6 +105,8 @@ app.MapGetDevice();
 app.MapListDevices();
 app.MapUpdateDevice();
 app.MapRemoveDevice();
+
+app.MapUpsertUser();
 
 app.Run();
 
