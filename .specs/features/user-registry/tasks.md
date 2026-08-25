@@ -68,7 +68,7 @@ Verifier, discrimination sensor).
 
 Phases run sequentially; tasks within a phase run in order.
 
-### Phase 1: Domain foundation (7 tasks)
+### ✅ Phase 1: Domain foundation (7 tasks) — complete, 187 unit tests
 
 Pure logic, no Docker. Everything downstream depends on these types existing.
 
@@ -108,7 +108,7 @@ T22 → T23 → T24 → T25 → T26
 
 ## Task Breakdown
 
-### T1: `ExternalRef` value object
+### ✅ T1: `ExternalRef` value object
 
 **What**: The integrator's opaque key as a validated value object with case-sensitive equality.
 **Where**: `src/HikvisionReplicator.Api/Domain/ExternalRef.cs`
@@ -119,18 +119,20 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Create` rejects null, blank and whitespace-only, and > 255 characters, each with a `ValidationError` naming `externalRef`
-- [ ] Two refs differing only by letter case are **not** equal
-- [ ] `internal static FromPersistence` bypasses validation, per AD-009
-- [ ] Quick gate passes
-- [ ] ≥ 6 new unit tests pass (no silent deletions)
+- [x] `Create` rejects null, blank and whitespace-only, and > 255 characters, each with a `ValidationError` naming `externalRef`
+- [x] Two refs differing only by letter case are **not** equal
+- [x] `internal static FromPersistence` bypasses validation, per AD-009
+- [x] Quick gate passes
+- [x] ≥ 6 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `232e924`
+
 **Commit**: `feat(domain): add ExternalRef value object`
 
 ---
 
-### T2: `AccessCode` value object
+### ✅ T2: `AccessCode` value object
 
 **What**: A 4–20 **ASCII**-digit access code as a validated value object.
 **Where**: `src/HikvisionReplicator.Api/Domain/AccessCode.cs`
@@ -141,18 +143,20 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Create` rejects null/blank, non-digits, < 4 and > 20 characters
-- [ ] **Arabic-Indic digits (e.g. `٤٥٦٧`) are rejected** — the implementation must not use `char.IsDigit`, which accepts them
-- [ ] `internal static FromPersistence` present
-- [ ] Quick gate passes
-- [ ] ≥ 7 new unit tests pass (no silent deletions)
+- [x] `Create` rejects null/blank, non-digits, < 4 and > 20 characters
+- [x] **Arabic-Indic digits (e.g. `٤٥٦٧`) are rejected** — the implementation must not use `char.IsDigit`, which accepts them
+- [x] `internal static FromPersistence` present
+- [x] Quick gate passes
+- [x] ≥ 7 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `99e4cbb`
+
 **Commit**: `feat(domain): add AccessCode value object`
 
 ---
 
-### T3: `FaceFingerprint` value object
+### ✅ T3: `FaceFingerprint` value object
 
 **What**: The face image's content hash, byte size and pixel dimensions — the denormalized half of A-1.
 **Where**: `src/HikvisionReplicator.Api/Domain/FaceFingerprint.cs`
@@ -163,18 +167,20 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Holds `ContentHash`, `ByteSize`, `Width`, `Height`; rejects a blank hash and non-positive size/dimensions
-- [ ] Equality is by all four components
-- [ ] `internal static FromPersistence` present
-- [ ] Quick gate passes
-- [ ] ≥ 5 new unit tests pass (no silent deletions)
+- [x] Holds `ContentHash`, `ByteSize`, `Width`, `Height`; rejects a blank hash and non-positive size/dimensions
+- [x] Equality is by all four components
+- [x] `internal static FromPersistence` present
+- [x] Quick gate passes
+- [x] ≥ 5 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `d4b34f7`
+
 **Commit**: `feat(domain): add FaceFingerprint value object`
 
 ---
 
-### T4: `FacePicture` entity
+### ✅ T4: `FacePicture` entity
 
 **What**: The bytes-only entity inside the `User` aggregate — no repository, not an `IAggregateRoot`.
 **Where**: `src/HikvisionReplicator.Api/Domain/FacePicture.cs`
@@ -185,18 +191,20 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `internal static ForUser(byte[])` and `internal void Replace(byte[])` exist; both reject empty content
-- [ ] Type does **not** implement `IAggregateRoot` — asserted by a test, since this is the only thing keeping it out of `IRepository<T>`
-- [ ] Private parameterless constructor for EF Core
-- [ ] Quick gate passes
-- [ ] ≥ 4 new unit tests pass (no silent deletions)
+- [x] `internal static ForUser(byte[])` and `internal void Replace(byte[])` exist; both reject empty content
+- [x] Type does **not** implement `IAggregateRoot` — asserted by a test, since this is the only thing keeping it out of `IRepository<T>`
+- [x] Private parameterless constructor for EF Core
+- [x] Quick gate passes
+- [x] ≥ 4 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `b3ed610`
+
 **Commit**: `feat(domain): add FacePicture entity`
 
 ---
 
-### T5: `User.Create`
+### ✅ T5: `User.Create`
 
 **What**: The aggregate and its creation factory, receiving an already-normalized image.
 **Where**: `src/HikvisionReplicator.Api/Domain/User.cs`
@@ -207,20 +215,22 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `Create(externalRef, name, accessCode, fingerprint, pictureContent, now)` returns `OneOf<User, ValidationError>`
-- [ ] `name` rejected when null/blank/whitespace-only or > 100 characters; **trimmed before the length check** (spec Edge Cases)
-- [ ] Value-object failures propagate as their own `ValidationError` via `TryPickT1`
-- [ ] `CreatedAt` and `UpdatedAt` are both the supplied `now`; the aggregate never calls `DateTime.UtcNow` (AD-023)
-- [ ] A created user has `DeletedAt == null` and a non-null `Picture`
-- [ ] Quick gate passes
-- [ ] ≥ 9 new unit tests pass (no silent deletions)
+- [x] `Create(externalRef, name, accessCode, fingerprint, pictureContent, now)` returns `OneOf<User, ValidationError>`
+- [x] `name` rejected when null/blank/whitespace-only or > 100 characters; **trimmed before the length check** (spec Edge Cases)
+- [x] Value-object failures propagate as their own `ValidationError` via `TryPickT1`
+- [x] `CreatedAt` and `UpdatedAt` are both the supplied `now`; the aggregate never calls `DateTime.UtcNow` (AD-023)
+- [x] A created user has `DeletedAt == null` and a non-null `Picture`
+- [x] Quick gate passes
+- [x] ≥ 9 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `c6d7b74`
+
 **Commit**: `feat(domain): add User aggregate with creation factory`
 
 ---
 
-### T6: `User.Update`
+### ✅ T6: `User.Update`
 
 **What**: The validate-everything-then-apply mutator with the change guard.
 **Where**: `src/HikvisionReplicator.Api/Domain/User.cs` (modify)
@@ -231,18 +241,20 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] A `null` fingerprint/content pair leaves the stored image, hash, size and dimensions untouched (USR-24)
-- [ ] **No field is assigned before every field is validated** — a rejected update leaves the aggregate byte-for-byte as it was (USR-27), asserted per field
-- [ ] `UpdatedAt` advances only when a value actually differs; an identical update leaves it unmoved (USR-26)
-- [ ] Quick gate passes
-- [ ] ≥ 10 new unit tests pass (no silent deletions)
+- [x] A `null` fingerprint/content pair leaves the stored image, hash, size and dimensions untouched (USR-24)
+- [x] **No field is assigned before every field is validated** — a rejected update leaves the aggregate byte-for-byte as it was (USR-27), asserted per field
+- [x] `UpdatedAt` advances only when a value actually differs; an identical update leaves it unmoved (USR-26)
+- [x] Quick gate passes
+- [x] ≥ 10 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `7913c01`
+
 **Commit**: `feat(domain): add User update with change guard`
 
 ---
 
-### T7: `User.MarkDeleted` and `User.Restore`
+### ✅ T7: `User.MarkDeleted` and `User.Restore`
 
 **What**: The only two lifecycle transitions — tombstone (destroying the image) and resurrection.
 **Where**: `src/HikvisionReplicator.Api/Domain/User.cs` (modify)
@@ -253,14 +265,16 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `MarkDeleted(now)` sets `DeletedAt` **and** drops the picture, while `ExternalRef`, `Name` and `AccessCode` survive (USR-30)
-- [ ] `MarkDeleted` on an already-deleted user is a no-op that does not move `DeletedAt` (supports A-16)
-- [ ] `Restore(...)` clears `DeletedAt` and **re-imposes every create-time rule**, including a mandatory picture (USR-34)
-- [ ] `Restore` on an active user is rejected — resurrection is not an update path
-- [ ] Quick gate passes
-- [ ] ≥ 8 new unit tests pass (no silent deletions)
+- [x] `MarkDeleted(now)` sets `DeletedAt` **and** drops the picture, while `ExternalRef`, `Name` and `AccessCode` survive (USR-30)
+- [x] `MarkDeleted` on an already-deleted user is a no-op that does not move `DeletedAt` (supports A-16)
+- [x] `Restore(...)` clears `DeletedAt` and **re-imposes every create-time rule**, including a mandatory picture (USR-34)
+- [x] `Restore` on an active user is rejected — resurrection is not an update path
+- [x] Quick gate passes
+- [x] ≥ 8 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `1933fa1`
+
 **Commit**: `feat(domain): add User tombstone and restore transitions`
 
 ---
