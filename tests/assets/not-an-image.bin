@@ -1,0 +1,1 @@
+this is not an image, it is 128 bytes of text that no codec will accept -- it exercises the not-a-decodable-image rejection.
