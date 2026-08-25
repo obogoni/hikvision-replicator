@@ -90,7 +90,7 @@ T8 → T9 → T10 → T11 → T12 → T13
 T14 → T15 → T16
 ```
 
-### Phase 4: Slices (5 tasks)
+### ✅ Phase 4: Slices (5 tasks) — complete, 183 integration tests
 
 Resurrection comes after removal, because it needs a tombstone to resurrect.
 
@@ -511,7 +511,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T17: `UpsertUser` slice — create path
+### ✅ T17: `UpsertUser` slice — create path
 
 **What**: The PUT route, its DI wiring, and the create half of the upsert.
 **Where**: `Features/Users/UpsertUser/` (3 files), `Program.cs` (modify)
@@ -536,7 +536,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T18: `UpsertUser` slice — update path
+### ✅ T18: `UpsertUser` slice — update path
 
 **What**: The update half — omitted-face semantics, the change guard, and the access-code conflict.
 **Where**: `Features/Users/UpsertUser/UpsertUserService.cs` (modify)
@@ -561,7 +561,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T19: `GetUser` slice
+### ✅ T19: `GetUser` slice
 
 **What**: Lookup by the integrator's key.
 **Where**: `Features/Users/GetUser/` (3 files), `Program.cs` (modify)
@@ -583,7 +583,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T20: `RemoveUser` slice
+### ✅ T20: `RemoveUser` slice
 
 **What**: The tombstone, the biometric destruction, and idempotent deletion.
 **Where**: `Features/Users/RemoveUser/` (3 files), `Program.cs` (modify)
@@ -607,7 +607,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T21: `UpsertUser` slice — resurrection path
+### ✅ T21: `UpsertUser` slice — resurrection path
 
 **What**: A-7 — a `PUT` on a tombstoned ref brings the user back under full create rules.
 **Where**: `Features/Users/UpsertUser/UpsertUserService.cs` (modify)
