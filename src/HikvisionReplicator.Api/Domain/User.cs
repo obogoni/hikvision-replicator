@@ -69,6 +69,65 @@ public class User : IAggregateRoot
         return new User(reference, trimmedName, code, fingerprint, pictureContent, now);
     }
 
+    /// <summary>
+    /// Applies a corrected representation. A null fingerprint/content pair means "keep the
+    /// stored image" (USR-24). Every field is validated before any is assigned, so a rejected
+    /// update leaves the aggregate exactly as it was (USR-27). <see cref="UpdatedAt"/> advances
+    /// only when a value actually differs from the current one (USR-26).
+    /// </summary>
+    public OneOf<Success, ValidationError> Update(
+        string? name,
+        string? accessCode,
+        FaceFingerprint? fingerprint,
+        byte[]? pictureContent,
+        DateTime now
+    )
+    {
+        // ── Validate everything first — no assignment happens above this line ──
+        var nameResult = ValidateName(name);
+        if (nameResult.TryPickT1(out var nameError, out var trimmedName))
+            return nameError;
+
+        var codeResult = AccessCode.Create(accessCode);
+        if (codeResult.TryPickT1(out var codeError, out var code))
+            return codeError;
+
+        // ── Everything is valid: apply only what actually differs ──
+        var changed = false;
+
+        if (trimmedName != Name)
+        {
+            Name = trimmedName;
+            changed = true;
+        }
+
+        if (code != AccessCode)
+        {
+            AccessCode = code;
+            changed = true;
+        }
+
+        if (fingerprint is not null && fingerprint != Face)
+        {
+            Face = fingerprint;
+            SetPicture(pictureContent!);
+            changed = true;
+        }
+
+        if (changed)
+            UpdatedAt = now;
+
+        return new Success();
+    }
+
+    private void SetPicture(byte[] content)
+    {
+        if (Picture is null)
+            Picture = FacePicture.ForUser(content);
+        else
+            Picture.Replace(content);
+    }
+
     private static OneOf<string, ValidationError> ValidateName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
