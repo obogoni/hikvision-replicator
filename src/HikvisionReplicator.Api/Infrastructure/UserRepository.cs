@@ -47,6 +47,9 @@ public class UserRepository(AppDbContext dbContext)
         }
     }
 
+    public Task LoadPictureAsync(User user, CancellationToken cancellationToken) =>
+        dbContext.Entry(user).Reference(tracked => tracked.Picture).LoadAsync(cancellationToken);
+
     /// <summary>
     /// The message for the key that actually collided, or <c>null</c> when the failure is
     /// something else — in which case the exception filter does not match and it propagates.

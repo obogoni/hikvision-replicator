@@ -33,4 +33,15 @@ public interface IUserRepository : IRepository<User>
 
     /// <summary>Saves pending changes, or reports which key was already taken.</summary>
     Task<OneOf<Success, ConflictError>> SaveIfKeysFreeAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Brings a spectator's stored face picture into the tracked graph.
+    /// <para>
+    /// No specification includes the navigation, because no read path has any use for 40-200 KB
+    /// of JPEG (A-1). The two paths that must <em>change</em> the bytes — replacing them on an
+    /// update and destroying them on a removal — need the row in the graph for the write to be
+    /// part of the same transaction, so they ask for it here and pay for it explicitly.
+    /// </para>
+    /// </summary>
+    Task LoadPictureAsync(User user, CancellationToken cancellationToken);
 }

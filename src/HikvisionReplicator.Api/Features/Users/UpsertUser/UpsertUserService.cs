@@ -37,9 +37,12 @@ public class UpsertUserService(
         if (existing is null)
             return await CreateAsync(externalRef, request, cancellationToken);
 
-        // The update and resurrection halves arrive with T18 and T21. Until then an existing
-        // reference cannot be rewritten, and saying so is honest.
-        return new ConflictError(IUserRepository.ExternalRefAlreadyRegistered);
+        // The resurrection half arrives with T21. Until then a tombstoned reference cannot be
+        // rewritten, and saying so is honest.
+        if (existing.DeletedAt is not null)
+            return new ConflictError(IUserRepository.ExternalRefAlreadyRegistered);
+
+        return await UpdateAsync(existing, request, cancellationToken);
     }
 
     private async Task<
@@ -87,6 +90,67 @@ public class UpsertUserService(
             return conflictError;
 
         return new UserCreated(UserResponse.FromEntity(user));
+    }
+
+    /// <summary>
+    /// Applies a corrected representation to a registered spectator.
+    /// <para>
+    /// <b>Every field of the representation is sent, not just the changed ones.</b> PUT is a
+    /// full-representation upsert (A-2) and the face picture is its sole exception (A-4): omitting
+    /// the picture keeps the stored image, omitting anything else is a rejection. This differs
+    /// deliberately from the device slices, where a null means "leave unchanged" — devices are
+    /// patched, spectators are replaced.
+    /// </para>
+    /// </summary>
+    private async Task<
+        OneOf<UserCreated, UserUpdated, ValidationError, ConflictError>
+    > UpdateAsync(User user, UpsertUserRequest request, CancellationToken cancellationToken)
+    {
+        FaceFingerprint? fingerprint = null;
+        byte[]? content = null;
+
+        if (request.FacePicture is { Length: > 0 })
+        {
+            var faceResult = NormalizeFace(request.FacePicture);
+            if (faceResult.TryPickT1(out var faceError, out var face))
+                return faceError;
+
+            (fingerprint, content) = face;
+
+            // The stored picture is not loaded by any specification, so replacing it means asking
+            // for it first: without the row in the graph the aggregate would build a second
+            // picture for a user that already has one, and the write would fail on the 1:1 index
+            // instead of overwriting the bytes (USR-25).
+            await repository.LoadPictureAsync(user, cancellationToken);
+        }
+
+        // Update validates every field before assigning any of them, so a rejected correction
+        // leaves the aggregate — and therefore the row and its image — untouched (USR-27). It
+        // also advances UpdatedAt only when a value actually differs (USR-26).
+        var updateResult = user.Update(
+            request.Name,
+            request.AccessCode,
+            fingerprint,
+            content,
+            timeProvider.GetUtcNow().UtcDateTime
+        );
+        if (updateResult.TryPickT1(out var validationError, out _))
+            return validationError;
+
+        // A spectator re-sending its own access code is never a conflict with itself (USR-28).
+        if (
+            await repository.AnyAsync(
+                new ActiveUserByAccessCodeSpec(user.AccessCode, user.Id),
+                cancellationToken
+            )
+        )
+            return new ConflictError(IUserRepository.AccessCodeAlreadyInUse);
+
+        var saveResult = await repository.SaveIfKeysFreeAsync(cancellationToken);
+        if (saveResult.TryPickT1(out var conflictError, out _))
+            return conflictError;
+
+        return new UserUpdated(UserResponse.FromEntity(user));
     }
 
     /// <summary>
