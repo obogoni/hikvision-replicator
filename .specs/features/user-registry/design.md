@@ -266,6 +266,7 @@ behaves as intended, in particular that a PIN is reusable after its holder is de
 | **`ExternalRef` in a route segment may not survive A-15.** A-15 permits *any* non-blank string, but `{externalRef}` matches a single segment, so a ref containing `/` cannot round-trip, and `%2F` handling differs across hosts. | `Features/Users/*/…Endpoint.cs` | An integrator whose keys contain `/` gets 404s that look like missing data. | An explicit edge-case test round-tripping reserved characters through `PUT`/`GET`/`DELETE`. **If it cannot be made to work, A-15 is amended to exclude `/` — a spec change, not a silent code workaround.** |
 | **SkiaSharp needs native assets in the container and in CI.** | new `HikvisionReplicator.Api.csproj`, `.github/workflows/ci.yml` | Passes locally, fails at runtime in CI or Docker with a native-load error. | `SkiaSharp.NativeAssets.Linux` referenced from the start; the normalizer's unit tests run in CI, so a missing native asset fails the build rather than production. |
 | **Trace assertions can pass on scheduling luck.** USR-40 asserts a normalization span. | `IntegrationTests/TracingTests.cs` pattern | The OTel listener is process-wide, so an unfiltered assertion passes or fails on which host happened to be alive. | Follow the recorded pattern in `docs/test-patterns.md`: send a `traceparent` and filter spans by that trace id. |
+| **Golden hashes fail on a SkiaSharp upgrade.** | `Tests/Infrastructure/` fixtures | A routine dependency bump looks like a test regression and invites someone to delete the assertion. | The intended response — review and re-record, never loosen — is stated in the test file, not only in this design. |
 | **A quiet incremental build is not evidence** (lesson **L-007**, confirmed ×2). | whole build | Adding SkiaSharp could introduce warnings that an up-to-date build re-reports as zero. | Any claim that this feature introduced no warnings must come from `--no-incremental`. |
 | **Pre-existing NU1903/CS0618 warnings.** | solution-wide | A newcomer may try `-warnaserror` and fail the build on unrelated advisories. | Already documented in `Directory.Build.props`; unchanged by this feature. |
 
@@ -312,5 +313,46 @@ Per AD-024 / AD-026 — the project a test lives in declares its level.
 | **Integration** | `HikvisionReplicator.IntegrationTests/` | Every route: happy path, every edge case, every error path; both unique indexes under a real race; PIN reuse after deletion; no read against `face_pictures` on list/get; the 503 path; the normalization span |
 | **E2E** | `HikvisionReplicator.E2E/` | One happy path and one error path per route — confirmation, not coverage |
 
-Image fixtures are **generated in code, not committed as binaries**, so a test's input is readable
-in the test and no biometric-looking asset enters the repository.
+### The face-picture fixture bank
+
+`SkiaFaceImageNormalizer` is **entropy-sensitive**, so it cannot be honestly tested with drawn
+images. The 40 KB lower bound and the quality ladder's convergence both depend on how the content
+compresses: a generated gradient encodes to a few kilobytes and would trip the "cannot reach
+40 KB" rejection on every fixture, and the "still too big at the lowest quality, must downscale"
+branch would never be reached. Zero-entropy input proves nothing about an entropy-dependent
+algorithm.
+
+**No faces are committed.** The normalizer is face-*agnostic* — it decodes, rotates, resizes and
+encodes, and nothing in it looks for a face (that is the spec's named known gap). The fixtures
+therefore need photographic entropy and real camera metadata, not faces. A git repository is
+append-only in practice, so a committed face would be permanent biometric data with no consent
+trail; permissively-licensed non-face photographs exercise every branch identically.
+
+Fixtures live in a repo-root `tests/assets/` folder, **linked into both test projects** as copied
+content rather than becoming a fifth solution project. `tests/assets/PROVENANCE.md` records each
+file's source and licence.
+
+| Fixture | Origin | Exercises |
+| ------- | ------ | --------- |
+| EXIF-rotated portrait (origin 6) | photo | USR-13 rotation; the **oriented-dimensions** floor check |
+| Large landscape, ~4000×3000, ~4 MB | photo | Ceiling downscale, multi-step ladder, USR-18 no-crop |
+| Sub-floor thumbnail, 320×240 | photo | USR-17 reject-not-upscale |
+| PNG | photo | USR-12 non-JPEG input → canonical JPEG |
+| Grayscale | photo | sRGB conversion |
+| Progressive JPEG | photo | Baseline output |
+| ICC-profiled / wide-gamut | photo | Colour-space normalization |
+| GPS-tagged | photo | USR-14 metadata stripping |
+| Decode bomb — tiny file, enormous declared dimensions | **generated** | USR-20 pre-allocation cap. Cannot be found in the wild. |
+| Near-uniform image | **generated** | The sub-40 KB rejection path |
+| Not an image at all | **generated** | USR-21 |
+
+### Golden output hashes
+
+Each photographic fixture records its **expected derivative hash**, asserted by a unit test. This
+is the direct proof of the USR-26 determinism invariant and the only thing that catches a silent
+change in normalization output during a refactor.
+
+> **A SkiaSharp upgrade will change encoder output and fail these tests.** That is intended
+> behaviour, not a broken test: the correct response is to review the new output against the
+> spec's criteria and re-record, never to loosen the assertion. This must be stated in the test
+> file itself, because the next person to hit it will not have read this document.
