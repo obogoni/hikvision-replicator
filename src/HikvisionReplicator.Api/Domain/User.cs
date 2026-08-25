@@ -120,6 +120,62 @@ public class User : IAggregateRoot
         return new Success();
     }
 
+    /// <summary>
+    /// Tombstones the spectator: the row survives so Phase 2 keeps a valid replication
+    /// target, while the biometric is destroyed at the moment of deletion (A-5, USR-29,
+    /// USR-30). Deleting an already-deleted user is a no-op, which is what makes a
+    /// repeated removal safe (A-16).
+    /// </summary>
+    public void MarkDeleted(DateTime now)
+    {
+        if (DeletedAt is not null)
+            return;
+
+        DeletedAt = now;
+        UpdatedAt = now;
+        Picture = null;
+    }
+
+    /// <summary>
+    /// Resurrects a tombstoned spectator (A-7, USR-34). Because <see cref="MarkDeleted"/>
+    /// destroyed the picture, this is a creation for validation purposes: every create-time
+    /// rule is re-imposed, the face picture included. Every field is validated before any is
+    /// assigned, so a rejected resurrection leaves the tombstone exactly as it was.
+    /// </summary>
+    public OneOf<Success, ValidationError> Restore(
+        string? name,
+        string? accessCode,
+        FaceFingerprint fingerprint,
+        byte[] pictureContent,
+        DateTime now
+    )
+    {
+        // ── Validate everything first — no assignment happens above this line ──
+        if (DeletedAt is null)
+            return new ValidationError(ExternalRef.Errors.Field, Errors.AlreadyActive);
+
+        var nameResult = ValidateName(name);
+        if (nameResult.TryPickT1(out var nameError, out var trimmedName))
+            return nameError;
+
+        var codeResult = AccessCode.Create(accessCode);
+        if (codeResult.TryPickT1(out var codeError, out var code))
+            return codeError;
+
+        if (fingerprint is null || pictureContent is null || pictureContent.Length == 0)
+            return new ValidationError(FaceFingerprint.Errors.Field, Errors.PictureRequired);
+
+        // ── Everything is valid: the spectator is registered again ──
+        Name = trimmedName;
+        AccessCode = code;
+        Face = fingerprint;
+        SetPicture(pictureContent);
+        DeletedAt = null;
+        UpdatedAt = now;
+
+        return new Success();
+    }
+
     private void SetPicture(byte[] content)
     {
         if (Picture is null)
@@ -147,5 +203,8 @@ public class User : IAggregateRoot
         public const string NameField = "name";
         public const string NameRequired = "Name is required.";
         public const string NameTooLong = "Name must be 100 characters or fewer.";
+
+        public const string PictureRequired = "Face picture is required.";
+        public const string AlreadyActive = "User is already registered.";
     }
 }
