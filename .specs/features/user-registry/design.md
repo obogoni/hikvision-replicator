@@ -86,7 +86,12 @@ with an explicit specification.
 - **Location**: `Domain/User.cs`
 - **Interfaces**:
   - `static OneOf<User, ValidationError> Create(string? externalRef, string? name, string? accessCode, FaceFingerprint fingerprint, byte[] pictureContent, DateTime now)`
-  - `OneOf<Success, ValidationError> Update(string? name, string? accessCode, FaceFingerprint? fingerprint, byte[]? pictureContent, DateTime now)` — `null` fingerprint means "keep the stored image" (USR-24)
+  - `OneOf<Success, ValidationError> Update(string? name, string? accessCode, FaceFingerprint? fingerprint, byte[]? pictureContent, DateTime now)` — a `null` fingerprint/content pair means "keep the stored image" (USR-24)
+    > **`name` and `accessCode` are required on update, not optional.** They are declared nullable
+    > only so the domain can reject a null, exactly as in `Create`. `PUT` is a full-representation
+    > upsert (A-2) and **the picture is the sole exception** (A-4), so `UpsertUserService` must send
+    > the complete representation on every update. This deliberately differs from `Device.Update`,
+    > where `null` means "leave unchanged" — devices are patched, users are replaced.
   - `OneOf<Success, ValidationError> Restore(string? name, string? accessCode, FaceFingerprint fingerprint, byte[] pictureContent, DateTime now)` — A-7 resurrection; re-imposes every create rule
   - `void MarkDeleted(DateTime now)` — sets `DeletedAt` **and** destroys the picture (USR-29, USR-30)
 - **Dependencies**: none — `now` is passed in (AD-023).
