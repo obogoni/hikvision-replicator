@@ -163,6 +163,15 @@ with an explicit specification.
   - `Task<OneOf<Success, ConflictError>> AddIfKeysFreeAsync(User user, CancellationToken cancellationToken)`
   - `Task<OneOf<Success, ConflictError>> SaveIfKeysFreeAsync(CancellationToken cancellationToken)`
   - `const string ExternalRefAlreadyRegistered`, `const string AccessCodeAlreadyInUse`
+  - `Task LoadPictureAsync(User user, CancellationToken cancellationToken)` — explicitly pulls the
+    picture into the tracked graph
+    > **Added during T15, not in the original design.** `User.Update` and `MarkDeleted` can only
+    > replace or destroy the picture if that row is in EF's tracked graph, but T16 forbids any
+    > specification from including `Picture` — that prohibition is what enforces A-1. Without an
+    > explicit opt-in load, USR-25 fails on the 1:1 index (500 instead of 200) and USR-30 leaves the
+    > bytes on disk. This keeps both writes inside one `SaveChanges`, so USR-10's single-transaction
+    > guarantee is intact, and leaves the read-path guarantee untouched: nothing loads the bytes
+    > unless a write path asks for them.
 - **Behaviour**: catches `DbUpdateException` and maps **by constraint name** to the matching message —
   two indexes, two distinct messages, so a caller can tell which key collided. Every other failure
   propagates (AD-022).
