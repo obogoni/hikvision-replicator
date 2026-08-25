@@ -76,7 +76,7 @@ Pure logic, no Docker. Everything downstream depends on these types existing.
 T1 → T2 → T3 → T4 → T5 → T6 → T7
 ```
 
-### Phase 2: Image normalization (6 tasks)
+### ✅ Phase 2: Image normalization (6 tasks) — complete, 278 unit tests
 
 The fixture bank first — the normalizer's tests cannot be written before it exists.
 
@@ -279,7 +279,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T8: Face-picture fixture bank
+### ✅ T8: Face-picture fixture bank
 
 **What**: The committed photographic fixtures, their provenance record, and the build wiring that copies them into both test projects.
 **Where**: `tests/assets/**`, `tests/assets/PROVENANCE.md`, both test `.csproj` files
@@ -290,25 +290,27 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] A committed generator script produces all eleven fixtures **deterministically** — same script, same bytes, every run and every machine
-- [ ] Generated outputs are **committed alongside the script**, so the golden hashes in T13 do not depend on regeneration being byte-stable
-- [ ] Content is **fractal/noise-based, never gradients or solid fills** — the derivative must compress like a photograph, or T13's 40 KB lower bound and downscale branch are untestable
-- [ ] Eight image fixtures per design § fixture bank: EXIF-rotated (origin 6), ~4000×3000 large, 320×240 sub-floor, PNG, grayscale, progressive, ICC-profiled, GPS-tagged
-- [ ] EXIF, ICC and GPS headers are **written onto** the generated images; GPS uses **fictional** coordinates, never a real location
-- [ ] Three pathological fixtures: decode bomb, near-uniform image, not-an-image
-- [ ] `PROVENANCE.md` records, per fixture, how it was generated and which criterion it exercises
-- [ ] **No fixture contains a human face**
-- [ ] Both test projects copy the assets to output (`CopyToOutputDirectory`)
-- [ ] A fixture-integrity unit test asserts every declared fixture resolves at runtime, is non-empty, and matches its declared format and dimensions — this is what catches a broken copy-to-output
-- [ ] Quick gate passes
-- [ ] ≥ 11 new unit tests pass (one per fixture) (no silent deletions)
+- [x] A committed generator script produces all eleven fixtures **deterministically** — same script, same bytes, every run and every machine
+- [x] Generated outputs are **committed alongside the script**, so the golden hashes in T13 do not depend on regeneration being byte-stable
+- [x] Content is **fractal/noise-based, never gradients or solid fills** — the derivative must compress like a photograph, or T13's 40 KB lower bound and downscale branch are untestable
+- [x] Eight image fixtures per design § fixture bank: EXIF-rotated (origin 6), ~4000×3000 large, 320×240 sub-floor, PNG, grayscale, progressive, ICC-profiled, GPS-tagged
+- [x] EXIF, ICC and GPS headers are **written onto** the generated images; GPS uses **fictional** coordinates, never a real location
+- [x] Three pathological fixtures: decode bomb, near-uniform image, not-an-image
+- [x] `PROVENANCE.md` records, per fixture, how it was generated and which criterion it exercises
+- [x] **No fixture contains a human face**
+- [x] Both test projects copy the assets to output (`CopyToOutputDirectory`)
+- [x] A fixture-integrity unit test asserts every declared fixture resolves at runtime, is non-empty, and matches its declared format and dimensions — this is what catches a broken copy-to-output
+- [x] Quick gate passes
+- [x] ≥ 11 new unit tests pass (one per fixture) (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `5953eb8`
+
 **Commit**: `test(assets): add generated face-picture fixture bank`
 
 ---
 
-### T9: `FaceImageOptions` and its validator
+### ✅ T9: `FaceImageOptions` and its validator
 
 **What**: A-13's envelope as startup-validated configuration rather than constants.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/FaceImageOptions.cs`
@@ -319,18 +321,20 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Carries `MaxUploadBytes`, `MaxDecodePixels`, `MinByteSize`, `MaxByteSize`, `MinShortEdge`, `MinLongEdge`, `MaxShortEdge`, `MaxLongEdge`, `QualityLadder`, `DownscaleFactor` with the design's defaults
-- [ ] Validator rejects an inverted band (`MinByteSize >= MaxByteSize`), an inverted edge range, an empty quality ladder, a ladder value outside 1–100, and a `DownscaleFactor` outside (0,1)
-- [ ] Registered with `ValidateOnStart` so a bad bound aborts startup, not the first upload
-- [ ] Quick gate passes
-- [ ] ≥ 8 new unit tests pass (no silent deletions)
+- [x] Carries `MaxUploadBytes`, `MaxDecodePixels`, `MinByteSize`, `MaxByteSize`, `MinShortEdge`, `MinLongEdge`, `MaxShortEdge`, `MaxLongEdge`, `QualityLadder`, `DownscaleFactor` with the design's defaults
+- [x] Validator rejects an inverted band (`MinByteSize >= MaxByteSize`), an inverted edge range, an empty quality ladder, a ladder value outside 1–100, and a `DownscaleFactor` outside (0,1)
+- [x] Registered with `ValidateOnStart` so a bad bound aborts startup, not the first upload
+- [x] Quick gate passes
+- [x] ≥ 8 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `465c0eb`
+
 **Commit**: `feat(infra): add validated face image options`
 
 ---
 
-### T10: `IFaceImageNormalizer` port and `NormalizedFaceImage`
+### ✅ T10: `IFaceImageNormalizer` port and `NormalizedFaceImage`
 
 **What**: The contract only — no behaviour.
 **Where**: `src/HikvisionReplicator.Api/Shared/IFaceImageNormalizer.cs`
@@ -341,17 +345,19 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `OneOf<NormalizedFaceImage, ValidationError> Normalize(byte[] upload)` declared
-- [ ] `NormalizedFaceImage(byte[] Content, string ContentHash, int Width, int Height)` declared
-- [ ] **No `CancellationToken`** — CPU-bound with no I/O, so AD-007's token has nothing to cancel; the reason is stated in a doc comment so a future reader does not "fix" it
-- [ ] Build gate passes with no new diagnostics (`--no-incremental`)
+- [x] `OneOf<NormalizedFaceImage, ValidationError> Normalize(byte[] upload)` declared
+- [x] `NormalizedFaceImage(byte[] Content, string ContentHash, int Width, int Height)` declared
+- [x] **No `CancellationToken`** — CPU-bound with no I/O, so AD-007's token has nothing to cancel; the reason is stated in a doc comment so a future reader does not "fix" it
+- [x] Build gate passes with no new diagnostics (`--no-incremental`)
 
 **Tests**: none (contract-only layer — matrix says build gate only) · **Gate**: build
+**Committed**: `1cd2e9f`
+
 **Commit**: `feat(shared): add face image normalizer port`
 
 ---
 
-### T11: Normalizer — rejection guards
+### ✅ T11: Normalizer — rejection guards
 
 **What**: Everything that rejects before any pixel is decoded, plus the resolution floor.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/SkiaFaceImageNormalizer.cs`
@@ -362,21 +368,23 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `SkiaSharp` + `SkiaSharp.NativeAssets.Linux` referenced; build succeeds on Linux
-- [ ] Upload over `MaxUploadBytes` rejected **without constructing a codec** (USR-19)
-- [ ] `SKCodec.Create` returning null → `ValidationError` naming `facePicture` (USR-21)
-- [ ] Declared `Width * Height` over `MaxDecodePixels` rejected **before any decode allocation** — verified with the decode-bomb fixture (USR-20)
-- [ ] Sub-floor image rejected with a message stating the minimum, and **never upscaled** (USR-17)
-- [ ] **The floor is checked against orientation-corrected dimensions** — a portrait fixture with EXIF origin 6 must not be judged as landscape
-- [ ] Quick gate passes
-- [ ] ≥ 9 new unit tests pass (no silent deletions)
+- [x] `SkiaSharp` + `SkiaSharp.NativeAssets.Linux` referenced; build succeeds on Linux
+- [x] Upload over `MaxUploadBytes` rejected **without constructing a codec** (USR-19)
+- [x] `SKCodec.Create` returning null → `ValidationError` naming `facePicture` (USR-21)
+- [x] Declared `Width * Height` over `MaxDecodePixels` rejected **before any decode allocation** — verified with the decode-bomb fixture (USR-20)
+- [x] Sub-floor image rejected with a message stating the minimum, and **never upscaled** (USR-17)
+- [x] **The floor is checked against orientation-corrected dimensions** — a portrait fixture with EXIF origin 6 must not be judged as landscape
+- [x] Quick gate passes
+- [x] ≥ 9 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `0cf9be4`
+
 **Commit**: `feat(infra): add face image normalizer rejection guards`
 
 ---
 
-### T12: Normalizer — decode, orient, resize
+### ✅ T12: Normalizer — decode, orient, resize
 
 **What**: Decode to sRGB, apply EXIF rotation manually, downscale to the ceiling without cropping.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/SkiaFaceImageNormalizer.cs` (modify)
@@ -387,20 +395,22 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Non-JPEG input (PNG fixture) produces a JPEG derivative (USR-12)
-- [ ] EXIF-rotated fixture comes out **upright** — SkiaSharp has no auto-orient, so every `SKEncodedOrigin` case is handled explicitly (USR-13)
-- [ ] Output is sRGB; the grayscale and ICC-profiled fixtures both normalize (spec Edge Cases)
-- [ ] Above-ceiling input is downscaled within `MaxShortEdge`/`MaxLongEdge` (USR-16)
-- [ ] **Aspect ratio preserved and nothing cropped** — asserted by comparing input and output ratios within a pixel-rounding tolerance (USR-18)
-- [ ] Quick gate passes
-- [ ] ≥ 10 new unit tests pass (no silent deletions)
+- [x] Non-JPEG input (PNG fixture) produces a JPEG derivative (USR-12)
+- [x] EXIF-rotated fixture comes out **upright** — SkiaSharp has no auto-orient, so every `SKEncodedOrigin` case is handled explicitly (USR-13)
+- [x] Output is sRGB; the grayscale and ICC-profiled fixtures both normalize (spec Edge Cases)
+- [x] Above-ceiling input is downscaled within `MaxShortEdge`/`MaxLongEdge` (USR-16)
+- [x] **Aspect ratio preserved and nothing cropped** — asserted by comparing input and output ratios within a pixel-rounding tolerance (USR-18)
+- [x] Quick gate passes
+- [x] ≥ 10 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `e900013`
+
 **Commit**: `feat(infra): add face image decode, orientation and resize`
 
 ---
 
-### T13: Normalizer — encode ladder, band and hash
+### ✅ T13: Normalizer — encode ladder, band and hash
 
 **What**: The deterministic quality ladder that lands inside 40–200 KB, plus the content hash and golden-hash tests.
 **Where**: `src/HikvisionReplicator.Api/Infrastructure/SkiaFaceImageNormalizer.cs` (modify)
@@ -411,17 +421,19 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Every photographic fixture normalizes to **≥ `MinByteSize` and ≤ `MaxByteSize`** — the lower bound asserted explicitly, not just the upper (USR-15)
-- [ ] The large fixture exercises the still-too-big-at-lowest-quality downscale branch, and the branch is asserted to have been taken
-- [ ] The near-uniform fixture is **rejected** rather than stored below the band
-- [ ] Derivative carries no EXIF, in particular no GPS — asserted against the GPS-tagged fixture (USR-14)
-- [ ] SHA-256 content hash returned and matches the derivative bytes (USR-22)
-- [ ] **Determinism**: normalizing the same fixture twice yields byte-identical output and an identical hash
-- [ ] **Golden hashes**: each photographic fixture's expected derivative hash is recorded and asserted, with a comment in the test file stating that a SkiaSharp upgrade will change these and the response is to review and re-record, **never to loosen the assertion**
-- [ ] Quick gate passes
-- [ ] ≥ 12 new unit tests pass (no silent deletions)
+- [x] Every photographic fixture normalizes to **≥ `MinByteSize` and ≤ `MaxByteSize`** — the lower bound asserted explicitly, not just the upper (USR-15)
+- [x] The large fixture exercises the still-too-big-at-lowest-quality downscale branch, and the branch is asserted to have been taken
+- [x] The near-uniform fixture is **rejected** rather than stored below the band
+- [x] Derivative carries no EXIF, in particular no GPS — asserted against the GPS-tagged fixture (USR-14)
+- [x] SHA-256 content hash returned and matches the derivative bytes (USR-22)
+- [x] **Determinism**: normalizing the same fixture twice yields byte-identical output and an identical hash
+- [x] **Golden hashes**: each photographic fixture's expected derivative hash is recorded and asserted, with a comment in the test file stating that a SkiaSharp upgrade will change these and the response is to review and re-record, **never to loosen the assertion**
+- [x] Quick gate passes
+- [x] ≥ 12 new unit tests pass (no silent deletions)
 
 **Tests**: unit · **Gate**: quick
+**Committed**: `aa3ca6f`
+
 **Commit**: `feat(infra): add deterministic face image encode ladder`
 
 ---
