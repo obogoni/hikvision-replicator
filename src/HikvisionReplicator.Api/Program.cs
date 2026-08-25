@@ -74,6 +74,9 @@ if (!string.IsNullOrEmpty(otlpEndpoint))
             tracing
                 .AddAspNetCoreInstrumentation()
                 .AddEntityFrameworkCoreInstrumentation()
+                // Without this the normalizer's ActivitySource has no listener and emits
+                // nothing at all — the child span USR-40 requires would silently not exist.
+                .AddSource(SkiaFaceImageNormalizer.ActivitySourceName)
                 .AddOtlpExporter(options =>
                 {
                     options.Endpoint = new Uri(otlpEndpoint);

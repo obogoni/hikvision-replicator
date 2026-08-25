@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Security.Cryptography;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.Extensions.Options;
@@ -17,15 +19,78 @@ namespace HikvisionReplicator.Api.Infrastructure;
 /// </summary>
 public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
 {
-    private readonly FaceImageOptions _options;
+    /// <summary>The source the normalization span is published on (USR-40).</summary>
+    public const string ActivitySourceName = "HikvisionReplicator.FaceImage";
 
-    public SkiaFaceImageNormalizer(IOptions<FaceImageOptions> options)
+    /// <summary>The meter the normalization instruments are published on (USR-41).</summary>
+    public const string MeterName = "HikvisionReplicator.FaceImage";
+
+    /// <summary>The span AD-014's latency budget is spent inside.</summary>
+    public const string NormalizationSpanName = "normalize face picture";
+
+    public const string DurationMetricName = "face_picture.normalization.duration";
+
+    public const string ByteSizeMetricName = "face_picture.normalization.size";
+
+    /// <summary>
+    /// Static because an <see cref="System.Diagnostics.ActivitySource"/> is a process-wide
+    /// publisher, and it emits nothing at all unless <c>Program.cs</c> names it on the tracer
+    /// provider — a source nobody listens to is silently inert.
+    /// </summary>
+    private static readonly ActivitySource Source = new(ActivitySourceName);
+
+    private readonly FaceImageOptions _options;
+    private readonly Histogram<double> _duration;
+    private readonly Histogram<int> _byteSize;
+
+    public SkiaFaceImageNormalizer(IOptions<FaceImageOptions> options, IMeterFactory meterFactory)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(meterFactory);
+
         _options = options.Value;
+
+        // Through the factory rather than a bare `new Meter(...)`: the factory owns the meter's
+        // lifetime and scopes it to this container, so a test host's instruments are its own.
+        var meter = meterFactory.Create(MeterName);
+
+        _duration = meter.CreateHistogram<double>(
+            DurationMetricName,
+            unit: "ms",
+            description: "How long normalizing one face picture took."
+        );
+        _byteSize = meter.CreateHistogram<int>(
+            ByteSizeMetricName,
+            unit: "By",
+            description: "The size of the stored derivative."
+        );
     }
 
+    /// <summary>
+    /// Normalization is the one CPU-bound step on the write path AD-014 makes latency-critical,
+    /// so it is measured twice over: as a child span of the request that provoked it (USR-40),
+    /// and as duration and size metrics (USR-41). Both are recorded here rather than inside the
+    /// pipeline so every rejection path shares the same accounting.
+    /// </summary>
     public OneOf<NormalizedFaceImage, ValidationError> Normalize(byte[] upload)
+    {
+        using var span = Source.StartActivity(NormalizationSpanName);
+        var startedAt = Stopwatch.GetTimestamp();
+
+        var result = NormalizeCore(upload);
+
+        // Only a picture that really was normalized has a duration and a size worth recording;
+        // a refusal produced no derivative to measure.
+        if (result.TryPickT0(out var image, out _))
+        {
+            _duration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            _byteSize.Record(image.Content.Length);
+        }
+
+        return result;
+    }
+
+    private OneOf<NormalizedFaceImage, ValidationError> NormalizeCore(byte[] upload)
     {
         if (upload is null || upload.Length == 0)
             return Reject(Errors.NotDecodable);
