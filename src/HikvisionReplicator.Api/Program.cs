@@ -25,6 +25,15 @@ builder
     .Bind(builder.Configuration.GetSection(EncryptionOptions.SectionName))
     .ValidateOnStart();
 
+// A-13's envelope is configuration, not constants: Phase 3 must be able to correct it against
+// real hardware without a code change. A bound that cannot be satisfied aborts startup rather
+// than failing on the first upload, by which point a spectator is already at the turnstile.
+builder.Services.AddSingleton<IValidateOptions<FaceImageOptions>, FaceImageOptionsValidator>();
+builder
+    .Services.AddOptions<FaceImageOptions>()
+    .Bind(builder.Configuration.GetSection(FaceImageOptions.SectionName))
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
