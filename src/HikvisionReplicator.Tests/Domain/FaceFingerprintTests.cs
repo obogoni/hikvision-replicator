@@ -1,4 +1,3 @@
-using System.Reflection;
 using HikvisionReplicator.Api.Domain;
 
 namespace HikvisionReplicator.Tests.Domain;
@@ -94,10 +93,7 @@ public class FaceFingerprintTests
     [Fact]
     public void Fingerprint_rehydrated_from_storage_keeps_values_creation_would_reject()
     {
-        var rehydrated = (FaceFingerprint)
-            typeof(FaceFingerprint)
-                .GetMethod("FromPersistence", BindingFlags.NonPublic | BindingFlags.Static)!
-                .Invoke(null, ["", 0, 0, 0])!;
+        var rehydrated = FaceFingerprint.FromPersistence("", 0, 0, 0);
 
         Assert.Equal(string.Empty, rehydrated.ContentHash);
         Assert.Equal(0, rehydrated.ByteSize);

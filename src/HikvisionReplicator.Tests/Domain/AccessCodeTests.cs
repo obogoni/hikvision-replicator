@@ -1,4 +1,3 @@
-using System.Reflection;
 using HikvisionReplicator.Api.Domain;
 
 namespace HikvisionReplicator.Tests.Domain;
@@ -95,10 +94,7 @@ public class AccessCodeTests
     [Fact]
     public void Access_code_rehydrated_from_storage_keeps_a_value_creation_would_reject()
     {
-        var rehydrated = (AccessCode)
-            typeof(AccessCode)
-                .GetMethod("FromPersistence", BindingFlags.NonPublic | BindingFlags.Static)!
-                .Invoke(null, ["12"])!;
+        var rehydrated = AccessCode.FromPersistence("12");
 
         Assert.Equal("12", rehydrated.Value);
         Assert.True(AccessCode.Create("12").IsT1);

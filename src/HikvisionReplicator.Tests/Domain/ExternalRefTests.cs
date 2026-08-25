@@ -1,4 +1,3 @@
-using System.Reflection;
 using HikvisionReplicator.Api.Domain;
 
 namespace HikvisionReplicator.Tests.Domain;
@@ -83,15 +82,10 @@ public class ExternalRefTests
     [Fact]
     public void Ref_rehydrated_from_storage_keeps_a_value_creation_would_reject()
     {
-        var rehydrated = FromPersistence(new string('T', 300));
+        var rehydrated = ExternalRef.FromPersistence(new string('T', 300));
 
         Assert.Equal(new string('T', 300), rehydrated.Value);
         Assert.True(ExternalRef.Create(new string('T', 300)).IsT1);
     }
 
-    private static ExternalRef FromPersistence(string value) =>
-        (ExternalRef)
-            typeof(ExternalRef)
-                .GetMethod("FromPersistence", BindingFlags.NonPublic | BindingFlags.Static)!
-                .Invoke(null, [value])!;
 }

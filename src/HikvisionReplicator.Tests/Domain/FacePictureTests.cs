@@ -14,7 +14,7 @@ public class FacePictureTests
     [Fact]
     public void Picture_holds_the_content_it_was_made_from()
     {
-        var picture = ForUser(Jpeg);
+        var picture = FacePicture.ForUser(Jpeg);
 
         Assert.Equal(Jpeg, picture.Content);
     }
@@ -26,7 +26,7 @@ public class FacePictureTests
     {
         var content = useNull ? null : Array.Empty<byte>();
 
-        var error = Assert.Throws<ArgumentException>(() => ForUser(content!));
+        var error = Assert.Throws<ArgumentException>(() => FacePicture.ForUser(content!));
 
         Assert.Contains(FacePicture.EmptyContent, error.Message, StringComparison.Ordinal);
     }
@@ -36,9 +36,9 @@ public class FacePictureTests
     [Fact]
     public void Replaced_picture_holds_the_new_content()
     {
-        var picture = ForUser(Jpeg);
+        var picture = FacePicture.ForUser(Jpeg);
 
-        Replace(picture, ReplacementJpeg);
+        picture.Replace(ReplacementJpeg);
 
         Assert.Equal(ReplacementJpeg, picture.Content);
     }
@@ -50,10 +50,10 @@ public class FacePictureTests
         bool useNull
     )
     {
-        var picture = ForUser(Jpeg);
+        var picture = FacePicture.ForUser(Jpeg);
         var content = useNull ? null : Array.Empty<byte>();
 
-        var error = Assert.Throws<ArgumentException>(() => Replace(picture, content!));
+        var error = Assert.Throws<ArgumentException>(() => picture.Replace(content!));
 
         Assert.Contains(FacePicture.EmptyContent, error.Message, StringComparison.Ordinal);
         Assert.Equal(Jpeg, picture.Content);
@@ -79,35 +79,5 @@ public class FacePictureTests
 
         Assert.NotNull(parameterless);
         Assert.True(parameterless.IsPrivate);
-    }
-
-    private static FacePicture ForUser(byte[] content) =>
-        (FacePicture)
-            Invoke(
-                typeof(FacePicture).GetMethod(
-                    "ForUser",
-                    BindingFlags.NonPublic | BindingFlags.Static
-                )!,
-                target: null,
-                content
-            )!;
-
-    private static void Replace(FacePicture picture, byte[] content) =>
-        Invoke(
-            typeof(FacePicture).GetMethod("Replace", BindingFlags.NonPublic | BindingFlags.Instance)!,
-            picture,
-            content
-        );
-
-    private static object? Invoke(MethodBase method, object? target, byte[] content)
-    {
-        try
-        {
-            return method.Invoke(target, [content]);
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException is not null)
-        {
-            throw exception.InnerException;
-        }
     }
 }
