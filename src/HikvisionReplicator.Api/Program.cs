@@ -37,6 +37,7 @@ builder
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 builder.UseRegisterDevice();
 builder.UseGetDevice();
