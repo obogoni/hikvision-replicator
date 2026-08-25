@@ -98,7 +98,7 @@ Resurrection comes after removal, because it needs a tombstone to resurrect.
 T17 → T18 → T19 → T20 → T21
 ```
 
-### Phase 5: Observability, hardening, P2 (5 tasks)
+### ✅ Phase 5: Observability, hardening, P2 (5 tasks) — complete, 222 integration · 17 E2E tests
 
 ```
 T22 → T23 → T24 → T25 → T26
@@ -630,7 +630,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T22: Normalization observability
+### ✅ T22: Normalization observability
 
 **What**: The child span and metrics for the one CPU-bound step on the latency path.
 **Where**: `Infrastructure/SkiaFaceImageNormalizer.cs` (modify), `Program.cs` (modify)
@@ -641,18 +641,19 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] A dedicated `ActivitySource` emits a **child** span for normalization, registered with the tracer provider (USR-40)
-- [ ] Metrics record normalization duration and resulting byte size (USR-41)
-- [ ] **The span assertion sends a `traceparent` and filters by that trace id** — the OTel listener is process-wide, so an unfiltered assertion passes on scheduling luck (`docs/test-patterns.md`)
-- [ ] Full gate passes
-- [ ] ≥ 4 new integration tests pass (no silent deletions)
+- [x] A dedicated `ActivitySource` emits a **child** span for normalization, registered with the tracer provider (USR-40)
+- [x] Metrics record normalization duration and resulting byte size (USR-41)
+- [x] **The span assertion sends a `traceparent` and filters by that trace id** — the OTel listener is process-wide, so an unfiltered assertion passes on scheduling luck (`docs/test-patterns.md`)
+- [x] Full gate passes
+- [x] ≥ 4 new integration tests pass (no silent deletions)
 
+**Committed**: `81bf17a`
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add normalization tracing and metrics`
 
 ---
 
-### T23: Request size limit and database-failure path
+### ✅ T23: Request size limit and database-failure path
 
 **What**: Stop an oversized body being buffered before the normalizer can reject it; confirm the 503 path.
 **Where**: `Features/Users/UpsertUser/UpsertUserService.Endpoint.cs` (modify)
@@ -663,21 +664,23 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] An explicit request-size limit on the upsert route rejects an oversized body **before** it is buffered into memory
-- [ ] The limit accounts for base64 inflation — an 8 MB image is ~10.7 MB on the wire (A-9), so a limit of exactly 8 MB would reject valid uploads
-- [ ] With the database unavailable, user routes return a ProblemDetails 503 leaking no connection string or stack trace (USR-39)
-- [ ] Full gate passes
-- [ ] ≥ 4 new integration tests pass (no silent deletions)
+- [x] An explicit request-size limit on the upsert route rejects an oversized body **before** it is buffered into memory
+- [x] The limit accounts for base64 inflation — an 8 MB image is ~10.7 MB on the wire (A-9), so a limit of exactly 8 MB would reject valid uploads
+- [x] With the database unavailable, user routes return a ProblemDetails 503 leaking no connection string or stack trace (USR-39)
+- [x] Full gate passes
+- [x] ≥ 4 new integration tests pass (no silent deletions)
 
+**Committed**: `b9e0f37`
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): bound upsert request size`
 
 ---
 
-### T24: `ExternalRef` reserved-character round-trip
+### ✅ T24: `ExternalRef` reserved-character round-trip
 
 **What**: Settle design § Risks — whether A-15's "any non-blank string" survives a single-segment route.
-**Where**: `IntegrationTests/UserEndpointsTests.cs` (modify); `spec.md` only if the assumption must change
+**Where**: `IntegrationTests/UserExternalRefTests.cs` (new — no `UserEndpointsTests.cs` exists in the
+integration project; the user suites are split by concern); `spec.md`, where A-15 was amended
 **Depends on**: T21
 **Reuses**: nothing
 **Requirement**: A-15, spec Edge Cases
@@ -685,18 +688,19 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Refs containing `%`, spaces, `+`, `#` and non-ASCII characters round-trip through `PUT`, `GET` and `DELETE`
-- [ ] A ref containing `/` is tested explicitly
-- [ ] **If `/` cannot round-trip, A-15 is amended in `spec.md` to exclude it, with the reason recorded — the code is not quietly bent to hide it.** Either outcome completes this task; a silent workaround does not
-- [ ] Full gate passes
-- [ ] ≥ 6 new integration tests pass (no silent deletions)
+- [x] Refs containing `%`, spaces, `+`, `#` and non-ASCII characters round-trip through `PUT`, `GET` and `DELETE`
+- [x] A ref containing `/` is tested explicitly
+- [x] **If `/` cannot round-trip, A-15 is amended in `spec.md` to exclude it, with the reason recorded — the code is not quietly bent to hide it.** Either outcome completes this task; a silent workaround does not
+- [x] Full gate passes
+- [x] ≥ 6 new integration tests pass (no silent deletions)
 
+**Committed**: `903de5c`
 **Tests**: integration · **Gate**: full
 **Commit**: `test(users): cover reserved characters in external refs`
 
 ---
 
-### T25: `ListUsers` paged slice (P2)
+### ✅ T25: `ListUsers` paged slice (P2)
 
 **What**: The paged catalogue, shipped paged from day one.
 **Where**: `Features/Users/ListUsers/` (3 files), `Program.cs` (modify)
@@ -707,20 +711,21 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Returns a **paged** response with the page's items and the means to request the next page (USR-42)
-- [ ] An over-maximum page size is **clamped, not honoured** (USR-43)
-- [ ] Ordering is stable and total — 3 users at page size 2 yield exactly those 3 across both pages, no duplicates, no omissions (USR-44)
-- [ ] Deleted users excluded; an empty registry returns an empty page, not an error (USR-45)
-- [ ] Response items carry no image bytes
-- [ ] Full gate passes
-- [ ] ≥ 8 new integration tests pass (no silent deletions)
+- [x] Returns a **paged** response with the page's items and the means to request the next page (USR-42)
+- [x] An over-maximum page size is **clamped, not honoured** (USR-43)
+- [x] Ordering is stable and total — 3 users at page size 2 yield exactly those 3 across both pages, no duplicates, no omissions (USR-44)
+- [x] Deleted users excluded; an empty registry returns an empty page, not an error (USR-45)
+- [x] Response items carry no image bytes
+- [x] Full gate passes
+- [x] ≥ 8 new integration tests pass (no silent deletions)
 
+**Committed**: `886328f`
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add paged user listing`
 
 ---
 
-### T26: E2E route confirmation
+### ✅ T26: E2E route confirmation
 
 **What**: A thin out-of-process pass over each user route.
 **Where**: `src/HikvisionReplicator.E2E/UserEndpointsTests.cs`
@@ -731,12 +736,13 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] One happy path and one error path for each of `PUT`, `GET`, `DELETE`, `GET` (list)
-- [ ] Uses Playwright's `IAPIRequestContext`; **no browser download required** (`docs/test-patterns.md`)
-- [ ] Suite is **not** added to CI — it needs a live API, matching how the device E2E suite is treated
-- [ ] Full gate passes; E2E suite passes against a locally running API
-- [ ] ≥ 8 new E2E tests pass (no silent deletions)
+- [x] One happy path and one error path for each of `PUT`, `GET`, `DELETE`, `GET` (list)
+- [x] Uses Playwright's `IAPIRequestContext`; **no browser download required** (`docs/test-patterns.md`)
+- [x] Suite is **not** added to CI — it needs a live API, matching how the device E2E suite is treated
+- [x] Full gate passes; E2E suite passes against a locally running API
+- [x] ≥ 8 new E2E tests pass (no silent deletions)
 
+**Committed**: `9783e0b`
 **Tests**: e2e · **Gate**: full
 **Commit**: `test(e2e): add user endpoint confirmation suite`
 
