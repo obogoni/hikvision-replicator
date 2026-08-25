@@ -75,9 +75,83 @@ public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
 
         using var fitted = FitToCeiling(upright);
 
-        var content = Encode(fitted, _options.QualityLadder[0]);
+        return EncodeIntoBand(fitted)
+            .Match<OneOf<NormalizedFaceImage, ValidationError>>(
+                landed => new NormalizedFaceImage(
+                    landed.Content,
+                    Sha256Hex(landed.Content),
+                    landed.Width,
+                    landed.Height
+                ),
+                error => error
+            );
+    }
 
-        return new NormalizedFaceImage(content, Sha256Hex(content), fitted.Width, fitted.Height);
+    /// <summary>
+    /// Walks the quality ladder for the byte band (USR-15), shrinking the image and walking it
+    /// again while the whole ladder is still over the ceiling.
+    /// <para>
+    /// <b>A fixed ladder, deliberately, and never a bisection search.</b> USR-26 requires that
+    /// re-sending an identical upload leaves <c>UpdatedAt</c> untouched, which holds only if
+    /// identical input bytes produce identical output bytes and therefore an identical hash. A
+    /// search converges on different quality values from different starting conditions; a ladder
+    /// walked in a fixed order from a fixed start cannot.
+    /// </para>
+    /// <para>
+    /// The ladder descends, so the first quality inside the ceiling is also the highest one
+    /// available. If even that lands under <see cref="FaceImageOptions.MinByteSize"/> there is no
+    /// quality that reaches the band at these dimensions, and shrinking would only make it
+    /// smaller — the image is nearly uniform, which is a lens cap rather than a face.
+    /// </para>
+    /// </summary>
+    private OneOf<(byte[] Content, int Width, int Height), ValidationError> EncodeIntoBand(
+        SKBitmap fitted
+    )
+    {
+        var current = fitted.Copy();
+        try
+        {
+            while (true)
+            {
+                var candidate = HighestQualityUnderCeiling(current);
+
+                if (candidate is not null)
+                {
+                    return candidate.Length >= _options.MinByteSize
+                        ? (candidate, current.Width, current.Height)
+                        : Reject(Errors.CannotReachMinimumSize);
+                }
+
+                var next = ScaleBy(current, _options.DownscaleFactor);
+                if (
+                    Math.Min(next.Width, next.Height) < _options.MinShortEdge
+                    || Math.Max(next.Width, next.Height) < _options.MinLongEdge
+                )
+                {
+                    next.Dispose();
+                    return Reject(Errors.CannotReachMaximumSize);
+                }
+
+                current.Dispose();
+                current = next;
+            }
+        }
+        finally
+        {
+            current.Dispose();
+        }
+    }
+
+    private byte[]? HighestQualityUnderCeiling(SKBitmap bitmap)
+    {
+        foreach (var quality in _options.QualityLadder)
+        {
+            var encoded = Encode(bitmap, quality);
+            if (encoded.Length <= _options.MaxByteSize)
+                return encoded;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -243,6 +317,14 @@ public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
 
         public const string TooManyPixels =
             "Face picture declares more pixels than can safely be decoded.";
+
+        public const string CannotReachMinimumSize =
+            "Face picture has too little detail to store at the required quality. "
+            + "Supply a sharper photograph.";
+
+        public const string CannotReachMaximumSize =
+            "Face picture cannot be compressed into the accepted size without falling below "
+            + "the minimum resolution.";
 
         public static string BelowResolutionFloor(
             int minShortEdge,
