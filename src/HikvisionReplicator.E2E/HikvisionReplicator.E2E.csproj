@@ -23,4 +23,14 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The face-picture fixture bank lives outside the solution tree (tests/assets) because
+         every test project uses it and none owns it. Linked in as copied content rather than
+         becoming a fifth project. PROVENANCE.md and the generator stay behind. -->
+    <Content Include="..\..\tests\assets\*.jpg">
+      <Link>assets\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
