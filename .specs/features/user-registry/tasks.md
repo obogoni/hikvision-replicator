@@ -84,7 +84,7 @@ The fixture bank first — the normalizer's tests cannot be written before it ex
 T8 → T9 → T10 → T11 → T12 → T13
 ```
 
-### Phase 3: Persistence (3 tasks)
+### ✅ Phase 3: Persistence (3 tasks) — complete, 123 integration tests
 
 ```
 T14 → T15 → T16
@@ -438,7 +438,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T14: EF configuration, migration and schema
+### ✅ T14: EF configuration, migration and schema
 
 **What**: Both entity configurations, the `DbSet`, the migration, and the two deliberately asymmetric indexes.
 **Where**: `Infrastructure/UserConfiguration.cs`, `Infrastructure/FacePictureConfiguration.cs`, `Infrastructure/AppDbContext.cs` (modify), `Infrastructure/Migrations/*`
@@ -464,7 +464,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T15: `IUserRepository` and `UserRepository`
+### ✅ T15: `IUserRepository` and `UserRepository`
 
 **What**: The repository with two-constraint violation translation.
 **Where**: `Shared/IUserRepository.cs`, `Infrastructure/UserRepository.cs`, `Program.cs` (modify)
@@ -488,7 +488,7 @@ T22 → T23 → T24 → T25 → T26
 
 ---
 
-### T16: Domain specifications
+### ✅ T16: Domain specifications
 
 **What**: The query shapes, including the two that differ only in whether tombstones are visible.
 **Where**: `src/HikvisionReplicator.Api/Domain/Specs/*.cs`
