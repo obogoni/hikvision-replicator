@@ -1,7 +1,7 @@
 # User Registry Design
 
 **Spec**: [`spec.md`](spec.md) (confirmed 2026-08-24)
-**Status**: Draft
+**Status**: **Approved** · 2026-08-25
 **Conforms to**: AD-001…AD-009, AD-014…AD-016, AD-022, AD-023, AD-024, AD-026, AD-027.
 **Supersedes**: nothing. Proposes three new decisions — see § Tech Decisions.
 

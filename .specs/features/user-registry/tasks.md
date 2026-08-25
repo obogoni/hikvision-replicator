@@ -12,7 +12,7 @@ Verifier, discrimination sensor).
 ---
 
 **Spec**: [`spec.md`](spec.md) · **Design**: [`design.md`](design.md)
-**Status**: Draft — awaiting approval
+**Status**: **Approved** · 2026-08-25 — execution by four sequential batch workers
 **Baselines before this feature**: 81 unit · 88 integration · 9 E2E
 
 ---
