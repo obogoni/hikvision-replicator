@@ -52,9 +52,10 @@ public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
 
         var (width, height) = Orient(encoded.Width, encoded.Height, codec.EncodedOrigin);
 
-        // USR-17. Checked against the *oriented* dimensions: a 90 or 270 degree origin swaps
-        // width and height, so a portrait photograph stored as landscape pixels would otherwise
-        // be judged as the landscape image it is not.
+        // USR-17. Checked against the *oriented* dimensions: a quarter-turn origin swaps width
+        // and height, so a portrait photograph stored as landscape pixels would otherwise be
+        // judged as the landscape image it is not. And never upscaled: manufacturing a compliant
+        // file out of one that is too small produces something no device can recognise.
         if (
             Math.Min(width, height) < _options.MinShortEdge
             || Math.Max(width, height) < _options.MinLongEdge
@@ -68,12 +69,20 @@ public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
                 )
             );
 
-        return new NormalizedFaceImage(upload, Sha256Hex(upload), width, height);
+        using var upright = DecodeUpright(codec, encoded);
+        if (upright is null)
+            return Reject(Errors.NotDecodable);
+
+        using var fitted = FitToCeiling(upright);
+
+        var content = Encode(fitted, _options.QualityLadder[0]);
+
+        return new NormalizedFaceImage(content, Sha256Hex(content), fitted.Width, fitted.Height);
     }
 
     /// <summary>
-    /// The dimensions the image is meant to be *seen* at. SkiaSharp does not auto-orient, so
-    /// every origin is handled explicitly rather than by falling through a default.
+    /// The dimensions the image is meant to be <em>seen</em> at. SkiaSharp does not auto-orient,
+    /// so every origin is listed explicitly rather than reached through a default.
     /// </summary>
     internal static (int Width, int Height) Orient(int width, int height, SKEncodedOrigin origin) =>
         origin switch
@@ -88,6 +97,135 @@ public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
             SKEncodedOrigin.LeftBottom => (height, width),
             _ => (width, height),
         };
+
+    /// <summary>
+    /// Decodes into sRGB and then applies the EXIF origin to the pixels (USR-13), because the
+    /// metadata that recorded the rotation is about to be discarded and the rotation has to
+    /// survive it.
+    /// </summary>
+    private static SKBitmap? DecodeUpright(SKCodec codec, SKImageInfo encoded)
+    {
+        // One colour space regardless of what the source declared, so a grayscale, CMYK or
+        // oddly-profiled photograph converges here rather than reaching the encoder as something
+        // the device may not decode.
+        var target = Rgba(encoded.Width, encoded.Height);
+        var decoded = new SKBitmap(target);
+
+        var read = codec.GetPixels(target, decoded.GetPixels());
+        if (read is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+        {
+            decoded.Dispose();
+            return null;
+        }
+
+        if (codec.EncodedOrigin == SKEncodedOrigin.TopLeft)
+            return decoded;
+
+        using (decoded)
+            return ApplyOrigin(decoded, codec.EncodedOrigin);
+    }
+
+    /// <summary>
+    /// Redraws the bitmap under the transform its EXIF origin describes.
+    /// <para>
+    /// Written as an explicit matrix per origin rather than a sequence of canvas operations: a
+    /// wrong sign here produces a mirrored face that still passes any check that looks only at
+    /// dimensions, so the mapping is stated in the form it can be read back in. Each matrix sends
+    /// source pixel (x, y) to the place the EXIF standard says it should be seen, where
+    /// <c>w</c> and <c>h</c> are the source's own width and height.
+    /// </para>
+    /// </summary>
+    private static SKBitmap ApplyOrigin(SKBitmap source, SKEncodedOrigin origin)
+    {
+        float w = source.Width;
+        float h = source.Height;
+
+        // SKMatrix is (scaleX, skewX, transX, skewY, scaleY, transY, ...), applied as
+        // x' = scaleX*x + skewX*y + transX and y' = skewY*x + scaleY*y + transY.
+        var matrix = origin switch
+        {
+            // Mirrored horizontally: x' = w - x.
+            SKEncodedOrigin.TopRight => new SKMatrix(-1, 0, w, 0, 1, 0, 0, 0, 1),
+            // Half turn.
+            SKEncodedOrigin.BottomRight => new SKMatrix(-1, 0, w, 0, -1, h, 0, 0, 1),
+            // Mirrored vertically: y' = h - y.
+            SKEncodedOrigin.BottomLeft => new SKMatrix(1, 0, 0, 0, -1, h, 0, 0, 1),
+            // Transposed about the main diagonal: x' = y, y' = x.
+            SKEncodedOrigin.LeftTop => new SKMatrix(0, 1, 0, 1, 0, 0, 0, 0, 1),
+            // A quarter turn clockwise: x' = h - y, y' = x.
+            SKEncodedOrigin.RightTop => new SKMatrix(0, -1, h, 1, 0, 0, 0, 0, 1),
+            // Transposed about the anti-diagonal.
+            SKEncodedOrigin.RightBottom => new SKMatrix(0, -1, h, -1, 0, w, 0, 0, 1),
+            // A quarter turn anticlockwise: x' = y, y' = w - x.
+            SKEncodedOrigin.LeftBottom => new SKMatrix(0, 1, 0, -1, 0, w, 0, 0, 1),
+            SKEncodedOrigin.TopLeft => SKMatrix.Identity,
+            _ => SKMatrix.Identity,
+        };
+
+        var (width, height) = Orient(source.Width, source.Height, origin);
+        var rotated = new SKBitmap(Rgba(width, height));
+
+        using var canvas = new SKCanvas(rotated);
+        canvas.SetMatrix(matrix);
+        canvas.DrawBitmap(source, 0, 0);
+        canvas.Flush();
+        return rotated;
+    }
+
+    /// <summary>
+    /// Scales the image down until it fits inside the ceiling (USR-16), preserving the source
+    /// aspect ratio and cropping nothing (USR-18). Never scales up — an image already inside the
+    /// ceiling is handed back as it is.
+    /// </summary>
+    private SKBitmap FitToCeiling(SKBitmap source)
+    {
+        var shorter = Math.Min(source.Width, source.Height);
+        var longer = Math.Max(source.Width, source.Height);
+
+        if (shorter <= _options.MaxShortEdge && longer <= _options.MaxLongEdge)
+            return source.Copy();
+
+        return ScaleBy(
+            source,
+            Math.Min(
+                (double)_options.MaxShortEdge / shorter,
+                (double)_options.MaxLongEdge / longer
+            )
+        );
+    }
+
+    /// <summary>
+    /// One uniform scale applied to both edges. That, and nothing else, is what preserves the
+    /// aspect ratio and guarantees nothing is cropped.
+    /// </summary>
+    internal static SKBitmap ScaleBy(SKBitmap source, double scale)
+    {
+        var width = Math.Max(1, (int)Math.Round(source.Width * scale, MidpointRounding.AwayFromZero));
+        var height = Math.Max(
+            1,
+            (int)Math.Round(source.Height * scale, MidpointRounding.AwayFromZero)
+        );
+
+        // Mitchell cubic resampling: fixed coefficients, so the same input always yields the same
+        // pixels. SKFilterQuality is gone in SkiaSharp 3.
+        return source.Resize(Rgba(width, height), new SKSamplingOptions(SKCubicResampler.Mitchell))
+            ?? throw new InvalidOperationException("Resizing the face picture failed.");
+    }
+
+    /// <summary>
+    /// Baseline JPEG. Re-encoding is also what strips the source's metadata: SkiaSharp's encoder
+    /// writes no EXIF, so the GPS coordinates of wherever the photograph was taken do not survive
+    /// this call (USR-14).
+    /// </summary>
+    internal static byte[] Encode(SKBitmap bitmap, int quality)
+    {
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, quality);
+        return data.ToArray();
+    }
+
+    private static SKImageInfo Rgba(int width, int height) =>
+        new(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, SKColorSpace.CreateSrgb());
 
     internal static string Sha256Hex(byte[] content) =>
         Convert.ToHexStringLower(SHA256.HashData(content));

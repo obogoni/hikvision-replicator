@@ -43,45 +43,10 @@ internal static class FixtureHeader
         );
     }
 
-    /// <summary>Walk the marker segments to the start-of-frame, which is what carries the size.</summary>
+    /// <summary>The size lives in the start-of-frame segment, not in the file header.</summary>
     private static (string, int, int) ReadJpeg(byte[] bytes)
     {
-        var span = bytes.AsSpan();
-        var at = 2;
-        while (at + 3 < span.Length)
-        {
-            if (span[at] != 0xFF)
-            {
-                at++;
-                continue;
-            }
-
-            var marker = span[at + 1];
-            at += 2;
-
-            // Padding, and the standalone markers that carry no length word.
-            if (marker is 0xFF or 0x01 or >= 0xD0 and <= 0xD9)
-                continue;
-
-            if (at + 1 >= span.Length)
-                break;
-
-            var length = BinaryPrimitives.ReadUInt16BigEndian(span.Slice(at, 2));
-
-            // Every SOFn except the arithmetic-coding and hierarchical outliers (0xC4, 0xC8, 0xCC).
-            var isStartOfFrame =
-                marker is >= 0xC0 and <= 0xCF && marker is not (0xC4 or 0xC8 or 0xCC);
-
-            if (isStartOfFrame && at + 7 < span.Length)
-                return (
-                    Jpeg,
-                    BinaryPrimitives.ReadUInt16BigEndian(span.Slice(at + 5, 2)),
-                    BinaryPrimitives.ReadUInt16BigEndian(span.Slice(at + 3, 2))
-                );
-
-            at += length;
-        }
-
-        return (Jpeg, 0, 0);
+        var (_, width, height, _) = JpegInspector.Frame(bytes);
+        return (Jpeg, width, height);
     }
 }
