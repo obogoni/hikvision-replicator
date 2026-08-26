@@ -46,7 +46,7 @@ decision in Phase 2.
 | ~~OD-2~~ | **RESOLVED — PostgreSQL from the first commit** (AD-018). Integration tests move to Testcontainers (AD-019). | — | — |
 | OD-3 | **Job runner.** Reopened by AD-018: Hangfire on PostgreSQL is now viable, where Hangfire on SQLite was not. **No incumbent to default to** — AD-030 supersedes AD-010's Hangfire mandate, and the solution contains no job runner of any kind. | Hangfire+PostgreSQL for Phase 1's simple enqueue needs; validate under the derived Phase 2 load before committing, with a purpose-built hosted worker polling the replication table as the fallback (the queue design supports either). **Recommendation only — this decision is not taken.** | Phase 2 |
 | ~~OD-6~~ | **RESOLVED — higher-capacity hardware** (AD-021). AD-015's all-users-to-all-devices rule stands; scoping stays out of scope. Carries a standing risk: the fleet runs near 100% of each device's face library with no headroom, and the 10,000-face bench unit cannot validate full-scale enrolment. Mitigated by the mandatory `Device.FaceCapacity` guard. | — | — |
-| OD-4 | **Face image storage.** 10 GB of BLOBs inside the transactional database bloats it and slows every query. | Store images outside the row (filesystem/object store), keep a content hash on `User` for change detection and dedup. Decide in `user-registry`. | Phase 1 |
+| ~~OD-4~~ | **RESOLVED — a dedicated table inside PostgreSQL, never joined** (AD-032). Bytes live in `face_pictures`; `users` carries the fingerprint and the navigation is never auto-included, so a get, a list and a conflict check never touch the image table. **The recommendation opposite was rejected**: an external store cannot join the transaction that tombstones a user and destroys their biometric together (AD-034, USR-32), and a crash between the two would orphan a face. ~7.5 GB at 50,000 spectators is accepted; an orphaned biometric is not. | — | — |
 | OD-5 | **Live-sync latency SLO.** "A few minutes" needs a number to be testable — it becomes an acceptance criterion. | Propose: p95 under 30s from `POST /api/users` to enrolled on all healthy devices. Confirm or replace. | Phase 2 |
 | OD-7 | **Ciphertext format for device passwords.** AES-256-CBC (AD-008) gives confidentiality but no integrity check, so a tampered ciphertext fails at decrypt time rather than being detected (assumption A-8 of `device-registry`). | Move to AES-GCM behind a **versioned ciphertext prefix**. Decide before the first production deployment — a format migration is far cheaper while no real credentials are stored than after. | First production deploy |
 
@@ -82,7 +82,7 @@ ProblemDetails pipeline, OpenTelemetry, Scalar.
 | # | Feature | Delivers |
 |---|---|---|
 | 1 | `device-registry` | Register / list / get / update / delete devices. Encrypted credentials (AES-256, reversible per AD-008). Unique `ip:port`. |
-| 2 | `user-registry` | Create / update / **delete** users keyed by `ExternalRef`. Access code, face picture (see OD-4). Delete is first-class from day one — the integrator owns removals, so the Remove path cannot be an afterthought. |
+| 2 | `user-registry` | Create / update / **delete** users keyed by `ExternalRef`. Access code, face picture (storage settled by AD-032). Delete is first-class from day one — the integrator owns removals, so the Remove path cannot be an afterthought. |
 
 ### Phase 2 — Replication Engine ⭐ the product
 
