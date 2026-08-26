@@ -12,6 +12,7 @@ using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
@@ -79,6 +80,20 @@ if (!string.IsNullOrEmpty(otlpEndpoint))
                 // Without this the normalizer's ActivitySource has no listener and emits
                 // nothing at all — the child span USR-40 requires would silently not exist.
                 .AddSource(SkiaFaceImageNormalizer.ActivitySourceName)
+                .AddOtlpExporter(options =>
+                {
+                    options.Endpoint = new Uri(otlpEndpoint);
+                    options.Protocol = OtlpExportProtocol.Grpc;
+                })
+        )
+        // USR-41. An instrument with no reader records into nothing: the normalizer's
+        // histograms existed and were unit-observable while production collected neither.
+        // Normalization is the only CPU-bound step on the write path AD-014 makes the primary
+        // quality attribute, so leaving it unexported is leaving that attribute unmeasured.
+        .WithMetrics(metrics =>
+            metrics
+                .AddAspNetCoreInstrumentation()
+                .AddMeter(SkiaFaceImageNormalizer.MeterName)
                 .AddOtlpExporter(options =>
                 {
                     options.Endpoint = new Uri(otlpEndpoint);

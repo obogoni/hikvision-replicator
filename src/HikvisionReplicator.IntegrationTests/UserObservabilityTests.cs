@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 namespace HikvisionReplicator.IntegrationTests;
@@ -198,6 +199,19 @@ public class UserObservabilityTests(PostgresFixture fixture) : IAsyncLifetime
     }
 
     // ─── USR-41: the same work is measured as metrics ────────────────────
+
+    // USR-41. The histograms above are observed through a listener the test installs, which
+    // passes whether or not production collects anything. This asserts the other half: that a
+    // configured deployment actually has a metric reader for them. The Verifier found the app
+    // shipping with `.WithTracing(...)` and no `.WithMetrics(...)` at all — instruments
+    // recording into nothing, with a green suite (L-037).
+    [Fact]
+    public void Configured_deployment_collects_the_normalization_metrics()
+    {
+        var provider = _factory!.Services.GetService<MeterProvider>();
+
+        Assert.NotNull(provider);
+    }
 
     [Fact]
     public void Normalizing_a_face_picture_records_how_long_it_took()
