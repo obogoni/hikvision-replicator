@@ -330,27 +330,82 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ## Handoff
 
-- **Feature**: `code-style-enforcement` — **complete** (AD-027), awaiting PR review. `test-project-conventions` (AD-026) and the AD-025 amendment are merged to `main` (PR #5, PR #6).
-- **Phase / Task**: Execute finished, 6 atomic commits `f9c3bc9`…`e86a896` on `build/code-style-enforcement` (off `main` at `bba7908`). **Pre-squash references** — they resolve only via the PR. Validation ran as a standalone self-check again, **not** an independent sub-agent: the session forbids spawning agents unless the user asks, so **author ≠ verifier was not satisfied for the second consecutive feature**. The discrimination sensor is the load-bearing evidence, since a mutation's build outcome does not depend on the author's mental model.
-- **Completed**: spec.md · validation.md (PASS, 8/8 ACs, 5/5 sensor mutations as specified). `.editorconfig` is the ruleset; `Directory.Build.props` sets `EnforceCodeStyleInBuild` + `AnalysisLevel 10.0` + `AnalysisMode Recommended`; `IDE0055` is an **error**, so `dotnet build` is the formatting gate with no flags. `.github/workflows/ci.yml` runs build + unit + integration on PRs to `main` — **the repo's first CI**. Gates: 81 unit · 88 integration, unchanged.
-- **In-progress** (file:line): none
-- **Next step**: specify Phase 1 item 2, `user-registry`; resolve OD-4 (face-image storage — 10 GB of BLOBs in the transactional database) during that spec. *(The former next step — merge the `code-style-enforcement` PR, then configure branch protection — is done; see below.)*
-- **Blockers**: none.
-- **Verification findings worth carrying forward**:
-  - **Never take a warning census from a build that did not succeed.** `AnalysisMode=Recommended` first measured as 3 findings; the true number is 10. The Api's `IDE0055` errors aborted the build before the two test projects compiled. Enforcement was therefore switched on only *after* existing violations were fixed.
-  - **Bare `dotnet format` is unsafe here.** It runs the analyzer fixers and "fixed" the deprecated Testcontainers `PostgreSqlBuilder` call by stamping `[Obsolete]` onto `PostgresFixture` and `UnreachableDatabaseFixture` — silencing a real advisory by marking the consumer obsolete. Use `dotnet format whitespace`.
-  - **A sensor mutation applied to a wrong path reports a false pass.** `ls` is aliased to a table formatter in this environment, so `$(ls … | head -1)` yielded a column header; two mutations silently targeted a junk file. Caught only because one of them was a *must-fail* mutation that reported success. Always include a must-fail mutation.
-  - **`AC-1` was self-contradictory** — it demanded "zero diagnostics" while the same spec accepted 10 `CA` warnings. Corrected to "zero errors" with the warnings enumerated. Written by the same author who implemented it, which is what an independent verifier is for.
-  - The `device-registry` and `test-project-conventions` findings still stand: gaps were missing assertions over correct production code, found by mutation and never by the passing gate; and a gate that passes because of thread scheduling is not evidence.
-  - Lessons: **L-007 is now `confirmed`** (recurrence 2 — incremental builds re-report zero warnings; corroborated independently by this feature). L-008…L-012 added as candidates from the findings above. L-001…L-006 remain candidates; `user-registry` is where they get tested.
-- **Pre-existing warnings, unchanged by this feature**: a clean `--no-incremental` build emits **4 NU1903** (SSH.NET 2025.1.0, high severity, transitive via Testcontainers) plus **4 CS0618**. This is why severity is set per rule in `.editorconfig` and **never** via `-warnaserror` — the flag would fail the build on these. Still worth its own `build(deps)` change.
-- **Known non-gating debt**: 10 `CA` warnings from `AnalysisMode=Recommended`, enumerated by rule and `file:line` in `.specs/features/code-style-enforcement/spec.md`. Seven are in `IntegrationTests`. Ratchet rules to `error` as they are cleared; never jump to `AnalysisMode=All`.
-- **Open decisions**: Phase 2 still needs three numbers — device/reader count, live-sync latency SLO (proposed p95 < 30s), bulk-load window. OD-3 (job runner under load) open.
-- **Uncommitted files**: none
-- **Branch**: `build/code-style-enforcement`, based on `main` (`bba7908`). Everything else is merged and its branch deleted; `main` carries all four projects (`Api`, `Tests`, `IntegrationTests`, `E2E`), verified by reading `main` directly.
-- **Stacked-PR hazard is now recorded in AD-025, not here** — it was hit twice (PR #2, PR #4) and both times the work merged into a branch instead of `main`. The rule and the root cause live in the decision log; the repository settings that prevent it (`squashMergeAllowed` only, `deleteBranchOnMerge=true`) are applied. Do not restate it in future handoffs — read AD-025.
-- **Repo settings now differ from a fresh clone's defaults**: merge commits and rebase merges are disabled, head branches auto-delete. Anyone reasoning about merge behaviour should check `gh repo view --json deleteBranchOnMerge,squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed` rather than assume GitHub defaults.
-- **Branch protection on `main` is live** — verified against the API on 2026-08-20, not inferred: `required_status_checks` = `build-and-test` with `strict=true`, `enforce_admins=true`, `required_approving_review_count=0`, `required_linear_history=true`, force-pushes and deletions disabled. AD-025's no-direct-commits clause is **mechanically enforced**, and `CLAUDE.md` documents it as such.
+- **Feature**: `user-registry` (`.specs/features/user-registry/`) — **complete and verified**, awaiting review on **PR #15**.
+- **Phase / Task**: All 5 phases, T1–T26, done. Execute finished; the Verifier returned **PASS**.
+- **Completed**: spec.md · design.md · tasks.md · validation.md. 47 commits on `feat/user-registry` off `main` at `738f6b3`. **Pre-squash hashes — they resolve only via the PR.** Executed as four sequential batch sub-agents (T1–T7, T8–T13, T14–T21, T22–T26), then a fresh Verifier — **author ≠ verifier was satisfied this time**, the first feature for which that is true (AD-028).
+- **In-progress** (file:line): none.
+- **Next step**: merge PR #15 (squash), then open a small follow-up branch for the three items below. Nothing else in `user-registry` is outstanding.
+- **Blockers**: none. CI `build-and-test` is green on PR #15.
+- **Uncommitted files**: none.
+- **Branch**: `feat/user-registry`, pushed, tracking `origin/feat/user-registry`, based on `main` at `738f6b3`.
 
-  This bullet previously read *"Not configured: nothing mechanically blocks a direct push"* while `CLAUDE.md` documented the rejection message from a real blocked push. AD-030 was written about this exact shape — an always-loaded instruction disagreeing with the decision log, where a reader cannot tell which side is stale. Corrected during `context-engineering`; **the rest of this Handoff is still stale by deliberate deferral** and gets its refresh when `user-registry` starts.
-- **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`, `002-adr-conformance` (local-only, no upstream).
+### Outstanding follow-ups — deliberately not in PR #15
+
+These were left out because the chosen landing path scoped the PR to the feature itself. They are
+real debt, not notes:
+
+1. **AD-032 / AD-033 / AD-034 are proposed in `user-registry`'s `design.md` but never written to
+   `## Decisions` above.** AD-032 (binary payloads in a dedicated table with a fingerprint
+   denormalized onto the owner, navigation never auto-included) is what **formally closes ROADMAP
+   OD-4** — the roadmap still lists OD-4 as open. AD-033 is normalize-external-formats-at-the-boundary;
+   AD-034 is the tombstone + asymmetric-index pattern. `replication-queue` inherits all three.
+2. **The semantic-image-quality gap is missing from `ROADMAP.md` § Known Gaps.** It is named in
+   `user-registry`'s spec: the face pipeline proves an image is *mechanically* acceptable, never
+   that it is a usable face. A profile shot or a spectator in a cap passes all 45 criteria and
+   fails at a turnstile, and Phase 4 `reconciliation` will not catch it either — it compares our
+   belief against the device, not against reality.
+3. **A-13 carries a standing Phase 3 obligation.** The official ISAPI face-record envelope could
+   not be read directly (the wiki is behind a JS app); the 40–200 KB band and the 640×480 floor come
+   from Hikvision's DS-K1T606 terminal documentation. `isapi-device-client` must verify both against
+   real hardware and supersede A-13 if they differ. The envelope lives in `FaceImageOptions`, so a
+   correction is a config change, not a code change.
+
+### What `user-registry` established that later features inherit
+
+- **`PUT /api/users/{externalRef}`** upsert, `GET`, `DELETE`, paged `GET /api/users`. Removal
+  **tombstones** the row (`DeletedAt`) and **destroys the face bytes in the same transaction** —
+  Phase 2's Remove path gets a live FK target and no biometric.
+- **The two unique indexes are deliberately asymmetric.** `IX_users_ExternalRef` covers all rows
+  (resurrection must find a tombstone by key); `IX_users_AccessCode` is partial on
+  `WHERE "DeletedAt" IS NULL` (a removed spectator's PIN returns to the pool). Any change to one
+  must re-check the other — the Verifier killed a mutation in each direction.
+- **`IFaceImageNormalizer`** converts any reasonable upload into the device envelope. **The 40 KB
+  figure is a lower bound** — over-compression is a rejection cause, so an upper-bound-only check is
+  wrong. The encode ladder is **fixed, never a bisection search**, because a byte-identical re-upsert
+  must not advance `UpdatedAt`.
+- **SkiaSharp 3.119.4**, not ImageSharp: ImageSharp v4 fails the build without a committed
+  `sixlabors.lic` and its free sample licence expired 2026-09-04. Golden hashes are recorded against
+  that exact version; a SkiaSharp upgrade will fail them **by design** — review and re-record, never
+  loosen.
+- **Fixtures are generated**, so none carries authentic camera encoder output (`tests/assets/`,
+  generator + committed outputs). A green suite is not evidence of real-world coverage; see item 3.
+- **`InternalsVisibleTo` now covers `HikvisionReplicator.Tests`**, so `FromPersistence` and
+  aggregate-internal mutators are asserted directly rather than by reflection.
+
+### Verification findings worth carrying forward
+
+- **A wait-loop condition that can return empty is not a wait.** Polling `gh pr checks --json state`
+  returned blank rather than `PENDING`, so the loop exited immediately and CI was reported as
+  finished while it was still running. Key the condition off a field that cannot go blank.
+- **A comment can claim a safeguard the code does not implement.** The normalizer documented that its
+  resolution floor is judged on orientation-corrected dimensions; `Min`/`Max` are invariant under that
+  swap, so it cannot be. Found only by mutation — it killed no test. **The error originated in the
+  orchestrator's own instructions to three workers**, propagated into a code comment and a provenance
+  file, and would not have been caught by re-reading. This is the concrete argument for author ≠ verifier.
+- **An instrument with no reader records into nothing.** `Program.cs` had `.WithTracing(…)` and no
+  `.WithMetrics(…)` at all; USR-41's histograms passed their tests because the tests installed their
+  own listener. See L-037.
+- **CI and local warning counts differ legitimately.** Local `dotnet build` restores implicitly, so all
+  4 `NU1903` land in the build tally (14); CI restores in a separate step, so one is attributed there
+  (13). Compare per-rule, never by total.
+- **`%2F` is not decoded into a path separator.** An `ExternalRef` containing `/` does not 404 — it
+  registers under the literal escaped text, substituting one identity for another. A-15 was amended
+  to exclude `/`; the code was not changed, because the `/` never reaches the application.
+- Lessons **L-035…L-038** added as candidates. L-033/L-034 remain candidates from `context-engineering`;
+  **L-007 is confirmed** (×2) and is why any "no new warnings" claim must come from `--no-incremental`.
+
+- **Pre-existing warnings, unchanged by this feature**: 10 `CA` + 4 `CS0618` + 4 `NU1903` (SSH.NET,
+  transitive via Testcontainers). Baseline, not debt introduced here. Never use `-warnaserror`.
+- **Test totals**: 282 unit · 224 integration · 17 E2E. Entering `user-registry` they were 81 · 88 · 9.
+- **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`,
+  `002-adr-conformance` (local-only, no upstream).
