@@ -1,5 +1,6 @@
 using System.Net;
 using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Shared;
 
 namespace HikvisionReplicator.IntegrationTests;
 
@@ -163,7 +164,7 @@ public class UserResurrectionTests(PostgresFixture fixture) : UserApiTests(fixtu
 
         var response = await UpsertAsync("TICKET-1", ValidUpsert(accessCode: "222222"));
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await AssertConflictAsync(response, IUserRepository.AccessCodeAlreadyInUse);
 
         var stored = await StoredUserAsync("TICKET-1");
         Assert.NotNull(stored);

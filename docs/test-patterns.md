@@ -12,9 +12,9 @@ declares the level you chose.**
 | Layer | Level | Project | Depth |
 |---|---|---|---|
 | Pure logic with no I/O — domain aggregates, value objects, `EncryptionService`, options validation | **unit** | `src/HikvisionReplicator.Tests/`, folders mirroring the Api tree (`Domain/`, `Infrastructure/`) | All branches, 1:1 with the spec's acceptance criteria, every listed edge case |
-| Anything touching I/O or wiring — feature slices and their routes, repositories and specifications, startup behaviour, cross-cutting handlers | **integration** | `src/HikvisionReplicator.IntegrationTests/`, in-process through the HTTP surface against Testcontainers PostgreSQL | Every route: happy path, every listed edge case, every documented error path |
+| Anything touching I/O or wiring — feature slices and their routes, startup behaviour, cross-cutting handlers | **integration** | `src/HikvisionReplicator.IntegrationTests/`, in-process through the HTTP surface against Testcontainers PostgreSQL | Every use case: happy path, every listed edge case, every documented error path |
 
-Two rules keep the split honest:
+Three rules keep the split honest:
 
 - The unit project **references neither Testcontainers nor a web host**, so the pure-logic
   tests run without Docker — that is the fast feedback loop, and it is enforced by what
@@ -22,6 +22,47 @@ Two rules keep the split honest:
 - Unit tests **add depth; they never replace endpoint coverage.** Every route keeps its
   acceptance-criterion coverage at the integration layer, so a branch can never be
   unit-tested but unproven through the API.
+- **Integration tests drive use cases, not dependencies** — see the next section.
+
+## Integration tests are black box (AD-036)
+
+**An integration test drives a use case through the HTTP surface and asserts what a caller
+can observe.** It does not construct a repository, a specification, or a `DbContext` in
+order to assert against it. Those are how the use case is built, not what it promises, and
+a test that names them fails when the design changes rather than when the behaviour does.
+
+Reading the database directly is **not** the same thing and is fine: `UserApiTests` exposes
+`StoredUserAsync`, `StoredPictureAsync` and `CountUsersAsync` precisely because a promise
+about what is *stored* cannot be proved by asking the API that stores it. Drive through
+HTTP; verify wherever the truth lives.
+
+### The one exception, and the test it must pass
+
+A test may go below the HTTP surface **only if it can name, in a sentence, an observable
+that HTTP cannot distinguish** — that is, a wrong implementation and a right one would
+return byte-identical responses. Those tests live in exactly two classes, and the sentence
+goes in the test's own doc comment:
+
+- `UserPersistenceContractTests`
+- `DevicePersistenceContractTests`
+
+The four kinds that qualify today, and why HTTP is blind to each:
+
+| Kind | Why HTTP cannot see it |
+|---|---|
+| **What a read touches** | A response that omits the face bytes looks identical whether or not they were loaded. Only the emitted SQL discriminates — and these assertions are the only thing enforcing A-1, on the latency path AD-014 makes primary. |
+| **The shape of the two unique indexes** | Their asymmetry is deliberate and easy to misread. Swapping the filters leaves most round-trips green; `pg_indexes` does not lie. |
+| **Which failures are *not* translated** | AD-022 turns two named index violations into conflicts and everything else must stay an exception. Provoking a foreign constraint violation or a vanished row needs the database, not a request. |
+| **Cancellation, and the index→message mapping** | A pre-cancelled token proves the abort deterministically. The mapping is reachable through HTTP *only* when a racer slips past the service pre-check — which is scheduling, not evidence (AD-026). |
+
+That last row is the cautionary one. The mapping **is** asserted by the race tests in
+`UserRegistrationTests`, and they do catch a swapped mapping — but swapping it was observed
+failing two of them on one run and one on the next. **A guard that depends on thread
+scheduling is not a guard.** When a use-case test can only reach something by racing, prove
+it deterministically as well.
+
+If a test you are about to add cannot state its blind-spot sentence, it belongs in a
+use-case class instead.
 
 ## Test isolation in the integration project
 
@@ -99,7 +140,13 @@ The subject can be omitted when it is obvious from the test class name.
 
 Group by resource and test scope:
 
-- `DeviceEndpointsTests` — integration tests for device HTTP endpoints
-- `UserRegistrationTests` — integration tests for the user registration path
+Name a class for the **use case or situation** it covers, not for the component it exercises:
+
+- `UserRegistrationTests`, `UserAmendmentTests`, `UserResurrectionTests` — the three
+  situations the one `PUT /api/users/{externalRef}` upsert route serves
+- `UserRemovalTests`, `UserLookupTests`, `UserCatalogueTests` — one per remaining route
+- `DeviceEndpointsTests` — the five device routes
+- `UserPersistenceContractTests`, `DevicePersistenceContractTests` — the below-HTTP
+  exception above, and the only classes named after a mechanism
 
 Class names carry no level suffix — the project does.

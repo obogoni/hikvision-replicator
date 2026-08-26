@@ -82,6 +82,23 @@ public abstract class UserApiTests(PostgresFixture fixture) : IAsyncLifetime
         Assert.NotEmpty(messages.EnumerateArray());
     }
 
+    /// <summary>
+    /// Asserts a 409 whose problem body names <em>which</em> key collided. The status alone does
+    /// not discriminate: `AD-022` translates two different unique-index violations into two
+    /// different messages, and swapping them would still answer 409 while telling the caller to
+    /// change a key that is already free.
+    /// </summary>
+    protected static async Task AssertConflictAsync(
+        HttpResponseMessage response,
+        string expectedDetail
+    )
+    {
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var body = await ReadBodyAsync(response);
+        Assert.Equal(expectedDetail, body.GetProperty("detail").GetString());
+    }
+
     protected async Task<int> CountUsersAsync()
     {
         await using var context = Fixture.CreateDbContext();

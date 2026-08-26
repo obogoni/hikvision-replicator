@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Shared;
 
 namespace HikvisionReplicator.IntegrationTests;
 
@@ -230,7 +231,7 @@ public class UserRegistrationTests(PostgresFixture fixture) : UserApiTests(fixtu
 
         var response = await UpsertAsync("TICKET-2", ValidUpsert(accessCode: "123456"));
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await AssertConflictAsync(response, IUserRepository.AccessCodeAlreadyInUse);
         Assert.Equal(1, await CountUsersAsync());
     }
 
@@ -253,10 +254,8 @@ public class UserRegistrationTests(PostgresFixture fixture) : UserApiTests(fixtu
         // The loser must be told its key is taken, not handed a 500 — the whole point of
         // translating the constraint violation inside the repository (AD-022).
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
-        Assert.All(
-            responses.Where(response => response.StatusCode != HttpStatusCode.Created),
-            response => Assert.Equal(HttpStatusCode.Conflict, response.StatusCode)
-        );
+        foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
+            await AssertConflictAsync(loser, IUserRepository.ExternalRefAlreadyRegistered);
         Assert.Equal(1, await CountUsersAsync());
 
         foreach (var response in responses)
@@ -280,10 +279,8 @@ public class UserRegistrationTests(PostgresFixture fixture) : UserApiTests(fixtu
         var responses = await Task.WhenAll(racers);
 
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
-        Assert.All(
-            responses.Where(response => response.StatusCode != HttpStatusCode.Created),
-            response => Assert.Equal(HttpStatusCode.Conflict, response.StatusCode)
-        );
+        foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
+            await AssertConflictAsync(loser, IUserRepository.AccessCodeAlreadyInUse);
         Assert.Equal(1, await CountUsersAsync());
 
         foreach (var response in responses)

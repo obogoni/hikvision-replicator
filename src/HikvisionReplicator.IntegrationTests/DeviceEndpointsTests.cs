@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace HikvisionReplicator.IntegrationTests;
@@ -309,6 +310,11 @@ public class DeviceEndpointsTests(PostgresFixture fixture) : IAsyncLifetime
         var response = await RegisterAsync(ValidRegistration(name: "Back Gate Reader"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await ReadBodyAsync(response);
+        Assert.Equal(
+            IDeviceRepository.AddressAlreadyRegistered,
+            problem.GetProperty("detail").GetString()
+        );
         Assert.Equal(1, await CountDevicesAsync());
     }
 
@@ -628,6 +634,11 @@ public class DeviceEndpointsTests(PostgresFixture fixture) : IAsyncLifetime
         var response = await UpdateAsync(movingId, new { ipAddress = "192.168.1.10" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await ReadBodyAsync(response);
+        Assert.Equal(
+            IDeviceRepository.AddressAlreadyRegistered,
+            problem.GetProperty("detail").GetString()
+        );
 
         var reread = await ReadBodyAsync(await _client.GetAsync($"/api/devices/{movingId}"));
         Assert.Equal(
