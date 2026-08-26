@@ -160,9 +160,12 @@ public class UpsertUserService(
     /// A-3 forbids. Every create-time rule is therefore re-imposed, the picture included.
     /// </para>
     /// <para>
-    /// It answers 200 rather than 201 because the row was never gone — the external reference
-    /// stayed registered and reserved throughout, which is why the tombstone could be found at
-    /// all. A-7 scopes the create-likeness to validation, and this is not validation.
+    /// It answers <b>201</b>, not 200. The surviving row is invisible to the integrator: USR-31
+    /// makes a removed spectator report as not found on every read path. A client that saw 404 on
+    /// GET and then received 200 on PUT would be told the record had been there all along. The
+    /// tombstone is our bookkeeping for Phase 2's Remove work (A-5), not something the caller can
+    /// observe, so the answer is the one any unregistered reference gets. USR-23's 200 applies to
+    /// an <i>active</i> registration.
     /// </para>
     /// </summary>
     private async Task<
@@ -203,7 +206,7 @@ public class UpsertUserService(
         if (saveResult.TryPickT1(out var conflictError, out _))
             return conflictError;
 
-        return new UserUpdated(UserResponse.FromEntity(user));
+        return new UserCreated(UserResponse.FromEntity(user));
     }
 
     /// <summary>

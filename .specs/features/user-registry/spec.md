@@ -190,7 +190,7 @@ path only ever fires from here.
 3. **USR-31** — WHEN a user is deleted THEN it SHALL become invisible to every read path, which SHALL report it as not found.
 4. **USR-32** — WHEN `DELETE` names an already-deleted user THEN the system SHALL respond `204 No Content` (A-16).
 5. **USR-33** — WHEN `DELETE` names an `ExternalRef` that was never registered THEN the system SHALL respond with a not-found error.
-6. **USR-34** — WHEN a `PUT` names a deleted `ExternalRef` THEN the system SHALL resurrect that user, clearing the deleted mark, and SHALL require a face picture in that request exactly as at creation (A-7).
+6. **USR-34** — WHEN a `PUT` names a deleted `ExternalRef` THEN the system SHALL resurrect that user, clearing the deleted mark, SHALL require a face picture in that request exactly as at creation (A-7), and SHALL respond **`201 Created`** with a `Location` header. *Added 2026-08-26: the original criterion named no status. `201` because USR-31 makes a removed spectator report as not found on every read path — a client that saw 404 on `GET` and then 200 on `PUT` would be told the record had been there all along. The surviving row is bookkeeping for Phase 2's Remove work (A-5), not something the caller can observe; USR-23's `200` applies to an* active *registration.*
 
 **Independent Test**: Delete a user, confirm `GET` reports not found and the image bytes are gone
 from storage, then `PUT` the same `ExternalRef` without an image and see it rejected — and with an

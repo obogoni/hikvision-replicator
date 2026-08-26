@@ -40,7 +40,7 @@ public class UserResurrectionTests(PostgresFixture fixture) : UserApiTests(fixtu
 
         var response = await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var body = await ReadBodyAsync(response);
         Assert.Equal(originalId, body.GetProperty("id").GetInt32());
@@ -51,6 +51,22 @@ public class UserResurrectionTests(PostgresFixture fixture) : UserApiTests(fixtu
         Assert.Null(stored.DeletedAt);
         Assert.Equal("Grace Hopper", stored.Name);
         Assert.Equal(1, await CountUsersAsync());
+    }
+
+    // USR-31 makes a removed spectator report as not found on every read path, so from the
+    // integrator's side the reference genuinely does not exist. Answering 200 here would claim
+    // the record had been there all along. The surviving row is our bookkeeping for Phase 2's
+    // Remove work (A-5), never something the caller can observe.
+    [Fact]
+    public async Task Spectator_that_reads_as_missing_is_registered_rather_than_corrected()
+    {
+        await GivenRemovedSpectatorAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await ReadAsync("TICKET-1")).StatusCode);
+
+        var response = await UpsertAsync("TICKET-1", ValidUpsert());
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("/api/users/TICKET-1", response.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -161,7 +177,7 @@ public class UserResurrectionTests(PostgresFixture fixture) : UserApiTests(fixtu
 
         var response = await UpsertAsync("TICKET-1", ValidUpsert(accessCode: "111111"));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var stored = await StoredUserAsync("TICKET-1");
         Assert.NotNull(stored);
