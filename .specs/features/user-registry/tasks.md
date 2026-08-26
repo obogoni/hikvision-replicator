@@ -449,15 +449,15 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Value converters for `ExternalRef`, `AccessCode` and `FaceFingerprint` per AD-009
-- [ ] `IX_users_ExternalRef` unique across **all** rows, tombstoned included
-- [ ] `IX_users_AccessCode` unique with `.HasFilter(...)` on `"DeletedAt" IS NULL`
-- [ ] Both index names exposed as `public const string` so the repository can key off them
-- [ ] `face_pictures` 1:1 with `users`, cascade delete; the navigation is **not auto-included**, with the reason stated in a comment at the configuration
-- [ ] Migration created and applied at startup by the existing `Migrate()` call; `EnsureCreated()` is not used anywhere (USR-38)
-- [ ] Integration tests assert against the real schema: both indexes exist, the partial filter is present, and **a deleted user's access code can be reused by a new user while its `ExternalRef` cannot**
-- [ ] Full gate passes
-- [ ] ≥ 7 new integration tests pass (no silent deletions)
+- [x] Value converters for `ExternalRef`, `AccessCode` and `FaceFingerprint` per AD-009
+- [x] `IX_users_ExternalRef` unique across **all** rows, tombstoned included
+- [x] `IX_users_AccessCode` unique with `.HasFilter(...)` on `"DeletedAt" IS NULL`
+- [x] Both index names exposed as `public const string` so the repository can key off them
+- [x] `face_pictures` 1:1 with `users`, cascade delete; the navigation is **not auto-included**, with the reason stated in a comment at the configuration
+- [x] Migration created and applied at startup by the existing `Migrate()` call; `EnsureCreated()` is not used anywhere (USR-38)
+- [x] Integration tests assert against the real schema: both indexes exist, the partial filter is present, and **a deleted user's access code can be reused by a new user while its `ExternalRef` cannot**
+- [x] Full gate passes
+- [x] ≥ 7 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(infra): add user schema with asymmetric unique indexes`
@@ -475,13 +475,13 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `AddIfKeysFreeAsync` / `SaveIfKeysFreeAsync` return `OneOf<Success, ConflictError>`
-- [ ] A `23505` on **each** named index maps to its own distinct message, so a caller can tell which key collided
-- [ ] A constraint violation on any *other* index propagates untouched rather than being reported as one of these two
-- [ ] Services never see a `PostgresException` (AD-022)
-- [ ] Integration tests provoke **both** real races concurrently: one `ExternalRef` → exactly one user (USR-07); one `accessCode` → exactly one success (USR-08); each asserts 409 and **not** 500
-- [ ] Full gate passes
-- [ ] ≥ 6 new integration tests pass (no silent deletions)
+- [x] `AddIfKeysFreeAsync` / `SaveIfKeysFreeAsync` return `OneOf<Success, ConflictError>`
+- [x] A `23505` on **each** named index maps to its own distinct message, so a caller can tell which key collided
+- [x] A constraint violation on any *other* index propagates untouched rather than being reported as one of these two
+- [x] Services never see a `PostgresException` (AD-022)
+- [x] Integration tests provoke **both** real races concurrently: one `ExternalRef` → exactly one user (USR-07); one `accessCode` → exactly one success (USR-08); each asserts 409 and **not** 500
+- [x] Full gate passes
+- [x] ≥ 6 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(infra): add user repository with constraint translation`
@@ -499,12 +499,12 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `UserByExternalRefSpec` (**active only**) and `UserByExternalRefIncludingDeletedSpec` (resurrection's lookup) both exist, with a comment on each stating why the other is not interchangeable
-- [ ] `ActiveUserByAccessCodeSpec` for the friendly pre-check
-- [ ] `ActiveUsersPagedSpec` with stable, total ordering (USR-44)
-- [ ] **No specification includes the `Picture` navigation** — an integration test asserts that querying users issues no read against `face_pictures`, which is the only thing enforcing A-1
-- [ ] Full gate passes
-- [ ] ≥ 6 new integration tests pass (no silent deletions)
+- [x] `UserByExternalRefSpec` (**active only**) and `UserByExternalRefIncludingDeletedSpec` (resurrection's lookup) both exist, with a comment on each stating why the other is not interchangeable
+- [x] `ActiveUserByAccessCodeSpec` for the friendly pre-check
+- [x] `ActiveUsersPagedSpec` with stable, total ordering (USR-44)
+- [x] **No specification includes the `Picture` navigation** — an integration test asserts that querying users issues no read against `face_pictures`, which is the only thing enforcing A-1
+- [x] Full gate passes
+- [x] ≥ 6 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(domain): add user specifications`
@@ -522,14 +522,14 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `PUT /api/users/{externalRef}` returns **201 with a `Location`** header for a new user (USR-01)
-- [ ] Service returns `OneOf<UserCreated, UserUpdated, ValidationError, ConflictError>`; the endpoint's `.Match()` maps arms to results with **no `if` in the endpoint** (AD-003)
-- [ ] A create with no face picture is rejected, naming `facePicture` (USR-05)
-- [ ] Response carries hash, byte size and dimensions and **never the image bytes** (USR-09)
-- [ ] User and picture are written in **one transaction** — a forced picture-write failure leaves no user row (USR-10)
-- [ ] `now` comes from the injected `TimeProvider` (USR-11)
-- [ ] Full gate passes
-- [ ] ≥ 10 new integration tests pass (no silent deletions)
+- [x] `PUT /api/users/{externalRef}` returns **201 with a `Location`** header for a new user (USR-01)
+- [x] Service returns `OneOf<UserCreated, UserUpdated, ValidationError, ConflictError>`; the endpoint's `.Match()` maps arms to results with **no `if` in the endpoint** (AD-003)
+- [x] A create with no face picture is rejected, naming `facePicture` (USR-05)
+- [x] Response carries hash, byte size and dimensions and **never the image bytes** (USR-09)
+- [x] User and picture are written in **one transaction** — a forced picture-write failure leaves no user row (USR-10)
+- [x] `now` comes from the injected `TimeProvider` (USR-11)
+- [x] Full gate passes
+- [x] ≥ 10 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add user upsert create path`
@@ -547,14 +547,14 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] An existing `ExternalRef` returns **200**, not 201 (USR-23)
-- [ ] Omitting the face leaves the stored image, hash, size and dimensions unchanged (USR-24)
-- [ ] Supplying a face re-normalizes and replaces all four (USR-25)
-- [ ] Re-sending a byte-identical upload leaves `UpdatedAt` unmoved — the end-to-end proof of the normalizer's determinism (USR-26)
-- [ ] A rejected update leaves the stored user, image included, exactly as it was (USR-27)
-- [ ] Taking another active user's access code returns 409 (USR-28)
-- [ ] Full gate passes
-- [ ] ≥ 9 new integration tests pass (no silent deletions)
+- [x] An existing `ExternalRef` returns **200**, not 201 (USR-23)
+- [x] Omitting the face leaves the stored image, hash, size and dimensions unchanged (USR-24)
+- [x] Supplying a face re-normalizes and replaces all four (USR-25)
+- [x] Re-sending a byte-identical upload leaves `UpdatedAt` unmoved — the end-to-end proof of the normalizer's determinism (USR-26)
+- [x] A rejected update leaves the stored user, image included, exactly as it was (USR-27)
+- [x] Taking another active user's access code returns 409 (USR-28)
+- [x] Full gate passes
+- [x] ≥ 9 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add user upsert update path`
@@ -572,11 +572,11 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] An active user returns 200 with identity fields, timestamps and the face fingerprint (USR-35)
-- [ ] An unregistered ref returns 404 (USR-36)
-- [ ] Response never contains image bytes (USR-37)
-- [ ] Full gate passes
-- [ ] ≥ 5 new integration tests pass (no silent deletions)
+- [x] An active user returns 200 with identity fields, timestamps and the face fingerprint (USR-35)
+- [x] An unregistered ref returns 404 (USR-36)
+- [x] Response never contains image bytes (USR-37)
+- [x] Full gate passes
+- [x] ≥ 5 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add get user endpoint`
@@ -594,13 +594,13 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Deleting an active user returns 204 and **the row survives** with `DeletedAt` set (USR-29)
-- [ ] **The `face_pictures` row is gone** — asserted by querying the table directly, not by asserting the API hides it (USR-30)
-- [ ] A deleted user is 404 on `GET` and absent from listing (USR-31)
-- [ ] Deleting an already-deleted user returns **204, not 404** (USR-32, A-16)
-- [ ] Deleting a never-registered ref returns 404 (USR-33)
-- [ ] Full gate passes
-- [ ] ≥ 7 new integration tests pass (no silent deletions)
+- [x] Deleting an active user returns 204 and **the row survives** with `DeletedAt` set (USR-29)
+- [x] **The `face_pictures` row is gone** — asserted by querying the table directly, not by asserting the API hides it (USR-30)
+- [x] A deleted user is 404 on `GET` and absent from listing (USR-31)
+- [x] Deleting an already-deleted user returns **204, not 404** (USR-32, A-16)
+- [x] Deleting a never-registered ref returns 404 (USR-33)
+- [x] Full gate passes
+- [x] ≥ 7 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add user removal with tombstone`
@@ -618,12 +618,12 @@ T22 → T23 → T24 → T25 → T26
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] A `PUT` on a tombstoned ref clears the tombstone and rewrites the record (USR-34)
-- [ ] **A face picture is mandatory on resurrection** — the tombstone destroyed the old one, so an omitted picture is rejected exactly as at creation
-- [ ] Resurrection uses the including-deleted specification; a lookup that only sees active users would 404 instead and is asserted not to
-- [ ] The resurrected user's access code is re-checked against active users
-- [ ] Full gate passes
-- [ ] ≥ 5 new integration tests pass (no silent deletions)
+- [x] A `PUT` on a tombstoned ref clears the tombstone and rewrites the record (USR-34)
+- [x] **A face picture is mandatory on resurrection** — the tombstone destroyed the old one, so an omitted picture is rejected exactly as at creation
+- [x] Resurrection uses the including-deleted specification; a lookup that only sees active users would 404 instead and is asserted not to
+- [x] The resurrected user's access code is re-checked against active users
+- [x] Full gate passes
+- [x] ≥ 5 new integration tests pass (no silent deletions)
 
 **Tests**: integration · **Gate**: full
 **Commit**: `feat(users): add user resurrection path`

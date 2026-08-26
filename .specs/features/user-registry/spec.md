@@ -84,15 +84,15 @@ Large scope — every dimension resolves to a requirement or an explicit `N/A be
 
 | Dimension | Resolution |
 | --------- | ---------- |
-| Input validation & bounds | USR-03, USR-04, USR-05 (identity fields); USR-16…USR-20 (image envelope, upload cap, decode-bomb cap) |
-| Failure / partial-failure states | USR-10 — the `User` row and its `FacePicture` are written in one transaction, so a failed image write never leaves a user without a face (A-3); USR-26 — a rejected update leaves the aggregate untouched; USR-41 — database unavailability surfaces as ProblemDetails |
-| Idempotency / retry / duplicate handling | USR-01/USR-21 — `PUT` upsert is idempotent by construction (A-2); USR-24 — a byte-identical re-upsert does not advance `UpdatedAt`; USR-30 — repeated `DELETE` is idempotent (A-16) |
+| Input validation & bounds | USR-03, USR-04, USR-05 (identity fields); USR-15…USR-21 (image envelope, upload cap, decode-bomb cap) |
+| Failure / partial-failure states | USR-10 — the `User` row and its `FacePicture` are written in one transaction, so a failed image write never leaves a user without a face (A-3); USR-27 — a rejected update leaves the aggregate untouched; USR-39 — database unavailability surfaces as ProblemDetails |
+| Idempotency / retry / duplicate handling | USR-01/USR-23 — `PUT` upsert is idempotent by construction (A-2); USR-26 — a byte-identical re-upsert does not advance `UpdatedAt`; USR-32 — repeated `DELETE` is idempotent (A-16) |
 | Auth boundaries & rate limits | **N/A because** authentication is Phase 4 `api-auth` (A-11). No rate limiting: a single trusted integrator on a private network. **Recorded as an elevated accepted risk** — this endpoint decodes untrusted images without authentication; USR-19/USR-20 bound per-request cost, nothing bounds request rate. |
 | Concurrency / ordering | USR-07 — concurrent upsert of one `ExternalRef` yields exactly one user; USR-08 — a concurrent access-code collision yields exactly one conflict. Both per AD-022: the DB constraint is the authority, never a pre-check. |
-| Data lifecycle / expiry | USR-27/USR-28 — tombstone on delete, face bytes destroyed immediately (A-5); A-6 — purge is Phase 2's. **N/A** for TTL/archival: a spectator record has no expiry independent of the integrator's own delete. |
-| Observability | USR-42, USR-43 — traced spans and metrics, including **normalization duration**, which is the one CPU-bound step on the write path AD-014 makes latency-critical |
+| Data lifecycle / expiry | USR-29/USR-30 — tombstone on delete, face bytes destroyed immediately (A-5); A-6 — purge is Phase 2's. **N/A** for TTL/archival: a spectator record has no expiry independent of the integrator's own delete. |
+| Observability | USR-40, USR-41 — traced spans and metrics, including **normalization duration**, which is the one CPU-bound step on the write path AD-014 makes latency-critical |
 | External-dependency failure | **N/A because** this feature makes no outbound call. Normalization is in-process (A-14); device communication arrives in Phase 3. |
-| State-transition integrity | USR-27, USR-29, USR-31 — `Active → Deleted` is the only transition; a tombstoned user is invisible to reads, and `Deleted → Active` occurs only through the resurrection path of A-7, which re-imposes every create-time rule |
+| State-transition integrity | USR-29, USR-31, USR-34 — `Active → Deleted` is the only transition; a tombstoned user is invisible to reads, and `Deleted → Active` occurs only through the resurrection path of A-7, which re-imposes every create-time rule |
 
 ---
 
