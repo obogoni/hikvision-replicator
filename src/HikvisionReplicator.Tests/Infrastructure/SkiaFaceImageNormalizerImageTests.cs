@@ -96,6 +96,18 @@ public class SkiaFaceImageNormalizerImageTests
     }
 
     [Fact]
+    public void Four_channel_print_photograph_is_stored_as_a_three_channel_colour_image()
+    {
+        // CMYK is the third colour space the spec's edge case names, and the one that had no
+        // fixture at all until the Verifier noticed (L-036). It is also the worst to get wrong:
+        // a four-component JPEG handed to a device that assumes three does not fail loudly, it
+        // renders inverted — a plausible-looking face that will never match anyone.
+        var (_, _, _, components) = JpegInspector.Frame(Normalize(FaceFixtures.Cmyk).Content);
+
+        Assert.Equal(3, components);
+    }
+
+    [Fact]
     public void Photograph_carrying_a_colour_profile_does_not_carry_it_forward()
     {
         var upload = FaceFixtures.Bytes(FaceFixtures.IccProfiled);

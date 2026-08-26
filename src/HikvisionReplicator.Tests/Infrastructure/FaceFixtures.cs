@@ -17,12 +17,14 @@ internal static class FaceFixtures
     public const string GpsTagged = "gps-tagged.jpg";
     public const string DecodeBomb = "decode-bomb.png";
     public const string NearUniform = "near-uniform.jpg";
+    public const string Cmyk = "cmyk.jpg";
+    public const string SinglePixel = "single-pixel.jpg";
     public const string NotAnImage = "not-an-image.bin";
 
     /// <summary>
     /// The fixtures that carry photographic entropy and are expected to normalize
-    /// successfully. The sub-floor, decode-bomb, near-uniform and not-an-image fixtures are
-    /// deliberately absent: each one exists to be rejected.
+    /// successfully. The sub-floor, single-pixel, decode-bomb, near-uniform and not-an-image
+    /// fixtures are deliberately absent: each one exists to be rejected.
     /// </summary>
     public static readonly string[] Photographic =
     [
@@ -33,6 +35,7 @@ internal static class FaceFixtures
         Progressive,
         IccProfiled,
         GpsTagged,
+        Cmyk,
     ];
 
     public static string PathTo(string fixture) =>

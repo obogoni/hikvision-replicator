@@ -267,6 +267,30 @@ def write_near_uniform(path: pathlib.Path) -> None:
     )
 
 
+def write_cmyk(path: pathlib.Path) -> None:
+    """1200x900 CMYK JPEG -- a colour space the device cannot be handed.
+
+    The spec's edge case names "grayscale, CMYK or ICC-profiled"; the first two
+    were covered and this one was not.  CMYK JPEGs come out of print workflows
+    and are the case most likely to decode to inverted or garbage colour if the
+    normalizer does not convert, which is far worse than a rejection because it
+    produces a plausible-looking face nobody can match.
+    """
+    photo(1200, 900, SEED + 10).convert("CMYK").save(path, format="JPEG", quality=95)
+
+
+def write_single_pixel(path: pathlib.Path) -> None:
+    """1x1 -- the smallest possible valid image.
+
+    The spec requires this be refused by the resolution floor, NOT by the byte
+    band.  It matters which: a 1x1 image is also far under 40 KB, so a
+    normalizer that checked size before dimensions would reject it for the
+    wrong reason and report a message telling the integrator to send a *larger
+    file* rather than a *larger picture*.
+    """
+    photo(1, 1, SEED + 11).save(path, format="JPEG", quality=95)
+
+
 def write_not_an_image(path: pathlib.Path) -> None:
     path.write_bytes(
         b"this is not an image, it is 128 bytes of text that no codec will accept "
@@ -285,6 +309,8 @@ GENERATORS = {
     "gps-tagged.jpg": write_gps_tagged,
     "decode-bomb.png": write_decode_bomb,
     "near-uniform.jpg": write_near_uniform,
+    "cmyk.jpg": write_cmyk,
+    "single-pixel.jpg": write_single_pixel,
     "not-an-image.bin": write_not_an_image,
 }
 

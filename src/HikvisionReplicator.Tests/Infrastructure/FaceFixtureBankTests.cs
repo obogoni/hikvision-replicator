@@ -24,6 +24,8 @@ public class FaceFixtureBankTests
     [InlineData(FaceFixtures.GpsTagged, "JPEG", 1200, 900)]
     [InlineData(FaceFixtures.DecodeBomb, "PNG", 30000, 30000)]
     [InlineData(FaceFixtures.NearUniform, "JPEG", 640, 480)]
+    [InlineData(FaceFixtures.Cmyk, "JPEG", 1200, 900)]
+    [InlineData(FaceFixtures.SinglePixel, "JPEG", 1, 1)]
     [InlineData(FaceFixtures.NotAnImage, "none", 0, 0)]
     public void Declared_fixture_is_present_and_carries_the_format_and_dimensions_it_claims(
         string fixture,

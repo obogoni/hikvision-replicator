@@ -125,6 +125,22 @@ public class SkiaFaceImageNormalizerGuardTests
     }
 
     [Fact]
+    public void Smallest_possible_image_is_refused_for_its_size_in_pixels_not_in_bytes()
+    {
+        // 1x1. It is under the resolution floor AND far under the 40 KB band, so it would be
+        // rejected either way — but *which* rule fires is what the integrator is told. The band
+        // message asks for a larger file; only the floor message asks for a larger picture, and
+        // re-encoding a 1x1 image at higher quality will never fix it (spec Edge Cases).
+        var result = FaceImageNormalizerFactory
+            .Build()
+            .Normalize(FaceFixtures.Bytes(FaceFixtures.SinglePixel));
+
+        var error = result.AsT1;
+        Assert.Contains("480", error.Message, StringComparison.Ordinal);
+        Assert.Contains("640", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Image_below_the_resolution_floor_is_never_upscaled_into_compliance()
     {
         // 320x240. Upscaling it would manufacture a file that satisfies the envelope and cannot

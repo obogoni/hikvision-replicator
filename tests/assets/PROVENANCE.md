@@ -13,7 +13,7 @@ as a known gap). What the fixtures need is photographic *entropy* and real metad
 not real photographs.
 
 **Why the outputs are committed and not just the script.** The golden derivative hashes in
-`SkiaFaceImageNormalizerHashTests` are taken over these exact bytes. If the suite regenerated the
+`SkiaFaceImageNormalizerEncodingTests` are taken over these exact bytes. If the suite regenerated the
 bank at build time, a Pillow or ImageMagick upgrade on one machine would move the golden hashes
 without anyone touching the normalizer. The script is committed so the bank can be extended and
 audited; the bytes are committed so the hashes mean something.
@@ -47,6 +47,8 @@ No real location is committed to this repository.
 | `icc-profiled.jpg` | JPEG | 1200×900 | fBm noise plus an embedded ICC profile built at a **5000 K** white point, deliberately not sRGB's D65 | Spec edge case: colour-space normalization is a real conversion here, not a no-op. The profile's creation timestamp and MD5 profile ID are zeroed — the ICC spec permits it, and leaving them in would make this the one fixture whose bytes changed on every run. |
 | `gps-tagged.jpg` | JPEG | 1200×900 | fBm noise plus a hand-assembled EXIF APP1 carrying a GPS IFD with **fictional** coordinates | USR-14: the derivative must carry no EXIF, and in particular no GPS. Hand-assembled because Pillow 10 cannot serialise a GPS IFD — assigning the nested dictionary raises, and mutating the one `get_ifd` returns is silently dropped on save. |
 | `decode-bomb.png` | PNG | **30000×30000 declared** in 68 bytes | Hand-assembled PNG chunks: a valid `IHDR`, an `IDAT` holding a single deflate block that could never satisfy those dimensions, an `IEND` | USR-20: 900 megapixels declared, far over the 40 MP cap, and the rejection must happen before any decode buffer is allocated. Assembled rather than rendered — rendering it would need the very allocation the fixture exists to prove we never make. Cannot be found in the wild. |
+| `cmyk.jpg` | JPEG | 1200×900, 4-channel | fBm noise converted to CMYK | Colour-space normalization for the third space the spec's edge case names. The worst of the three to get wrong: a four-component JPEG handed to a device expecting three renders **inverted** rather than failing, producing a plausible face that matches nobody. Added after the Verifier found the edge case had grayscale and ICC fixtures but no CMYK (L-036). |
+| `single-pixel.jpg` | JPEG | 1×1 | fBm noise at the smallest valid size | The floor-not-band rejection. It breaches the resolution floor *and* the 40 KB band, so what matters is **which** rule answers: the band message asks for a larger file, and only the floor message asks for a larger picture. Re-encoding a 1×1 image will never satisfy the former. |
 | `near-uniform.jpg` | JPEG | 640×480 | Flat mid-grey with a ±1 dither | The sub-40 KB rejection path (USR-15's lower bound). Sized **exactly on the floor** so nothing may downscale it into compliance; it clears every other guard and then cannot reach 40 KB at any quality the ladder offers. A photograph this uniform is a lens cap, not a face. |
 | `not-an-image.bin` | none | — | 125 bytes of ASCII text | USR-21: not a decodable image, rejected naming the `facePicture` field. |
 
