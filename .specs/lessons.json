@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 35,
+  "next_id": 39,
   "lessons": [
     {
       "id": "L-001",
@@ -620,6 +620,78 @@
       ],
       "created": "2026-08-20T15:45:58Z",
       "last_seen": "2026-08-20T15:45:58Z"
+    },
+    {
+      "id": "L-035",
+      "key": "surviving_mutant::before documenting that a guard distinguishes two forms of an input mutate it to the other form and confirm a test fails an expression that is invariant across them distinguishes nothing",
+      "text": "Before documenting that a guard distinguishes two forms of an input, mutate it to the other form and confirm a test fails; an expression that is invariant across them distinguishes nothing.",
+      "signal": "surviving_mutant",
+      "scope": "normalization",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Discrimination Sensor, mutation 3a — SkiaFaceImageNormalizer.cs:125-126 (normalization)"
+      ],
+      "created": "2026-08-26T12:21:05Z",
+      "last_seen": "2026-08-26T12:21:05Z"
+    },
+    {
+      "id": "L-036",
+      "key": "spec_precision_gap::when an edge case lists several kinds of input commit one fixture per named kind a kind with no fixture is uncovered however well its siblings are asserted",
+      "text": "When an edge case lists several kinds of input, commit one fixture per named kind; a kind with no fixture is uncovered however well its siblings are asserted.",
+      "signal": "spec_precision_gap",
+      "scope": "fixtures",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Edge Cases, Note 2 — no CMYK fixture for the grayscale/CMYK/ICC edge case (fixtures)"
+      ],
+      "created": "2026-08-26T12:21:05Z",
+      "last_seen": "2026-08-26T12:21:05Z"
+    },
+    {
+      "id": "L-037",
+      "key": "spec_precision_gap::register a new meter on the metrics provider as deliberately as a new activitysource on the tracer an instrument nobody reads records into nothing in production while its test still passes",
+      "text": "Register a new Meter on the metrics provider as deliberately as a new ActivitySource on the tracer; an instrument nobody reads records into nothing in production while its test still passes.",
+      "signal": "spec_precision_gap",
+      "scope": "observability",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Precision Notes, Note 4 — USR-41 metrics recorded with no WithMetrics pipeline in Program.cs (observability)"
+      ],
+      "created": "2026-08-26T12:21:06Z",
+      "last_seen": "2026-08-26T12:21:06Z"
+    },
+    {
+      "id": "L-038",
+      "key": "spec_precision_gap::an atomicity claim needs a test that forces the second write to fail not an argument that both writes share one savechanges",
+      "text": "An atomicity claim needs a test that forces the second write to fail, not an argument that both writes share one SaveChanges.",
+      "signal": "spec_precision_gap",
+      "scope": "persistence",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md § Precision Notes, Note 6 — USR-30 same-transaction claim has no fault-injection test unlike USR-10 (persistence)"
+      ],
+      "created": "2026-08-26T12:21:06Z",
+      "last_seen": "2026-08-26T12:21:06Z"
     }
   ]
 }

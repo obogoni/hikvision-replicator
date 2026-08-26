@@ -216,6 +216,30 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: CTX-10; spec.md:294; .specs/STATE.md:337 (specs)
 - last seen: 2026-08-20T15:45:58Z
 
+### L-035 — Before documenting that a guard distinguishes two forms of an input, mutate it to the other form and confirm a test fails; an expression that is invariant across them distinguishes nothing.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `normalization` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Discrimination Sensor, mutation 3a — SkiaFaceImageNormalizer.cs:125-126 (normalization)
+- last seen: 2026-08-26T12:21:05Z
+
+### L-036 — When an edge case lists several kinds of input, commit one fixture per named kind; a kind with no fixture is uncovered however well its siblings are asserted.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `fixtures` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Edge Cases, Note 2 — no CMYK fixture for the grayscale/CMYK/ICC edge case (fixtures)
+- last seen: 2026-08-26T12:21:05Z
+
+### L-037 — Register a new Meter on the metrics provider as deliberately as a new ActivitySource on the tracer; an instrument nobody reads records into nothing in production while its test still passes.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `observability` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Precision Notes, Note 4 — USR-41 metrics recorded with no WithMetrics pipeline in Program.cs (observability)
+- last seen: 2026-08-26T12:21:06Z
+
+### L-038 — An atomicity claim needs a test that forces the second write to fail, not an argument that both writes share one SaveChanges.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `persistence` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Precision Notes, Note 6 — USR-30 same-transaction claim has no fault-injection test unlike USR-10 (persistence)
+- last seen: 2026-08-26T12:21:06Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
