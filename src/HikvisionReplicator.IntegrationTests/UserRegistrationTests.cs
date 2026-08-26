@@ -251,11 +251,28 @@ public class UserRegistrationTests(PostgresFixture fixture) : UserApiTests(fixtu
         start.SetResult();
         var responses = await Task.WhenAll(racers);
 
-        // The loser must be told its key is taken, not handed a 500 — the whole point of
-        // translating the constraint violation inside the repository (AD-022).
+        // USR-07's promise is that one user exists, not that three callers were refused.
+        //
+        // A loser here has two legitimate outcomes, because the route is an idempotent upsert:
+        // 409 if it lost the insert race, and 200 if it arrived after the winner had committed
+        // and therefore found a row to update. Demanding 409 from every loser asserts that no
+        // racer was ever late — a claim about scheduling, not about the registry. It held on
+        // developer machines and failed on CI, where one racer arrived after the commit.
+        //
+        // What must never appear is a 500: translating the constraint violation inside the
+        // repository (AD-022) is the whole point.
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.DoesNotContain(
+            responses,
+            response => response.StatusCode == HttpStatusCode.InternalServerError
+        );
         foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
+        {
+            if (loser.StatusCode == HttpStatusCode.OK)
+                continue;
+
             await AssertConflictAsync(loser, IUserRepository.ExternalRefAlreadyRegistered);
+        }
         Assert.Equal(1, await CountUsersAsync());
 
         foreach (var response in responses)
