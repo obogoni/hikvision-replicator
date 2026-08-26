@@ -68,6 +68,125 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
 
                     b.ToTable("devices", (string)null);
                 });
+
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.FacePicture", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("face_pictures", (string)null);
+                });
+
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.User", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccessCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalRef")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccessCode")
+                        .IsUnique()
+                        .HasDatabaseName("IX_users_AccessCode")
+                        .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.HasIndex("ExternalRef")
+                        .IsUnique()
+                        .HasDatabaseName("IX_users_ExternalRef");
+
+                    b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.FacePicture", b =>
+                {
+                    b.HasOne("HikvisionReplicator.Api.Domain.User", null)
+                        .WithOne("Picture")
+                        .HasForeignKey("HikvisionReplicator.Api.Domain.FacePicture", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.User", b =>
+                {
+                    b.OwnsOne("HikvisionReplicator.Api.Domain.FaceFingerprint", "Face", b1 =>
+                        {
+                            b1.Property<int>("UserId")
+                                .HasColumnType("integer");
+
+                            b1.Property<int>("ByteSize")
+                                .HasColumnType("integer")
+                                .HasColumnName("FaceByteSize");
+
+                            b1.Property<string>("ContentHash")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("FaceContentHash");
+
+                            b1.Property<int>("Height")
+                                .HasColumnType("integer")
+                                .HasColumnName("FaceHeight");
+
+                            b1.Property<int>("Width")
+                                .HasColumnType("integer")
+                                .HasColumnName("FaceWidth");
+
+                            b1.HasKey("UserId");
+
+                            b1.ToTable("users");
+
+                            b1.WithOwner()
+                                .HasForeignKey("UserId");
+                        });
+
+                    b.Navigation("Face")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.User", b =>
+                {
+                    b.Navigation("Picture");
+                });
 #pragma warning restore 612, 618
         }
     }

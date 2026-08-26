@@ -58,14 +58,6 @@ Skipping locally never skips the gate: `.github/workflows/ci.yml` runs the **ful
 every PR regardless of what changed, and `build-and-test` is a required check (AD-025/AD-027).
 This box decides what *you* run before pushing, not what merges.
 
-### E2E
-
-```
-dotnet test src/HikvisionReplicator.E2E                 # e2e, needs a running API
-```
-
-- E2E: <!-- N passed / not run — say why -->
-
 ## Migrations & config
 
 - [ ] No EF Core migration in this PR

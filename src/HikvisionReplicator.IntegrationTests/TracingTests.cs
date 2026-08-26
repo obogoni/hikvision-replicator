@@ -209,13 +209,20 @@ public class TracingTests(PostgresFixture fixture) : IAsyncLifetime
 
     // ─── DEV-16 (a): the request itself is traced ────────────────────────
 
+    /// <summary>
+    /// DEV-16 (a): the request is traced at all, which is what makes the credential sweep below
+    /// meaningful. The exact display name is deliberately not asserted — this route has no
+    /// parameter to keep out of the span name, so pinning the string would only assert
+    /// OpenTelemetry's formatting convention, which a package upgrade may change with no defect
+    /// here. Where a route <em>does</em> carry a key, the templating is asserted — see
+    /// <see cref="UserObservabilityTests"/>.
+    /// </summary>
     [Fact]
-    public void Handled_request_produces_a_span_naming_the_route_that_served_it()
+    public void Handled_request_is_traced_as_a_server_span()
     {
         var requestSpan = Assert.Single(RequestSpans());
 
         Assert.Equal(ActivityKind.Server, requestSpan.Kind);
-        Assert.Equal("POST /api/devices", requestSpan.DisplayName);
     }
 
     // ─── DEV-16 (a): the database work hangs off that span ───────────────

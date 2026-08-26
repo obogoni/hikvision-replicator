@@ -6,6 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- AD-009 keeps `FromPersistence` and the aggregate-internal mutators `internal`: they
+         bypass validation and must not be callable from a feature slice. The unit-test project
+         still has to assert that back door behaves, so it — and only it — sees internals.
+         Compile-time visibility, deliberately, rather than reflection: a renamed member must
+         break the build, not fail at runtime on a null GetMethod result. -->
+    <InternalsVisibleTo Include="HikvisionReplicator.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Ardalis.Specification.EntityFrameworkCore" Version="9.3.1" />
     <PackageReference Include="CSharpFunctionalExtensions" Version="3.7.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
@@ -20,5 +29,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.17.0-beta.1" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.13.22" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
   </ItemGroup>
 </Project>

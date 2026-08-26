@@ -216,6 +216,60 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: CTX-10; spec.md:294; .specs/STATE.md:337 (specs)
 - last seen: 2026-08-20T15:45:58Z
 
+### L-035 — Before documenting that a guard distinguishes two forms of an input, mutate it to the other form and confirm a test fails; an expression that is invariant across them distinguishes nothing.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `normalization` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Discrimination Sensor, mutation 3a — SkiaFaceImageNormalizer.cs:125-126 (normalization)
+- last seen: 2026-08-26T12:21:05Z
+
+### L-036 — When an edge case lists several kinds of input, commit one fixture per named kind; a kind with no fixture is uncovered however well its siblings are asserted.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `fixtures` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Edge Cases, Note 2 — no CMYK fixture for the grayscale/CMYK/ICC edge case (fixtures)
+- last seen: 2026-08-26T12:21:05Z
+
+### L-037 — Register a new Meter on the metrics provider as deliberately as a new ActivitySource on the tracer; an instrument nobody reads records into nothing in production while its test still passes.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `observability` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Precision Notes, Note 4 — USR-41 metrics recorded with no WithMetrics pipeline in Program.cs (observability)
+- last seen: 2026-08-26T12:21:06Z
+
+### L-038 — An atomicity claim needs a test that forces the second write to fail, not an argument that both writes share one SaveChanges.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `persistence` · harmful: 0
+- features: user-registry
+- evidence: validation.md § Precision Notes, Note 6 — USR-30 same-transaction claim has no fault-injection test unlike USR-10 (persistence)
+- last seen: 2026-08-26T12:21:06Z
+
+### L-039 — Before deleting a component-level test as redundant, mutate the component and confirm a surviving test fails; a caller that trims or compensates hides the component's wrong bound behind an identical response.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: user-registry
+- evidence: validation-ad036.md M8 — src/HikvisionReplicator.Api/Domain/Specs/ActiveUsersPagedSpec.cs:22 (tests)
+- last seen: 2026-08-26T21:22:47Z
+
+### L-040 — When a rule requires proving a race-reachable behaviour deterministically, add the deterministic guard for every component that behaviour spans, not only the one that prompted the rule.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: user-registry
+- evidence: validation-ad036.md D2 — src/HikvisionReplicator.Api/Infrastructure/DeviceRepository.cs:49 (tests)
+- last seen: 2026-08-26T21:22:47Z
+
+### L-041 — Pin a user-visible message against a literal in at least one test; comparing it only to the constant the production code emits moves both together and asserts nothing.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: user-registry
+- evidence: validation-ad036.md M6 — src/HikvisionReplicator.Api/Shared/IUserRepository.cs:22-26 (tests)
+- last seen: 2026-08-26T21:22:47Z
+
+### L-042 — After a mutation run, rebuild before re-testing: restoring the source leaves the last build's mutated binary in place, and dotnet test --no-build then reports a failure against code that is no longer on disk.
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: user-registry
+- evidence: src/HikvisionReplicator.IntegrationTests/UserPersistenceContractTests.cs:338 (testing)
+- last seen: 2026-08-26T21:32:05Z
+
+### L-043 — Before deleting a test as duplicated, read the requirement it cites and what its assertion actually protects; a string equality that looks like framework-format pinning may be the only guard on a distinct property.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: user-registry
+- evidence: src/HikvisionReplicator.IntegrationTests/UserObservabilityTests.cs:190 (testing)
+- last seen: 2026-08-26T21:36:10Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

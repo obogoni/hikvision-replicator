@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using HikvisionReplicator.Api.Features.Devices.ListDevices;
 using HikvisionReplicator.Api.Infrastructure;
@@ -105,6 +107,83 @@ public class DatabaseUnreachableTests(UnreachableDatabaseFixture fixture)
         ];
         foreach (var leak in diagnosticLeaks)
             Assert.DoesNotContain(leak, body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ─── USR-39: the same holds for every user route ─────────────────────
+
+    private const string UserRoute = "/api/users/outage-spectator";
+
+    [Fact]
+    public async Task Registering_a_spectator_while_the_database_is_unreachable_reports_a_service_outage()
+    {
+        var response = await fixture.Client.PutAsJsonAsync(
+            UserRoute,
+            new
+            {
+                name = "Ada Lovelace",
+                accessCode = "123456",
+                facePicture = FaceFixtures.Bytes(FaceFixtures.Portrait),
+            }
+        );
+
+        await AssertServiceOutageAsync(response);
+    }
+
+    [Fact]
+    public async Task Looking_a_spectator_up_while_the_database_is_unreachable_reports_a_service_outage()
+    {
+        var response = await fixture.Client.GetAsync(UserRoute);
+
+        await AssertServiceOutageAsync(response);
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_while_the_database_is_unreachable_reports_a_service_outage()
+    {
+        var response = await fixture.Client.DeleteAsync(UserRoute);
+
+        await AssertServiceOutageAsync(response);
+    }
+
+    [Fact]
+    public async Task Service_outage_on_a_user_route_describes_nothing_about_the_database_connection()
+    {
+        var response = await fixture.Client.GetAsync(UserRoute);
+
+        var body = await response.Content.ReadAsStringAsync();
+
+        string[] connectionDetails =
+        [
+            fixture.Connection.Host!,
+            fixture.Connection.Port.ToString(CultureInfo.InvariantCulture),
+            fixture.Connection.Database!,
+            fixture.Connection.Username!,
+            fixture.Connection.Password!,
+        ];
+        foreach (var detail in connectionDetails)
+            Assert.DoesNotContain(detail, body, StringComparison.OrdinalIgnoreCase);
+
+        string[] diagnosticLeaks = ["Npgsql", "Exception", "stacktrace", "   at ", "Host=", "Password="];
+        foreach (var leak in diagnosticLeaks)
+            Assert.DoesNotContain(leak, body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task AssertServiceOutageAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(503, body.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal(
+            GlobalExceptionHandler.DatabaseUnavailableTitle,
+            body.RootElement.GetProperty("title").GetString()
+        );
+        Assert.Equal(
+            GlobalExceptionHandler.DatabaseUnavailableDetail,
+            body.RootElement.GetProperty("detail").GetString()
+        );
     }
 }
 

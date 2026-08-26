@@ -3,11 +3,16 @@ using HikvisionReplicator.Api.Features.Devices.ListDevices;
 using HikvisionReplicator.Api.Features.Devices.RegisterDevice;
 using HikvisionReplicator.Api.Features.Devices.RemoveDevice;
 using HikvisionReplicator.Api.Features.Devices.UpdateDevice;
+using HikvisionReplicator.Api.Features.Users.GetUser;
+using HikvisionReplicator.Api.Features.Users.ListUsers;
+using HikvisionReplicator.Api.Features.Users.RemoveUser;
+using HikvisionReplicator.Api.Features.Users.UpsertUser;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
@@ -25,15 +30,32 @@ builder
     .Bind(builder.Configuration.GetSection(EncryptionOptions.SectionName))
     .ValidateOnStart();
 
+// A-13's envelope is configuration, not constants: Phase 3 must be able to correct it against
+// real hardware without a code change. A bound that cannot be satisfied aborts startup rather
+// than failing on the first upload, by which point a spectator is already at the turnstile.
+builder.Services.AddSingleton<IValidateOptions<FaceImageOptions>, FaceImageOptionsValidator>();
+builder
+    .Services.AddOptions<FaceImageOptions>()
+    .Bind(builder.Configuration.GetSection(FaceImageOptions.SectionName))
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
+// Stateless and CPU-bound, so one instance serves every request (A-14).
+builder.Services.AddSingleton<IFaceImageNormalizer, SkiaFaceImageNormalizer>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 builder.UseRegisterDevice();
 builder.UseGetDevice();
 builder.UseListDevices();
 builder.UseUpdateDevice();
 builder.UseRemoveDevice();
+
+builder.UseUpsertUser();
+builder.UseGetUser();
+builder.UseListUsers();
+builder.UseRemoveUser();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -55,6 +77,23 @@ if (!string.IsNullOrEmpty(otlpEndpoint))
             tracing
                 .AddAspNetCoreInstrumentation()
                 .AddEntityFrameworkCoreInstrumentation()
+                // Without this the normalizer's ActivitySource has no listener and emits
+                // nothing at all — the child span USR-40 requires would silently not exist.
+                .AddSource(SkiaFaceImageNormalizer.ActivitySourceName)
+                .AddOtlpExporter(options =>
+                {
+                    options.Endpoint = new Uri(otlpEndpoint);
+                    options.Protocol = OtlpExportProtocol.Grpc;
+                })
+        )
+        // USR-41. An instrument with no reader records into nothing: the normalizer's
+        // histograms existed and were unit-observable while production collected neither.
+        // Normalization is the only CPU-bound step on the write path AD-014 makes the primary
+        // quality attribute, so leaving it unexported is leaving that attribute unmeasured.
+        .WithMetrics(metrics =>
+            metrics
+                .AddAspNetCoreInstrumentation()
+                .AddMeter(SkiaFaceImageNormalizer.MeterName)
                 .AddOtlpExporter(options =>
                 {
                     options.Endpoint = new Uri(otlpEndpoint);
@@ -90,6 +129,11 @@ app.MapGetDevice();
 app.MapListDevices();
 app.MapUpdateDevice();
 app.MapRemoveDevice();
+
+app.MapUpsertUser();
+app.MapGetUser();
+app.MapListUsers();
+app.MapRemoveUser();
 
 app.Run();
 

@@ -56,17 +56,11 @@ dotnet test src/HikvisionReplicator.Tests
 
 # In-process through the HTTP surface — starts a PostgreSQL container per test collection
 dotnet test src/HikvisionReplicator.IntegrationTests
-
-# Out-of-process, against a live API
-docker compose up -d
-dotnet run --project src/HikvisionReplicator.Api      # in another shell
-dotnet test src/HikvisionReplicator.E2E
 ```
 
 The integration suite provisions its own PostgreSQL through Testcontainers, so it needs a
-**running Docker daemon** but not `docker compose up`. The E2E suite needs both the
-compose stack and a running API; override its target with
-`E2E_BASE_URL=http://staging:5000`.
+**running Docker daemon** but not `docker compose up`. There is no end-to-end suite — see
+AD-035 for why it was retired and what would have to be true to bring one back.
 
 See [`docs/test-patterns.md`](docs/test-patterns.md) for which level a new test belongs at.
 

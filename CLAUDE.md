@@ -33,8 +33,7 @@ src/
 │   ├── Shared/           ← IAggregateRoot, IRepository<T>, error records, ports
 │   └── Program.cs
 ├── HikvisionReplicator.Tests/             ← xUnit — unit only, pure logic, no Docker
-├── HikvisionReplicator.IntegrationTests/  ← xUnit — through the HTTP surface, Testcontainers
-└── HikvisionReplicator.E2E/               ← NUnit + Playwright, against a live API
+└── HikvisionReplicator.IntegrationTests/  ← xUnit — through the HTTP surface, Testcontainers
 ```
 
 ## Commands
@@ -98,8 +97,9 @@ Read [`docs/test-patterns.md`](docs/test-patterns.md) **before writing any test*
 the choose-the-level rules and the behaviour-based naming convention.
 
 **The project a test lives in declares its level** (AD-026): `.Tests` for unit,
-`.IntegrationTests` for integration, `.E2E` for end-to-end. There is no category trait, and
-a test needing Docker cannot compile in `.Tests`.
+`.IntegrationTests` for integration. There is no category trait, and a test needing Docker
+cannot compile in `.Tests`. **There is no end-to-end project** — it was retired as pure
+duplication (AD-035); do not add one back without reading that entry.
 
 ## Validation
 
