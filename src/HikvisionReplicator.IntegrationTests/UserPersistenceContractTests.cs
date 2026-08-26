@@ -204,6 +204,49 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         Assert.Null(stored.Picture);
     }
 
+    // ─── The size of the page the catalogue actually reads ───────────────
+
+    /// <summary>
+    /// The window the specification reads is <em>exactly</em> the one it was asked for.
+    /// <para>
+    /// HTTP is structurally blind to this. `ListUsersService` deliberately asks for one row
+    /// more than the page size to answer "is there another page?" without a second count
+    /// query, then trims with `.Take(currentSize)` before responding — so a specification
+    /// that over-fetches returns a byte-identical response, and `hasMore`
+    /// (`window.Count > currentSize`) stays correct too. Over-fetching on the catalogue path
+    /// is exactly what A-1 and OD-4 care about at 50,000 spectators.
+    /// </para>
+    /// <para>
+    /// Restored after the AD-036 Verifier found `Take(take)` → `Take(take + 1)` surviving all
+    /// 191 tests, having been killed before the refactor by the deleted
+    /// `UserSpecificationTests.Pages_together_contain_every_spectator_exactly_once`.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Catalogue_page_reads_exactly_the_window_it_was_asked_for()
+    {
+        for (var index = 0; index < 5; index++)
+            await GivenRegisteredUserAsync($"TICKET-{index}", $"20000{index}");
+
+        await using var context = fixture.CreateDbContext();
+        var repository = new UserRepository(context);
+
+        var firstTwo = await repository.ListAsync(new ActiveUsersPagedSpec(0, 2), CancellationToken.None);
+        var nextTwo = await repository.ListAsync(new ActiveUsersPagedSpec(2, 2), CancellationToken.None);
+        var past = await repository.ListAsync(new ActiveUsersPagedSpec(4, 2), CancellationToken.None);
+
+        Assert.Equal(2, firstTwo.Count);
+        Assert.Equal(2, nextTwo.Count);
+
+        // The tail is short because the data ran out, not because the window was wrong.
+        Assert.Single(past);
+
+        Assert.Equal(
+            ["TICKET-0", "TICKET-1", "TICKET-2", "TICKET-3", "TICKET-4"],
+            firstTwo.Concat(nextTwo).Concat(past).Select(user => user.ExternalRef.Value)
+        );
+    }
+
     // ─── The asymmetry of the two unique indexes ─────────────────────────
 
     [Fact]
@@ -285,6 +328,20 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         var byAccessCode = await new UserRepository(codeContext).AddIfKeysFreeAsync(
             NewUser("TICKET-2", "123456"),
             CancellationToken.None
+        );
+
+        // Literal text, deliberately, and this is the one place in the suite that does it.
+        // Comparing against the constants proves only that the right *branch* ran: swapping
+        // the two constants' values moves assertion and implementation together and survives
+        // the whole suite, which the AD-036 Verifier confirmed against 191 and 224 tests
+        // alike. A copy change is meant to fail here — once, visibly.
+        Assert.Equal(
+            "A user is already registered under this external reference.",
+            byExternalRef.AsT1.Message
+        );
+        Assert.Equal(
+            "This access code is already in use by another user.",
+            byAccessCode.AsT1.Message
         );
 
         Assert.Equal(IUserRepository.ExternalRefAlreadyRegistered, byExternalRef.AsT1.Message);

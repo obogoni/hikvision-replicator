@@ -1,5 +1,6 @@
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace HikvisionReplicator.IntegrationTests;
@@ -37,6 +38,35 @@ public class DevicePersistenceContractTests(PostgresFixture fixture) : IAsyncLif
         context.Devices.Add(device);
         await context.SaveChangesAsync();
         return device.Id;
+    }
+
+    // ─── AD-022: the address index maps to the address message ───────────
+
+    /// <summary>
+    /// A collision on the address index is reported as the address conflict, proved without a
+    /// race. `DeviceEndpointsTests` covers this too, but only through an 8-way concurrent
+    /// registration, so it holds when a racer loses the insert and not otherwise — the same
+    /// scheduling-dependent guard `docs/test-patterns.md` warns about. AD-036 added the
+    /// deterministic version for users and omitted it for devices; the Verifier caught it.
+    /// </summary>
+    [Fact]
+    public async Task Address_collision_is_reported_as_the_address_conflict()
+    {
+        await GivenRegisteredDeviceAsync("192.168.1.10");
+
+        await using var context = fixture.CreateDbContext();
+
+        var result = await new DeviceRepository(context).AddIfAddressFreeAsync(
+            NewDevice("192.168.1.10"),
+            CancellationToken.None
+        );
+
+        Assert.True(result.IsT1);
+
+        // Literal, for the reason UserPersistenceContractTests spells out: the constant alone
+        // would move with the implementation.
+        Assert.Equal("A device is already registered at this address.", result.AsT1.Message);
+        Assert.Equal(IDeviceRepository.AddressAlreadyRegistered, result.AsT1.Message);
     }
 
     // ─── AD-022: only the address index becomes a conflict ───────────────

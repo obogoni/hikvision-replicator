@@ -47,6 +47,13 @@ public class HarnessTests(PostgresFixture fixture) : IAsyncLifetime
 
         Assert.NotEmpty(applied);
         Assert.Contains(applied, migration => migration.EndsWith("InitialCreate"));
+
+        // Naming only the first migration would stay green with every later one unapplied,
+        // which is the state a half-migrated database is actually in (Verifier, AD-036).
+        Assert.Contains(
+            applied,
+            migration => migration.EndsWith("AddUserRegistry", StringComparison.Ordinal)
+        );
     }
 
     // ─── DEV-13: state is isolated between tests ─────────────────────────

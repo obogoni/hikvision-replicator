@@ -103,13 +103,17 @@ public class UserRemovalTests(PostgresFixture fixture) : UserApiTests(fixture)
 
         await RemoveAsync("TICKET-1");
 
-        await using var context = Fixture.CreateDbContext();
-        var listed = await new UserRepository(context).ListAsync(
-            new ActiveUsersPagedSpec(0, 10),
-            CancellationToken.None
-        );
+        // Through the catalogue route, not the specification behind it (AD-036). The Verifier
+        // found this test still constructing a repository and a spec — the one place the rule
+        // its own commit introduced was left violated.
+        var body = await ReadBodyAsync(await Client.GetAsync("/api/users"));
 
-        Assert.Equal(["TICKET-2"], listed.Select(user => user.ExternalRef.Value));
+        Assert.Equal(
+            ["TICKET-2"],
+            body.GetProperty("items")
+                .EnumerateArray()
+                .Select(item => item.GetProperty("externalRef").GetString())
+        );
     }
 
     // ─── USR-32 / A-16: repeating a removal is safe ──────────────────────

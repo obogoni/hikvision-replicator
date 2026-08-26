@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 39,
+  "next_id": 43,
   "lessons": [
     {
       "id": "L-001",
@@ -692,6 +692,78 @@
       ],
       "created": "2026-08-26T12:21:06Z",
       "last_seen": "2026-08-26T12:21:06Z"
+    },
+    {
+      "id": "L-039",
+      "key": "surviving_mutant::before deleting a component level test as redundant mutate the component and confirm a surviving test fails a caller that trims or compensates hides the component s wrong bound behind an identical response",
+      "text": "Before deleting a component-level test as redundant, mutate the component and confirm a surviving test fails; a caller that trims or compensates hides the component's wrong bound behind an identical response.",
+      "signal": "surviving_mutant",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation-ad036.md M8 — src/HikvisionReplicator.Api/Domain/Specs/ActiveUsersPagedSpec.cs:22 (tests)"
+      ],
+      "created": "2026-08-26T21:22:47Z",
+      "last_seen": "2026-08-26T21:22:47Z"
+    },
+    {
+      "id": "L-040",
+      "key": "surviving_mutant::when a rule requires proving a race reachable behaviour deterministically add the deterministic guard for every component that behaviour spans not only the one that prompted the rule",
+      "text": "When a rule requires proving a race-reachable behaviour deterministically, add the deterministic guard for every component that behaviour spans, not only the one that prompted the rule.",
+      "signal": "surviving_mutant",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation-ad036.md D2 — src/HikvisionReplicator.Api/Infrastructure/DeviceRepository.cs:49 (tests)"
+      ],
+      "created": "2026-08-26T21:22:47Z",
+      "last_seen": "2026-08-26T21:22:47Z"
+    },
+    {
+      "id": "L-041",
+      "key": "surviving_mutant::pin a user visible message against a literal in at least one test comparing it only to the constant the production code emits moves both together and asserts nothing",
+      "text": "Pin a user-visible message against a literal in at least one test; comparing it only to the constant the production code emits moves both together and asserts nothing.",
+      "signal": "surviving_mutant",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation-ad036.md M6 — src/HikvisionReplicator.Api/Shared/IUserRepository.cs:22-26 (tests)"
+      ],
+      "created": "2026-08-26T21:22:47Z",
+      "last_seen": "2026-08-26T21:22:47Z"
+    },
+    {
+      "id": "L-042",
+      "key": "gate_fail::after a mutation run rebuild before re testing restoring the source leaves the last build s mutated binary in place and dotnet test no build then reports a failure against code that is no longer on disk",
+      "text": "After a mutation run, rebuild before re-testing: restoring the source leaves the last build's mutated binary in place, and dotnet test --no-build then reports a failure against code that is no longer on disk.",
+      "signal": "gate_fail",
+      "scope": "testing",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "src/HikvisionReplicator.IntegrationTests/UserPersistenceContractTests.cs:338 (testing)"
+      ],
+      "created": "2026-08-26T21:32:05Z",
+      "last_seen": "2026-08-26T21:32:05Z"
     }
   ]
 }

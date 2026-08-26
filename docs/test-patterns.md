@@ -40,8 +40,9 @@ HTTP; verify wherever the truth lives.
 
 A test may go below the HTTP surface **only if it can name, in a sentence, an observable
 that HTTP cannot distinguish** — that is, a wrong implementation and a right one would
-return byte-identical responses. Those tests live in exactly two classes, and the sentence
-goes in the test's own doc comment:
+return byte-identical responses. Those tests live in exactly two classes. The sentence is
+usually carried by the class's four-kinds table below; a test that does not fit one of
+those kinds must carry its own in its doc comment:
 
 - `UserPersistenceContractTests`
 - `DevicePersistenceContractTests`
@@ -53,7 +54,8 @@ The four kinds that qualify today, and why HTTP is blind to each:
 | **What a read touches** | A response that omits the face bytes looks identical whether or not they were loaded. Only the emitted SQL discriminates — and these assertions are the only thing enforcing A-1, on the latency path AD-014 makes primary. |
 | **The shape of the two unique indexes** | Their asymmetry is deliberate and easy to misread. Swapping the filters leaves most round-trips green; `pg_indexes` does not lie. |
 | **Which failures are *not* translated** | AD-022 turns two named index violations into conflicts and everything else must stay an exception. Provoking a foreign constraint violation or a vanished row needs the database, not a request. |
-| **Cancellation, and the index→message mapping** | A pre-cancelled token proves the abort deterministically. The mapping is reachable through HTTP *only* when a racer slips past the service pre-check — which is scheduling, not evidence (AD-026). |
+| **Cancellation, and the index→message mapping** | A pre-cancelled token proves the abort deterministically. The mapping is reachable through HTTP *only* when a racer slips past the service pre-check — which is scheduling, not evidence (AD-026). Both aggregates need this, not just users. |
+| **The size of the window a page reads** | `ListUsersService` asks for one row more than the page size and trims before responding, so an over-fetching specification returns a byte-identical response and a correct `hasMore`. Over-fetching on the catalogue path is what A-1 and OD-4 care about. |
 
 That last row is the cautionary one. The mapping **is** asserted by the race tests in
 `UserRegistrationTests`, and they do catch a swapped mapping — but swapping it was observed
@@ -63,6 +65,11 @@ it deterministically as well.
 
 If a test you are about to add cannot state its blind-spot sentence, it belongs in a
 use-case class instead.
+
+### Two traps the AD-036 Verifier caught, both worth knowing
+
+- **Asserting against production's own constant is tautological.** `Assert.Equal(IUserRepository.AccessCodeAlreadyInUse, …)` proves the right *branch* ran, not that the message is right — swap the two constants' values and assertion and implementation move together, green all the way. Pin the **literal text** in exactly one place, and let a copy change fail there deliberately.
+- **A deleted test's coverage is only replaced if you check the direction that is invisible.** When the caller of a component compensates for it — here, over-fetching then trimming — a fault in the component never reaches the response. Before deleting a below-HTTP test, mutate the thing it covered and confirm a surviving test dies.
 
 ## Test isolation in the integration project
 
