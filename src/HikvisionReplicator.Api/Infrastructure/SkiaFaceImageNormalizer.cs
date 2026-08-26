@@ -117,10 +117,15 @@ public sealed class SkiaFaceImageNormalizer : IFaceImageNormalizer
 
         var (width, height) = Orient(encoded.Width, encoded.Height, codec.EncodedOrigin);
 
-        // USR-17. Checked against the *oriented* dimensions: a quarter-turn origin swaps width
-        // and height, so a portrait photograph stored as landscape pixels would otherwise be
-        // judged as the landscape image it is not. And never upscaled: manufacturing a compliant
-        // file out of one that is too small produces something no device can recognise.
+        // USR-17. Never upscaled: manufacturing a compliant file out of one that is too small
+        // produces something no device can recognise, so a sub-floor image is refused outright.
+        //
+        // The oriented dimensions are used for consistency with everything downstream, but note
+        // that THIS guard alone does not depend on them: Min/Max are invariant under the swap a
+        // quarter-turn origin performs, so orienting first cannot change its verdict. `Orient`
+        // is still required below — for the ceiling, the aspect ratio and the rotation itself.
+        // Verified by mutation: reverting this comparison to the encoded dimensions kills no
+        // test, because it genuinely cannot.
         if (
             Math.Min(width, height) < _options.MinShortEdge
             || Math.Max(width, height) < _options.MinLongEdge

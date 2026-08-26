@@ -38,7 +38,7 @@ No real location is committed to this repository.
 
 | Fixture | Format | Dimensions | How it is generated | What it exercises |
 | ------- | ------ | ---------- | ------------------- | ----------------- |
-| `exif-rotated-portrait.jpg` | JPEG | 1200×900 encoded, **900×1200 oriented** | fBm noise, hand-assembled EXIF APP1 with `Orientation=6`, `Make`, `Model` | USR-13 rotation. Also the **oriented-dimensions** floor check: the stored pixels are landscape and the display image is portrait, so a normalizer that judges the floor or the ceiling on `codec.Info` is looking at an image that is not there. |
+| `exif-rotated-portrait.jpg` | JPEG | 1200×900 encoded, **900×1200 oriented** | fBm noise, hand-assembled EXIF APP1 with `Orientation=6`, `Make`, `Model` | USR-13 rotation, asserted on **corner content** — 900×1200 alone cannot tell a clockwise from an anticlockwise quarter turn. Also the **ceiling and aspect-ratio** logic, which does depend on oriented dimensions. Note the *floor* check does **not**: `Min`/`Max` are invariant under the swap, so orienting first cannot change its verdict (verified by mutation, L-035). |
 | `large-fractal.jpg` | JPEG | 4000×3000 | fBm noise at quality 95 | USR-16 ceiling downscale; the multi-step "still over 200 KB at the lowest quality" ladder branch; USR-18 aspect preserved with no crop across several downscale rounds. |
 | `sub-floor-thumbnail.jpg` | JPEG | 320×240 | fBm noise | USR-17 reject-do-not-upscale. Below both floor edges. |
 | `plain.png` | PNG | 1200×900 | fBm noise, unoptimised PNG | USR-12 non-JPEG input must yield a canonical JPEG derivative. |
