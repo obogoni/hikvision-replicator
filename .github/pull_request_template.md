@@ -19,14 +19,44 @@
 
 <!-- Paste the actual counts. "Passed" without numbers is not evidence. -->
 
+Always run, whatever the PR changes:
+
 ```
 dotnet build HikvisionReplicator.slnx
 dotnet test src/HikvisionReplicator.Tests               # unit, Docker-free
+```
+
+- Unit: <!-- N passed -->
+- Build warnings: <!-- none / list -->
+
+### Integration tests
+
+Required **only when this PR changes compiled code or the build** — any `.cs`, `.csproj`,
+`.slnx`, `Directory.Build.props`, or `.editorconfig`. The last three are in the list because
+a project-file or ruleset change can break the integration suite without a single `.cs` line
+moving. A docs- or `.specs/`-only PR does not need a local Docker run.
+
+```bash
+# Does this PR touch compiled code or the build?
+git diff --name-only origin/main...HEAD \
+  | grep -E '\.cs$|\.csproj$|\.slnx$|Directory\.Build|\.editorconfig' || echo "no — skip"
+```
+
+Note the **three** dots: `origin/main...HEAD` diffs from the merge base, so it shows what this
+branch introduces rather than everything that has landed on `main` since you branched.
+
+Tick one:
+
+- [ ] **Not required** — the command above printed `no`. Paste its output as the evidence.
+- [ ] **Required and run** — Integration: <!-- N passed -->
+
+```
 dotnet test src/HikvisionReplicator.IntegrationTests    # integration, needs Docker
 ```
 
-- Unit: <!-- N passed --> · Integration: <!-- N passed -->
-- Build warnings: <!-- none / list -->
+Skipping locally never skips the gate: `.github/workflows/ci.yml` runs the **full** gate on
+every PR regardless of what changed, and `build-and-test` is a required check (AD-025/AD-027).
+This box decides what *you* run before pushing, not what merges.
 
 ## Migrations & config
 
