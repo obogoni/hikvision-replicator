@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 43,
+  "next_id": 44,
   "lessons": [
     {
       "id": "L-001",
@@ -764,6 +764,24 @@
       ],
       "created": "2026-08-26T21:32:05Z",
       "last_seen": "2026-08-26T21:32:05Z"
+    },
+    {
+      "id": "L-043",
+      "key": "ac_gap::before deleting a test as duplicated read the requirement it cites and what its assertion actually protects a string equality that looks like framework format pinning may be the only guard on a distinct property",
+      "text": "Before deleting a test as duplicated, read the requirement it cites and what its assertion actually protects; a string equality that looks like framework-format pinning may be the only guard on a distinct property.",
+      "signal": "ac_gap",
+      "scope": "testing",
+      "status": "candidate",
+      "features": [
+        "user-registry"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "src/HikvisionReplicator.IntegrationTests/UserObservabilityTests.cs:190 (testing)"
+      ],
+      "created": "2026-08-26T21:36:10Z",
+      "last_seen": "2026-08-26T21:36:10Z"
     }
   ]
 }

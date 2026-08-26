@@ -264,6 +264,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: src/HikvisionReplicator.IntegrationTests/UserPersistenceContractTests.cs:338 (testing)
 - last seen: 2026-08-26T21:32:05Z
 
+### L-043 — Before deleting a test as duplicated, read the requirement it cites and what its assertion actually protects; a string equality that looks like framework-format pinning may be the only guard on a distinct property.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: user-registry
+- evidence: src/HikvisionReplicator.IntegrationTests/UserObservabilityTests.cs:190 (testing)
+- last seen: 2026-08-26T21:36:10Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

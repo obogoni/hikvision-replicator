@@ -165,13 +165,21 @@ public class UserObservabilityTests(PostgresFixture fixture) : IAsyncLifetime
 
     // ─── USR-40: the request is traced ───────────────────────────────────
 
+    /// <summary>
+    /// USR-40's first clause: a user request is traced. Asserted on the <b>template</b> rather
+    /// than on the exact string OpenTelemetry happens to format, because the property worth
+    /// owning is that the external reference does not reach the span name. An interpolated
+    /// path would put an integrator's key into every span — unbounded cardinality, and the
+    /// same leak channel DEV-07 sweeps span attributes for.
+    /// </summary>
     [Fact]
-    public void Handled_user_request_produces_a_span_naming_the_route_that_served_it()
+    public void Handled_user_request_is_traced_under_the_route_template_not_the_caller_key()
     {
         var requestSpan = Assert.Single(RequestSpans());
 
         Assert.Equal(ActivityKind.Server, requestSpan.Kind);
-        Assert.Equal("PUT /api/users/{externalRef}", requestSpan.DisplayName);
+        Assert.Contains("{externalRef}", requestSpan.DisplayName, StringComparison.Ordinal);
+        Assert.DoesNotContain(ExternalRef, requestSpan.DisplayName, StringComparison.Ordinal);
     }
 
     // ─── USR-40: normalization is a distinct child of it ─────────────────
