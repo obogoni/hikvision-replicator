@@ -725,7 +725,13 @@ integration project; the user suites are split by concern); `spec.md`, where A-1
 
 ---
 
-### ✅ T26: E2E route confirmation
+### ✅ T26: E2E route confirmation — **retired before merge (AD-035)**
+
+> **This task's output no longer exists.** `src/HikvisionReplicator.E2E/` was deleted later on this
+> same branch: every one of its 17 tests duplicated an integration test and the suite ran in no
+> gate. The task is left recorded as executed because it *was* — the record below is what happened,
+> not what ships. See **AD-035** for why the level went with it.
+
 
 **What**: A thin out-of-process pass over each user route.
 **Where**: `src/HikvisionReplicator.E2E/UserEndpointsTests.cs`

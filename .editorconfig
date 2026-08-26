@@ -46,9 +46,12 @@ dotnet_analyzer_diagnostic.category-Style.severity = none
 
 # Test methods are named in plain English with underscores — docs/test-patterns.md § Naming
 # Tests. CA1707 ("identifiers should not contain underscores") contradicts that convention
-# and fires 304 times across the test projects; it is wrong here, not the names.
+# and fires at 391 distinct sites across the two test projects; it is wrong here, not the names.
 #
-# Glob note: `**.cs` — NOT `**/*.cs`. The latter requires at least one directory level and
-# so misses test files sitting directly in a project root, leaving 18 CA1707 behind.
-[src/HikvisionReplicator.{Tests,IntegrationTests,E2E}/**.cs]
+# Glob note: `**.cs` — NOT `**/*.cs`. The latter requires at least one directory level and so
+# misses test files sitting directly in a project root, leaving 205 of those 391 behind — which
+# is the whole of IntegrationTests, whose classes all sit in the project root. Both figures were
+# re-measured with --no-incremental after AD-035 removed the E2E project (L-007); the previous
+# comment's 304 and 18 were both stale.
+[src/HikvisionReplicator.{Tests,IntegrationTests}/**.cs]
 dotnet_diagnostic.CA1707.severity = none

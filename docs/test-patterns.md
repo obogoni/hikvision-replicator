@@ -13,7 +13,6 @@ declares the level you chose.**
 |---|---|---|---|
 | Pure logic with no I/O — domain aggregates, value objects, `EncryptionService`, options validation | **unit** | `src/HikvisionReplicator.Tests/`, folders mirroring the Api tree (`Domain/`, `Infrastructure/`) | All branches, 1:1 with the spec's acceptance criteria, every listed edge case |
 | Anything touching I/O or wiring — feature slices and their routes, repositories and specifications, startup behaviour, cross-cutting handlers | **integration** | `src/HikvisionReplicator.IntegrationTests/`, in-process through the HTTP surface against Testcontainers PostgreSQL | Every route: happy path, every listed edge case, every documented error path |
-| The HTTP surface out of process | **e2e** | `src/HikvisionReplicator.E2E/` | A thin confirmation of each route — one happy path and one error path. Not a coverage layer |
 
 Two rules keep the split honest:
 
@@ -44,24 +43,23 @@ HTTP. The two defects the rewrite fixed in `Device` — IP normalization and the
 `UpdatedAt` change-guard — are exactly that shape, and "no change means no touch" is not
 cleanly assertable through a round-trip.
 
-## Running the E2E suite
+## There is no end-to-end level
 
-```bash
-dotnet build src/HikvisionReplicator.E2E
-dotnet test src/HikvisionReplicator.E2E        # requires a running API
-```
+The `HikvisionReplicator.E2E` project was removed (AD-035). Every one of its 17 tests asserted
+something an integration test already asserted, and it ran in neither gate. **Do not add tests at
+a third level, and do not reinstate the project, until the unit and integration conventions above
+are settled and there is a deployment for a suite to smoke.**
 
-The suite drives the API through Playwright's `IAPIRequestContext`, which needs only the node
-driver shipped in the NuGet package — **no browser download, and no `pwsh`, is required.**
-Installing browsers (`playwright.ps1 install`, or `playwright install` after
-`dotnet tool install --global Microsoft.Playwright.CLI`) is only needed if browser-driven tests
-are ever added, and none exist today.
+The gap a real end-to-end suite would close is narrow and worth naming, because it is *not* route
+behaviour: `WebApplicationFactory` injects configuration rather than reading it, runs as
+environment `Test`, and serves requests through an in-memory `TestServer` with no socket. What
+lives outside that boundary is a shipped process finding its own config and its own key. When
+that becomes worth testing, it is a **deployment smoke test** — not a second copy of the route
+assertions.
 
-Point the suite at another host with `E2E_BASE_URL`:
-
-```bash
-E2E_BASE_URL=http://staging:5000 dotnet test src/HikvisionReplicator.E2E
-```
+The one thing `TestServer` genuinely cannot answer is already covered in-process:
+`KestrelWebApplicationFactory` puts the application on a real socket for the request-size limit,
+and its class comment explains why nothing else should join it there.
 
 ## Naming Tests
 
@@ -102,8 +100,6 @@ The subject can be omitted when it is obvious from the test class name.
 Group by resource and test scope:
 
 - `DeviceEndpointsTests` — integration tests for device HTTP endpoints
-- `UserEndpointsTests` — integration tests for user HTTP endpoints
+- `UserRegistrationTests` — integration tests for the user registration path
 
-Class names carry no level suffix — the project does. `DeviceEndpointsTests` therefore
-exists in both `HikvisionReplicator.IntegrationTests` and `HikvisionReplicator.E2E`, and
-the assembly tells them apart.
+Class names carry no level suffix — the project does.

@@ -250,6 +250,8 @@ correct it without a code change. Not a defect of this feature.
 - **Integration**: `dotnet test src/HikvisionReplicator.IntegrationTests` → **223 passed, 0 failed,
   0 skipped**
 - **E2E**: 17 tests, deliberately excluded from CI (needs a live API on :5000) — not re-run here.
+  **Superseded**: the E2E project was deleted later on this branch (**AD-035**), so the merged
+  state has no e2e level and this line describes a tree that no longer exists.
 - **Test integrity**: no test count decreased; no assertion was weakened; no test is skipped.
 - Re-run **after** all mutations were reverted: identical results, `git status` clean at
   `944922f`.

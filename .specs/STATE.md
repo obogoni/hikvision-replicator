@@ -158,7 +158,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: Tests need Docker and run slower than in-memory SQLite; CI must provide a Docker daemon.
 - **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.E2ETests/**`. Supersedes AD-011.
 - **Date**: 2026-08-02
-- **Status**: active — the "integration is the default level" clause is amended by AD-024; the Testcontainers requirement and behaviour-based naming stand unchanged
+- **Status**: active — the "integration is the default level" clause is amended by AD-024; the **Playwright/NUnit E2E clause lapses with AD-035**; the Testcontainers requirement and behaviour-based naming stand unchanged
 
 ### AD-020
 - **Decision**: Device face-library capacity is a **hard domain constraint modelled on the `Device` aggregate** (`FaceCapacity`), not an implementation detail. The bench/development unit holds 10,000 faces; production readers must hold at least the full user count (see AD-021).
@@ -202,7 +202,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: Two levels mean some rules are asserted twice, so a domain change can require edits in both a unit and an integration test. It also invites drift where a branch is unit-tested but never proven reachable through the API — mitigated by keeping AC-level coverage at the integration layer for **every** endpoint, so unit tests add depth rather than replacing endpoint coverage.
 - **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.E2ETests/**`, `docs/test-patterns.md`. Amends AD-019's default-level clause.
 - **Date**: 2026-08-12
-- **Status**: active — the layer definitions stand; **where each level lives is amended by AD-026**, which gives each its own project and retires the `[Trait("Category", "Unit")]` marker. Paths named above are pre-AD-026.
+- **Status**: active — the unit and integration layer definitions stand; **the e2e layer is removed by AD-035**. **Where each level lives is amended by AD-026**, which gives each its own project and retires the `[Trait("Category", "Unit")]` marker. Paths named above are pre-AD-026.
 
 ### AD-025
 - **Decision**: **Git workflow is branch-per-change, Conventional Commits, merged into `main` only through a squash-merged pull request.**
@@ -256,7 +256,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Consequence found during execution**: splitting the assemblies removed the scheduling cover that was hiding a real test-isolation defect. `TracingTests` asserted `Assert.Single` over a span sink that receives spans process-wide, and a parallel class's `GET /api/devices` made it fail deterministically once the 81 unit tests no longer occupied the parallel worker slots. Fixed in `267ab4a` by correlating on a `traceparent` the class alone provokes. **A gate that passes because of thread scheduling is not evidence** — see `docs/test-patterns.md` § Test isolation.
 - **Scope**: `src/HikvisionReplicator.Tests/**`, `src/HikvisionReplicator.IntegrationTests/**`, `src/HikvisionReplicator.E2E/**`, `HikvisionReplicator.slnx`, `CLAUDE.md`, `README.md`, `docs/test-patterns.md`, `.github/pull_request_template.md`, `.specs/ARCHITECTURE.md`. Amends AD-024's "where each level lives" clause; AD-024's layer definitions are unchanged.
 - **Date**: 2026-08-17
-- **Status**: active
+- **Status**: active — **amended by AD-035**, which deletes the `HikvisionReplicator.E2E` project and leaves two levels, not three. The project-name-declares-the-level rule is unchanged.
 
 ### AD-027
 - **Decision**: **Code style is enforced by the compiler on every build; the pull request is the gate. No hooks.**
@@ -265,12 +265,12 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
   - **`dotnet_diagnostic.IDE0055.severity = error`.** Formatting violations fail the build. `IDE0055` is the entire formatting layer as one diagnostic, which makes `dotnet build` the formatting gate and removes the need for a `dotnet format --verify-no-changes` step in CI.
   - **Severity is set per rule in `.editorconfig`, never with `-warnaserror`.** A clean build already emits 4 `NU1903` + 4 `CS0618`; `-warnaserror` would fail on those pre-existing, unrelated warnings.
   - **The fix command is `dotnet format whitespace`, never bare `dotnet format`.**
-  - **Exemptions**: EF Core migrations are generated code (`generated_code = true`, Style category `none`) so scaffolding can never break the build; `CA1707` is `none` in the three test projects.
-  - **`.github/workflows/ci.yml`** runs restore → build → unit → integration on every PR to `main` and on push to `main`. E2E is excluded (needs a live API).
+  - **Exemptions**: EF Core migrations are generated code (`generated_code = true`, Style category `none`) so scaffolding can never break the build; `CA1707` is `none` in the test projects — **two of them since AD-035**, and the glob was re-measured then (391 distinct sites, 205 of them missed by a `**/*.cs` glob).
+  - **`.github/workflows/ci.yml`** runs restore → build → unit → integration on every PR to `main` and on push to `main`. **Those are now all the levels there are** — the E2E-is-excluded caveat went with the project (AD-035).
   - **No git hooks and no `PostToolUse` editor hooks**, consistent with AD-025's rejection of hooks.
 - **Reason**: The repo had no `.editorconfig`, so nothing was enforced anywhere — a full `dotnet format` run reported only `WHITESPACE` diagnostics and zero style findings, because `IDE####` rules sit below `warning` by default and `EnforceCodeStyleInBuild` was unset. Development happens entirely through AI agents with no IDE, so the "as you type" layer that normally catches style does not exist here; and there was **no CI workflow at all**, so nothing mechanical stood between an agent's edit and `main`. The compiler is the one tool an agent already runs and already reads the output of, which makes it the natural enforcement point: a style violation arrives in the same channel as a compiler error and cannot be scrolled past.
 - **Reason the hook approach was rejected**: the starting proposal was a `PostToolUse` hook running `dotnet format` on each edited file. Measured at **6.4–8.2 s per invocation** (full MSBuild workspace load every time) on every `Write`/`Edit`; `dotnet format whitespace --folder` is 1.35 s but still per-edit. Worse, the sketch was silently inert — `$FILE_PATH` does not exist (hook input arrives as JSON on stdin at `.tool_input.file_path`), and `--include ""` scopes to **nothing**, so it would have exited 0 having formatted no files while appearing configured. Hooks are also per-machine, absent from a fresh clone, and bypassable. Same class of failure AD-025 fixed by moving merge rules out of documentation and into repository settings.
-- **Reason for the exemptions**: `CA1707` ("identifiers should not contain underscores") fired **304 times**, entirely in the test projects, against the deliberate behaviour-based naming convention in `docs/test-patterns.md` § Naming Tests ("Words separated by underscores"). The rule is wrong here, not the names. Migrations are exempted because `dotnet ef` regenerates them and a scaffolded file must never fail a build.
+- **Reason for the exemptions**: `CA1707` ("identifiers should not contain underscores") fired **304 times** at the time of measurement, entirely in the test projects, against the deliberate behaviour-based naming convention in `docs/test-patterns.md` § Naming Tests ("Words separated by underscores"). The rule is wrong here, not the names. Migrations are exempted because `dotnet ef` regenerates them and a scaffolded file must never fail a build.
 - **Trade-off**: `AnalysisMode=Recommended` surfaces **10 `CA` findings** that are warnings only, so they do not gate — real risk of warning blindness, mitigated by enumerating them in `.specs/features/code-style-enforcement/spec.md` rather than leaving an anonymous warning cloud. Pinning `AnalysisLevel=10.0` means an SDK upgrade will *not* bring new rules automatically; that is deliberate (reproducibility) but must be revisited on purpose. `IDE0055` as an error also means the formatter's canonical output wins over local taste — the reformat of `DeviceRepository.IsAddressConflict` is arguably less readable, and that is the accepted price of not arguing with a formatter.
 - **Measured during execution** (all on a clean `--no-incremental` solution build):
   - `AnalysisMode` cost, *after* `CA1707` was exempted: `Minimum` → 0 findings · `Recommended` → 10 · (`Recommended` before the exemption → 326).
@@ -280,7 +280,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
   - **Lesson L-007 corroborated independently.** An up-to-date incremental build reported "Build succeeded" with zero diagnostics on code that a `--no-incremental` build failed with 5 `error IDE0055`. This is a false-green an agent can easily trust; the first build after a change is the signal.
 - **Scope**: `.editorconfig`, `Directory.Build.props`, `.github/workflows/ci.yml` (both new), `CLAUDE.md` (§ Code Style, § Gate commands), and 5 whitespace lines in `Api/Infrastructure/DeviceRepository.cs` and `Api/Shared/IRepository.cs`. Does **not** move `TargetFramework`/`Nullable`/`ImplicitUsings` out of the four `.csproj` files — deferred. No `.git-blame-ignore-revs`: only 5 lines are reformatted, so the convention becomes worthwhile at the first wide sweep.
 - **Date**: 2026-08-17
-- **Status**: active
+- **Status**: active — **amended by AD-035** on the two clauses that named live configuration: the `CA1707` exemption now covers two test projects, not three, and `ci.yml` no longer carries an E2E-exclusion caveat. The enforcement mechanism is unchanged.
 
 ### AD-028
 - **Decision**: **Feature-level validation runs as a fresh Verifier sub-agent — author ≠ verifier — and this entry is the standing authorisation for it.**
@@ -326,6 +326,17 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Date**: 2026-08-20
 - **Status**: active
 
+### AD-035
+- **Decision**: **The end-to-end level is removed.** `HikvisionReplicator.E2E` is deleted from the tree and from `HikvisionReplicator.slnx`, and Playwright and NUnit leave the solution with it. Test levels are now **two**: `HikvisionReplicator.Tests` (unit) and `HikvisionReplicator.IntegrationTests` (integration). **No third level may be reintroduced** until (a) the unit and integration conventions are settled — the granularity review that prompted this is still open — and (b) a deployment exists for a suite to smoke. If one returns, it returns as a **deployment smoke test** asserting what a shipped process does that `WebApplicationFactory` cannot — real configuration, real environment, real socket — and explicitly **not** as a second copy of route assertions.
+- **Reason**: The suite asserted nothing that was not already asserted. All 17 tests mapped 1:1 onto an integration test, several verbatim: `Getting_unknown_device_returns_not_found`, `Removed_device_is_no_longer_retrievable` and `Nonsensical_page_request_is_answered_rather_than_refused` exist under the same names in both projects, and `New_device_is_created_and_returned` differed in neither name nor assertion. It also ran nowhere — excluded from `ci.yml` by its own comment, absent from both gate commands in `CLAUDE.md`, and touched by exactly two commits in its lifetime (`9774e7a`, `9783e0b`). A suite that only ever compiles is a compile check, and this one cost a second test framework and a Playwright dependency used solely as an HTTP client.
+- **Reason the level itself did not survive the tests**: AD-024 gave e2e a purpose — "a thin confirmation of each route" — and that purpose is what produced the duplication, because route confirmation is exactly what `TestServer` already answers faithfully. The genuine out-of-process gap is narrower and different in kind: `TestWebApplicationFactory` **injects** `ConnectionStrings:DefaultConnection` and `Encryption:Key` as an in-memory source rather than reading real configuration, runs as environment `Test`, and never opens a socket. Nothing in the retired suite tested any of that. Keeping a level whose stated job is the wrong job is worse than having no level.
+- **Trade-off**: Real coverage is lost even though no assertion is. Nothing now proves the application boots from real configuration, that `docker-compose.yml`'s PostgreSQL works, or that the shipped process finds its encryption key — failures that would surface at first deploy instead of in CI. That is accepted because there is no deployment yet (`ROADMAP.md` Phase 4), and because the retired suite did not cover those things either, so nothing that was actually being caught stops being caught. **The debt is deliberate and is this entry.** The one `TestServer` limitation that mattered stays covered in-process: `KestrelWebApplicationFactory` serves the request-size test on a real socket.
+- **Consequence for the CA1707 glob**: `.editorconfig`'s test-project glob drops `E2E`. The comment above it cited "18 CA1707" as the residue a `**/*.cs` glob would leave — a figure `code-style-enforcement`'s validation had already found wrong (D-5: the real residue was 92 sites, and 18 was the raw line count for `E2E/DeviceEndpointsTests.cs` alone). Both magnitudes were re-measured against the tree after removal rather than adjusted by arithmetic.
+- **Scope**: `src/HikvisionReplicator.E2E/**` (deleted), `HikvisionReplicator.slnx`, `.editorconfig`, `.github/workflows/ci.yml`, `.github/pull_request_template.md`, `CLAUDE.md`, `README.md`, `docs/test-patterns.md`. **Amends AD-024's level definitions** by removing the e2e row, and **amends AD-026** by reducing its three projects to two. AD-024's unit/integration definitions and AD-026's project-declares-the-level rule are unchanged. AD-019's and AD-011's Playwright/NUnit clauses lapse. Does **not** settle the integration-granularity question that prompted this — that remains open.
+- **Numbering**: this is **AD-035**, not AD-032, because **AD-032, AD-033 and AD-034 are already reserved** by `user-registry`'s `design.md` (binary-payload table, normalize-at-the-boundary, tombstone + asymmetric index) and are still owed an entry here — see § Outstanding follow-ups. The gap is deliberate; do not backfill it with anything else.
+- **Date**: 2026-08-26
+- **Status**: active
+
 ---
 
 ## Handoff
@@ -334,6 +345,8 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Phase / Task**: All 5 phases, T1–T26, done. Execute finished; the Verifier returned **PASS**.
 - **Completed**: spec.md · design.md · tasks.md · validation.md. 47 commits on `feat/user-registry` off `main` at `738f6b3`. **Pre-squash hashes — they resolve only via the PR.** Executed as four sequential batch sub-agents (T1–T7, T8–T13, T14–T21, T22–T26), then a fresh Verifier — **author ≠ verifier was satisfied this time**, the first feature for which that is true (AD-028).
 - **In-progress** (file:line): none.
+- **Also on this branch, outside `user-registry`'s scope**: the **E2E level was removed** (AD-035) — project deleted, Playwright and NUnit out of the solution, docs and CI comments updated, T26's record annotated as retired. Folded into PR #15 by explicit decision rather than taking its own branch, because PR #15 is what introduced `E2E/UserEndpointsTests.cs` and any other ordering left that file orphaned in a directory with no csproj.
+- **Open, not decided**: the **integration-test granularity review** that prompted the E2E removal. The finding: of 224 integration tests, ~146 are already use-case black box through HTTP, but ~45 drive repositories, specifications and the schema directly, and **~25 of those 45 have a verbatim black-box twin**. A residue of ~8 genuinely is not reachable through HTTP — the SQL-shape assertions that enforce A-1 (no face-picture bytes loaded), the index-name-keyed conflict translation AD-022 warns about, and cancellation propagation. No decision was taken on any of it; nothing was deleted.
 - **Next step**: merge PR #15 (squash), then open a small follow-up branch for the three items below. Nothing else in `user-registry` is outstanding.
 - **Blockers**: none. CI `build-and-test` is green on PR #15.
 - **Uncommitted files**: none.
@@ -406,6 +419,6 @@ real debt, not notes:
 
 - **Pre-existing warnings, unchanged by this feature**: 10 `CA` + 4 `CS0618` + 4 `NU1903` (SSH.NET,
   transitive via Testcontainers). Baseline, not debt introduced here. Never use `-warnaserror`.
-- **Test totals**: 282 unit · 224 integration · 17 E2E. Entering `user-registry` they were 81 · 88 · 9.
+- **Test totals**: 282 unit · 224 integration, both green. **There is no E2E figure any more** — the project was deleted on this branch (AD-035) and its 17 tests were *removed, not converted*, each having duplicated an integration test. Entering `user-registry` the totals were 81 · 88 (+ 9 E2E).
 - **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`,
   `002-adr-conformance` (local-only, no upstream).
