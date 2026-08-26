@@ -5,7 +5,8 @@ using HikvisionReplicator.Api.Shared;
 namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
-/// A PUT naming a removed spectator brings them back (A-7, USR-34).
+/// <b><c>UpsertUser</c>, part three of three: resurrection.</b> A PUT naming a removed spectator
+/// brings them back (A-7, USR-34).
 /// <para>
 /// The whole path hangs on the upsert looking the reference up <em>including tombstones</em>. An
 /// active-only lookup would report the reference as unregistered, take the create branch, and
@@ -14,11 +15,8 @@ namespace HikvisionReplicator.IntegrationTests;
 /// produces.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public class UserResurrectionTests(PostgresFixture fixture) : UserApiTests(fixture)
+public partial class UpsertUserTests
 {
-    private static readonly DateTimeOffset Kickoff = new(2026, 8, 25, 18, 45, 0, TimeSpan.Zero);
-
     private async Task<int> GivenRemovedSpectatorAsync(
         string externalRef = "TICKET-1",
         string accessCode = DefaultAccessCode

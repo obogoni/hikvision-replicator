@@ -8,7 +8,8 @@ namespace HikvisionReplicator.IntegrationTests;
 /// <summary>
 /// <b>The exception to the black-box rule, and the whole of it for devices (AD-036).</b>
 /// <para>
-/// Device behaviour is asserted through the HTTP surface in <see cref="DeviceEndpointsTests"/>.
+/// Device behaviour is asserted through the HTTP surface, one class per use case — see
+/// <see cref="RegisterDeviceTests"/> and its siblings.
 /// These two are here because HTTP cannot distinguish a right implementation from a wrong one:
 /// an untranslated failure and a translated one both leave the caller with a response, and a
 /// cancellation racing a live request would assert scheduling luck rather than the abort.
@@ -44,7 +45,7 @@ public class DevicePersistenceContractTests(PostgresFixture fixture) : IAsyncLif
 
     /// <summary>
     /// A collision on the address index is reported as the address conflict, proved without a
-    /// race. `DeviceEndpointsTests` covers this too, but only through an 8-way concurrent
+    /// race. `RegisterDeviceTests` covers this too, but only through an 8-way concurrent
     /// registration, so it holds when a racer loses the insert and not otherwise — the same
     /// scheduling-dependent guard `docs/test-patterns.md` warns about. AD-036 added the
     /// deterministic version for users and omitted it for devices; the Verifier caught it.

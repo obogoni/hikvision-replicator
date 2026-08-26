@@ -7,7 +7,7 @@ namespace HikvisionReplicator.IntegrationTests;
 /// Answering "is this spectator registered, and what do we hold for them?" during a live event.
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public class UserLookupTests(PostgresFixture fixture) : UserApiTests(fixture)
+public class GetUserTests(PostgresFixture fixture) : UserApiTests(fixture)
 {
     private static readonly DateTimeOffset Kickoff = new(2026, 8, 25, 18, 45, 0, TimeSpan.Zero);
 

@@ -10,7 +10,7 @@ namespace HikvisionReplicator.IntegrationTests;
 /// falls between rows, which is where a non-total order loses or repeats one of them.
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public class UserCatalogueTests(PostgresFixture fixture) : UserApiTests(fixture)
+public class ListUsersTests(PostgresFixture fixture) : UserApiTests(fixture)
 {
     private Task<HttpResponseMessage> ListAsync(string query = "") =>
         Client.GetAsync($"/api/users{query}");

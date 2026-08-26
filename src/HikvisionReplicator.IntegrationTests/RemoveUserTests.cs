@@ -16,7 +16,7 @@ namespace HikvisionReplicator.IntegrationTests;
 /// </para>
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public class UserRemovalTests(PostgresFixture fixture) : UserApiTests(fixture)
+public class RemoveUserTests(PostgresFixture fixture) : UserApiTests(fixture)
 {
     private static readonly DateTimeOffset Kickoff = new(2026, 8, 25, 18, 45, 0, TimeSpan.Zero);
 

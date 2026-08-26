@@ -364,6 +364,18 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Date**: 2026-08-26
 - **Status**: active
 
+### AD-037
+- **Decision**: **A test class is named after the use case it covers** — the slice folder under `Features/{Resource}/{Operation}/` with `Tests` appended. `UpsertUser` → `UpsertUserTests`, `RegisterDevice` → `RegisterDeviceTests`. Two riders:
+  - **When one use case serves several situations, split the file, not the class.** `UpsertUser` is a single idempotent route (A-2) covering three situations, so it is one `partial class UpsertUserTests` across `UpsertUserTests.Registration.cs`, `.Amendment.cs` and `.Resurrection.cs`. Split on **what the registry held before the call**, never on a cross-cutting axis such as "validation" — a validation test belongs with the situation whose request carries the field.
+  - **Cross-cutting classes are named for their concern**, which is how a reader tells them apart from use-case classes at a glance: `UserExternalRefTests`, `CredentialLeakageTests`, `TracingTests`, `UserObservabilityTests`, `StartupTests`, `ErrorHandlingTests`, `UserRequestSizeTests`, `HarnessTests`, and the two `PersistenceContract` classes (AD-036's below-HTTP exception).
+- **Reason**: Findability, and the previous names actively worked against it in both directions. `DeviceEndpointsTests` was **one class of 55 tests and 873 lines covering five separate use cases** — the largest class in the suite, and the only way to find a route's tests was to scroll to the right section comment. In the other direction, three well-named user classes (`UserRegistrationTests`, `UserAmendmentTests`, `UserResurrectionTests`) covered **one** route between them, so "where are the upsert tests?" had three answers and none of them said `UpsertUser`. Naming from the slice folder removes the question entirely: the folder name *is* the class name.
+- **Reason the partial class rather than one file or three classes**: a strict single `UpsertUserTests.cs` would be 44 tests and ~800 lines — recreating the `DeviceEndpointsTests` problem this entry exists to fix. Three prefixed classes (`UpsertUserRegistrationTests`, …) keep files small but stop the class name being the use case name, which is the whole convention. The partial class is the only option that satisfies both: one class named for the use case, three files named for the situations, and a search for `UpsertUser` finds all of them.
+- **Trade-off**: A partial test class is unusual enough to surprise a reader, and it has one hard constraint — `[Collection]` and the primary constructor may appear on exactly **one** part, so `UpsertUserTests.cs` owns both plus any shared member (`Kickoff`). Add a second `[Collection]` and it is a compile error, which is at least a loud failure rather than a quiet one. The cross-cutting carve-out is the softer edge: it is a judgement call whether a new test is cross-cutting or belongs to a use case, and nothing mechanical decides it. `UserExternalRefTests` is the honest hard case — it exercises `UpsertUser`, `GetUser` and `RemoveUser`, and lives outside them because the thing it covers is key escaping across all of them rather than any one route's behaviour.
+- **Mechanical guarantee**: this is a pure move — no assertion was added, removed or altered, so **the count had to hold exactly, and did: 193 before, 193 after.** `DeviceEndpointsTests`' 55 split as 29 + 4 + 3 + 14 + 5, which sums to 55. A `DeviceApiTests` base was extracted to mirror the existing `UserApiTests`, taking the twelve helpers the five classes share; two defects surfaced from that extraction and were fixed rather than suppressed — a missing `Microsoft.EntityFrameworkCore` using, and `CS9107` where a split class captured `fixture` directly instead of using the base's `Fixture` property.
+- **Scope**: `src/HikvisionReplicator.IntegrationTests/**`, `docs/test-patterns.md`. Renames only; **supersedes nothing**. AD-036's black-box rule and its two-class exception are unchanged — this entry says what the resulting classes are *called*, not what they may drive. AD-026's "class names carry no level suffix, the project does" still holds.
+- **Date**: 2026-08-26
+- **Status**: active
+
 ---
 
 ## Handoff
@@ -447,6 +459,6 @@ real debt, not notes:
 
 - **Pre-existing warnings, unchanged by this feature**: 10 `CA` + 4 `CS0618` + 4 `NU1903` (SSH.NET,
   transitive via Testcontainers). Baseline, not debt introduced here. Never use `-warnaserror`.
-- **Test totals**: 282 unit · 191 integration, both green (224 → 191 via AD-036; see below). **There is no E2E figure any more** — the project was deleted on this branch (AD-035) and its 17 tests were *removed, not converted*, each having duplicated an integration test. Entering `user-registry` the totals were 81 · 88 (+ 9 E2E).
+- **Test totals**: 282 unit · 193 integration, both green (224 → 191 via AD-036, → 193 after its Verifier's fixes; AD-037 renamed and re-split the classes without moving the count). **There is no E2E figure any more** — the project was deleted on this branch (AD-035) and its 17 tests were *removed, not converted*, each having duplicated an integration test. Entering `user-registry` the totals were 81 · 88 (+ 9 E2E).
 - **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`,
   `002-adr-conformance` (local-only, no upstream).

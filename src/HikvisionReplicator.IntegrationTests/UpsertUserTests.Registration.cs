@@ -6,14 +6,12 @@ using HikvisionReplicator.Api.Shared;
 namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
-/// Registering a spectator the registry has never seen — the create half of the idempotent
-/// upsert (A-2).
+/// <b><c>UpsertUser</c>, part one of three: registration.</b> Registering a spectator the
+/// registry has never seen — the create half of the idempotent upsert (A-2). The class doc is
+/// in <c>UpsertUserTests.cs</c>.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public class UserRegistrationTests(PostgresFixture fixture) : UserApiTests(fixture)
+public partial class UpsertUserTests
 {
-    private static readonly DateTimeOffset Kickoff = new(2026, 8, 25, 18, 45, 0, TimeSpan.Zero);
-
     // ─── USR-01: a valid registration ────────────────────────────────────
 
     [Fact]

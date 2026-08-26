@@ -58,7 +58,7 @@ The four kinds that qualify today, and why HTTP is blind to each:
 | **The size of the window a page reads** | `ListUsersService` asks for one row more than the page size and trims before responding, so an over-fetching specification returns a byte-identical response and a correct `hasMore`. Over-fetching on the catalogue path is what A-1 and OD-4 care about. |
 
 That last row is the cautionary one. The mapping **is** asserted by the race tests in
-`UserRegistrationTests`, and they do catch a swapped mapping — but swapping it was observed
+`UpsertUserTests`, and they do catch a swapped mapping — but swapping it was observed
 failing two of them on one run and one on the next. **A guard that depends on thread
 scheduling is not a guard.** When a use-case test can only reach something by racing, prove
 it deterministically as well.
@@ -149,11 +149,34 @@ Group by resource and test scope:
 
 Name a class for the **use case or situation** it covers, not for the component it exercises:
 
-- `UserRegistrationTests`, `UserAmendmentTests`, `UserResurrectionTests` — the three
-  situations the one `PUT /api/users/{externalRef}` upsert route serves
-- `UserRemovalTests`, `UserLookupTests`, `UserCatalogueTests` — one per remaining route
-- `DeviceEndpointsTests` — the five device routes
-- `UserPersistenceContractTests`, `DevicePersistenceContractTests` — the below-HTTP
-  exception above, and the only classes named after a mechanism
+**A test class is named after the use case it covers** (AD-037) — the slice folder under
+`Features/{Resource}/{Operation}/`, with `Tests` appended. `UpsertUser` → `UpsertUserTests`.
+Nothing else needs to be memorised: to find a route's tests, read its folder name.
+
+| Use case | Class |
+|---|---|
+| `Features/Users/UpsertUser` | `UpsertUserTests` (44) |
+| `Features/Users/GetUser` | `GetUserTests` (6) |
+| `Features/Users/ListUsers` | `ListUsersTests` (10) |
+| `Features/Users/RemoveUser` | `RemoveUserTests` (11) |
+| `Features/Devices/RegisterDevice` | `RegisterDeviceTests` (29) |
+| `Features/Devices/GetDevice` | `GetDeviceTests` (4) |
+| `Features/Devices/ListDevices` | `ListDevicesTests` (3) |
+| `Features/Devices/UpdateDevice` | `UpdateDeviceTests` (14) |
+| `Features/Devices/RemoveDevice` | `RemoveDeviceTests` (5) |
+
+**When one use case serves several situations, split the file, not the class.**
+`UpsertUser` is one idempotent route (A-2) covering three situations, so it is one
+`partial class UpsertUserTests` across `UpsertUserTests.Registration.cs`,
+`.Amendment.cs` and `.Resurrection.cs`. The class name still answers "which use case",
+each file stays readable, and the test explorer shows one class. Split on **what the
+registry held before the call** — never on a cross-cutting axis like "validation", which
+produces a test whose home nobody can predict.
+
+**Cross-cutting classes are named for their concern, not a use case**, and that is how you
+tell them apart at a glance: `UserExternalRefTests` (key escaping across every user route),
+`CredentialLeakageTests`, `TracingTests`, `UserObservabilityTests`, `StartupTests`,
+`ErrorHandlingTests`, `UserRequestSizeTests`, `HarnessTests`, and the two
+`PersistenceContract` classes — the below-HTTP exception above.
 
 Class names carry no level suffix — the project does.

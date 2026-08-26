@@ -6,18 +6,16 @@ using Microsoft.EntityFrameworkCore;
 namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
-/// Correcting a registered spectator — the update half of the idempotent upsert.
+/// <b><c>UpsertUser</c>, part two of three: amendment.</b> Correcting a registered spectator —
+/// the update half of the idempotent upsert.
 /// <para>
 /// PUT is a full representation (A-2) and the face picture is its sole exception (A-4), so every
 /// test here that omits a field expects a rejection, and only the one that omits the picture
 /// expects the stored image to survive.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public class UserAmendmentTests(PostgresFixture fixture) : UserApiTests(fixture)
+public partial class UpsertUserTests
 {
-    private static readonly DateTimeOffset Kickoff = new(2026, 8, 25, 18, 45, 0, TimeSpan.Zero);
-
     private async Task<byte[]> StoredPictureContentAsync(string externalRef)
     {
         var user = await StoredUserAsync(externalRef);
