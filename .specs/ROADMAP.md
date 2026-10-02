@@ -26,15 +26,19 @@ API; this service owns propagation to devices, not the ticketing truth.
 |---|---|---|
 | Users | up to 50,000 | confirmed |
 | **Enrolled faces per device** | **10,000 (hard hardware limit)** | confirmed — AD-020 |
-| Devices / readers | **unknown — needed** | ⚠️ open |
+| Devices / readers | **20** (planning figure, not a surveyed inventory) | AD-038 |
 | Face picture size | ≤ 200 KB each | current domain rule |
-| Live-sync latency (single new user → all devices) | **unknown — needed** | ⚠️ open |
-| Bulk-load window (full 50k seed before an event) | **unknown — needed** | ⚠️ open |
+| Live-sync latency (single new user → all devices) | **p95 < 30 s**, measured *while a bulk backfill runs* | AD-038 — resolves OD-5 |
+| Bulk-load window (full 50k seed before an event) | **overnight — 8 h** | AD-038 |
 
 **Derived load** (arithmetic, not a measurement): a full fan-out is
 `50,000 × D` replication operations and `10 GB × D` of face-image transfer.
-At D=50 that is 2.5M operations; at D=100, 5M. This number sizes every
-decision in Phase 2.
+At the fixed D=20 that is **1M operations** and ~150–200 GB of transfer
+(~7.5 GB stored per AD-032, × 20); at D=50 it would be 2.5M, at D=100, 5M.
+Against the 8 h window, 1M operations is ≈35 ops/s aggregate and ≈5–7 MB/s —
+but **≈1.7 enrolments/s per device regardless of D**, since every device
+needs the same 50,000 faces. Bulk throughput is therefore not the binding
+constraint; the live lane's p95 while bulk runs is (AD-038).
 
 ---
 
@@ -44,10 +48,10 @@ decision in Phase 2.
 |---|---|---|---|
 | ~~OD-1~~ | **RESOLVED — capacity is modelled per device** (AD-020); bench unit holds 10,000. | — | — |
 | ~~OD-2~~ | **RESOLVED — PostgreSQL from the first commit** (AD-018). Integration tests move to Testcontainers (AD-019). | — | — |
-| OD-3 | **Job runner.** Reopened by AD-018: Hangfire on PostgreSQL is now viable, where Hangfire on SQLite was not. **No incumbent to default to** — AD-030 supersedes AD-010's Hangfire mandate, and the solution contains no job runner of any kind. | Hangfire+PostgreSQL for Phase 1's simple enqueue needs; validate under the derived Phase 2 load before committing, with a purpose-built hosted worker polling the replication table as the fallback (the queue design supports either). **Recommendation only — this decision is not taken.** | Phase 2 |
+| OD-3 | **Job runner.** Reopened by AD-018: Hangfire on PostgreSQL is now viable, where Hangfire on SQLite was not. **No incumbent to default to** — AD-030 supersedes AD-010's Hangfire mandate, and the solution contains no job runner of any kind. **Narrowed by AD-039**: it is no longer a Phase 2 entry gate — feature 3 `replication-queue` ships runner-agnostic and feature 4 `replication-worker` owns the resolution. | Hangfire+PostgreSQL's Phase-1 half is moot — Phase 1 shipped with no enqueue needs at all. Weigh a purpose-built hosted worker polling the replication table (`FOR UPDATE … SKIP LOCKED`) against Hangfire under AD-038's envelope, noting that Hangfire gives no in-queue ordering guarantee and prioritises queues alphabetically on PostgreSQL, so per-device ordering lives in our table either way. **Recommendation only — this decision is not taken.** | Phase 2, feature 4 |
 | ~~OD-6~~ | **RESOLVED — higher-capacity hardware** (AD-021). AD-015's all-users-to-all-devices rule stands; scoping stays out of scope. Carries a standing risk: the fleet runs near 100% of each device's face library with no headroom, and the 10,000-face bench unit cannot validate full-scale enrolment. Mitigated by the mandatory `Device.FaceCapacity` guard. | — | — |
 | ~~OD-4~~ | **RESOLVED — a dedicated table inside PostgreSQL, never joined** (AD-032). Bytes live in `face_pictures`; `users` carries the fingerprint and the navigation is never auto-included, so a get, a list and a conflict check never touch the image table. **The recommendation opposite was rejected**: an external store cannot join the transaction that tombstones a user and destroys their biometric together (AD-034, USR-32), and a crash between the two would orphan a face. ~7.5 GB at 50,000 spectators is accepted; an orphaned biometric is not. | — | — |
-| OD-5 | **Live-sync latency SLO.** "A few minutes" needs a number to be testable — it becomes an acceptance criterion. | Propose: p95 under 30s from `POST /api/users` to enrolled on all healthy devices. Confirm or replace. | Phase 2 |
+| ~~OD-5~~ | **RESOLVED — p95 < 30 s** (AD-038), measured from a completed `PUT /api/users/{externalRef}` to enrolled on every healthy device **while a bulk backfill is in flight**. The proposed figure was confirmed; the route was corrected, as `POST /api/users` is not what `user-registry` shipped. An idle-queue reading was rejected — it is green throughout the exact scenario the SLO exists to protect. | — | — |
 | OD-7 | **Ciphertext format for device passwords.** AES-256-CBC (AD-008) gives confidentiality but no integrity check, so a tampered ciphertext fails at decrypt time rather than being detected (assumption A-8 of `device-registry`). | Move to AES-GCM behind a **versioned ciphertext prefix**. Decide before the first production deployment — a format migration is far cheaper while no real credentials are stored than after. | First production deploy |
 
 ---

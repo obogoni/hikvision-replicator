@@ -407,6 +407,22 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ---
 
+### AD-038
+- **Decision**: The Phase 2 load envelope is fixed at **20 devices**, an **overnight (8 h) bulk-load window** for a full 50,000-user seed, and a **live-sync SLO of p95 < 30 s** from a completed `PUT /api/users/{externalRef}` to enrolled on every healthy device. **The SLO is measured while a bulk backfill is in flight, not on a drained queue** — that is the acceptance criterion `replication-worker` is tested against. This resolves `ROADMAP.md` OD-5 and fills the three Scale Targets cells that read *unknown — needed*.
+- **Reason**: `CLAUDE.md` names latency from user creation to enrolled-on-every-device as the primary quality attribute (AD-014), but "a few minutes" cannot be asserted, so Phase 2 had no testable obligation to design against. The SLO was taken at OD-5's own proposed figure; the route was corrected to the upsert `user-registry` actually shipped, since `POST /api/users` does not exist. The idle-queue reading was rejected because it is the one measurement the driving scenario never produces — a spectator buys minutes before kickoff, which is exactly when a pre-event seed is running. An SLO that holds only on a quiet queue would be green throughout the failure it exists to prevent.
+- **Trade-off**: 20 is a planning figure, not a surveyed inventory, and the arithmetic it feeds is published as fact. Two consequences are worth holding: **per-device throughput does not depend on D** — every device needs the same 50,000 faces within the window, ≈1.7 enrolments/s, whatever the fleet size — so a later fleet change moves aggregate concurrency and bandwidth but leaves the per-device obligation untouched. And an 8 h window is generous against a 1M-operation fan-out (≈35 ops/s aggregate, ≈5–7 MB/s), which means **bulk throughput is not the binding constraint — the live lane's p95 while bulk runs is**. The priority lane is therefore load-bearing, not an optimisation.
+- **Scope**: `.specs/ROADMAP.md` Scale Targets and OD-5. Binds `replication-queue` and `replication-worker`; measured by `replication-worker`, surfaced by `replication-visibility`. Does not relax AD-021 — 50,000 users on every device (AD-015) still requires readers holding at least the full user count, independently of D.
+- **Date**: 2026-10-02
+- **Status**: active
+
+### AD-039
+- **Decision**: **OD-3 stays open past feature 3.** The job-runner choice is deferred to `replication-worker`'s (feature 4) design, and `replication-queue` ships **runner-agnostic**: a durable table plus domain rules — fan-out, idempotency, supersession of a pending intent by a newer one, and the priority lane **as data** — with no execution path, no scheduling, and no enqueue API shaped around a particular runner. Whichever runner feature 4 picks must be adoptable without changing the queue's schema or its domain rules, and feature 3's tests must drive the queue by direct invocation.
+- **Reason**: AD-030 left OD-3 open to be answered against the derived load; AD-038 now defines that load, but neither candidate has been validated under it, and arithmetic alone is not the validation OD-3 asks for. The queue's correctness rules are independent of who drains it, so feature 3 is not actually blocked. Evidence gathered while weighing the options reinforces this: Hangfire's in-queue execution order is storage-defined with no FIFO guarantee under concurrency, and on PostgreSQL queue priority is resolved by **alphabetical queue name** — so the per-device ordering guarantee Phase 2 requires (Add-then-Remove for one user must not race) has to live in our own table under *either* candidate. That removes the main reason to settle the runner before the table exists.
+- **Trade-off**: the decision sits on the critical path of the product's core capability one feature later than it could — the cost AD-030 already accepted — and feature 3 may not lean on a runner's retry, backoff or scheduling primitives in its own tests, which means some of that machinery is exercised only once feature 4 lands.
+- **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-queue` (runner-agnostic constraint) and `replication-worker` (owns the resolution).
+- **Date**: 2026-10-02
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: `user-registry` (`.specs/features/user-registry/`) — **complete and verified**, awaiting review on **PR #15**.
