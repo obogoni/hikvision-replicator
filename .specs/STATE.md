@@ -407,87 +407,59 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ---
 
+### AD-038
+- **Decision**: The Phase 2 load envelope is fixed at **20 devices**, an **overnight (8 h) bulk-load window** for a full 50,000-user seed, and a **live-sync SLO of p95 < 30 s** from a completed `PUT /api/users/{externalRef}` to enrolled on every healthy device. **The SLO is measured while a bulk backfill is in flight, not on a drained queue** — that is the acceptance criterion `replication-worker` is tested against. This resolves `ROADMAP.md` OD-5 and fills the three Scale Targets cells that read *unknown — needed*.
+- **Reason**: `CLAUDE.md` names latency from user creation to enrolled-on-every-device as the primary quality attribute (AD-014), but "a few minutes" cannot be asserted, so Phase 2 had no testable obligation to design against. The SLO was taken at OD-5's own proposed figure; the route was corrected to the upsert `user-registry` actually shipped, since `POST /api/users` does not exist. The idle-queue reading was rejected because it is the one measurement the driving scenario never produces — a spectator buys minutes before kickoff, which is exactly when a pre-event seed is running. An SLO that holds only on a quiet queue would be green throughout the failure it exists to prevent.
+- **Trade-off**: 20 is a planning figure, not a surveyed inventory, and the arithmetic it feeds is published as fact. Two consequences are worth holding: **per-device throughput does not depend on D** — every device needs the same 50,000 faces within the window, ≈1.7 enrolments/s, whatever the fleet size — so a later fleet change moves aggregate concurrency and bandwidth but leaves the per-device obligation untouched. And an 8 h window is generous against a 1M-operation fan-out (≈35 ops/s aggregate, ≈5–7 MB/s), which means **bulk throughput is not the binding constraint — the live lane's p95 while bulk runs is**. The priority lane is therefore load-bearing, not an optimisation.
+- **Scope**: `.specs/ROADMAP.md` Scale Targets and OD-5. Binds `replication-queue` and `replication-worker`; measured by `replication-worker`, surfaced by `replication-visibility`. Does not relax AD-021 — 50,000 users on every device (AD-015) still requires readers holding at least the full user count, independently of D.
+- **Date**: 2026-10-02
+- **Status**: active
+
+### AD-039
+- **Decision**: **OD-3 stays open past feature 3.** The job-runner choice is deferred to `replication-worker`'s (feature 4) design, and `replication-queue` ships **runner-agnostic**: a durable table plus domain rules — fan-out, idempotency, supersession of a pending intent by a newer one, and the priority lane **as data** — with no execution path, no scheduling, and no enqueue API shaped around a particular runner. Whichever runner feature 4 picks must be adoptable without changing the queue's schema or its domain rules, and feature 3's tests must drive the queue by direct invocation.
+- **Reason**: AD-030 left OD-3 open to be answered against the derived load; AD-038 now defines that load, but neither candidate has been validated under it, and arithmetic alone is not the validation OD-3 asks for. The queue's correctness rules are independent of who drains it, so feature 3 is not actually blocked. Evidence gathered while weighing the options reinforces this: Hangfire's in-queue execution order is storage-defined with no FIFO guarantee under concurrency, and on PostgreSQL queue priority is resolved by **alphabetical queue name** — so the per-device ordering guarantee Phase 2 requires (Add-then-Remove for one user must not race) has to live in our own table under *either* candidate. That removes the main reason to settle the runner before the table exists.
+- **Trade-off**: the decision sits on the critical path of the product's core capability one feature later than it could — the cost AD-030 already accepted — and feature 3 may not lean on a runner's retry, backoff or scheduling primitives in its own tests, which means some of that machinery is exercised only once feature 4 lands.
+- **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-queue` (runner-agnostic constraint) and `replication-worker` (owns the resolution).
+- **Date**: 2026-10-02
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: `user-registry` (`.specs/features/user-registry/`) — **complete and verified**, awaiting review on **PR #15**.
-- **Phase / Task**: All 5 phases, T1–T26, done. Execute finished; the Verifier returned **PASS**.
-- **Completed**: spec.md · design.md · tasks.md · validation.md. 47 commits on `feat/user-registry` off `main` at `738f6b3`. **Pre-squash hashes — they resolve only via the PR.** Executed as four sequential batch sub-agents (T1–T7, T8–T13, T14–T21, T22–T26), then a fresh Verifier — **author ≠ verifier was satisfied this time**, the first feature for which that is true (AD-028).
+- **Feature**: between features. `user-registry` is **merged** — PR #15 squash-landed on `main` as `38dbbfc`, CI green. Phase 1 is complete (`device-registry`, `user-registry`), both verified PASS.
+- **Phase / Task**: Phase 2 entry work. No feature in flight; `.specs/features/replication-queue/` does not exist yet.
+- **Completed this session**: resolved **OD-5** and narrowed **OD-3**, recorded as **AD-038** and **AD-039**, with `ROADMAP.md` Scale Targets and `CLAUDE.md`'s job-runner note brought into line. Two commits on `docs/resolve-od5-phase-2-load-envelope` off `main` at `38dbbfc`.
 - **In-progress** (file:line): none.
-- **Also on this branch, outside `user-registry`'s scope**: the **E2E level was removed** (AD-035) — project deleted, Playwright and NUnit out of the solution, docs and CI comments updated, T26's record annotated as retired. Folded into PR #15 by explicit decision rather than taking its own branch, because PR #15 is what introduced `E2E/UserEndpointsTests.cs` and any other ordering left that file orphaned in a directory with no csproj.
-- **Settled**: the **integration-test granularity review** is done and recorded as **AD-036**. Integration tests are now black box through the HTTP surface, one class per use case; the below-HTTP exception is two `PersistenceContract` classes, each test carrying a written sentence naming what HTTP cannot distinguish. 224 → 191 tests: 34 deleted as duplicates, 11 relocated, 1 added, 7 strengthened. **No assertion was lost** — the one that existed only below HTTP (which key collided) was folded into the 409 `detail` before anything was deleted.
-- **Carry forward from AD-036's sensor**: two mutations, two lessons. Asserting a response against the **same constant the production code uses** is tautological — swapping the constants' values passed all 190 tests. And the index→message mapping is reachable through HTTP only by winning a race past the service pre-check, so the race tests killed the real mutation **non-deterministically** (3 failures one run, 2 the next). Both are why `Each_colliding_key_is_reported_as_the_key_that_actually_collided` exists. This is the second scheduling-dependent-guard incident after AD-026's `TracingTests`; the general rule now lives in `docs/test-patterns.md`.
-- **Next step**: merge PR #15 (squash), then open a small follow-up branch for the three items below. Nothing else in `user-registry` is outstanding.
-- **Blockers**: none. CI `build-and-test` is green on PR #15.
-- **Uncommitted files**: none.
-- **Branch**: `feat/user-registry`, pushed, tracking `origin/feat/user-registry`, based on `main` at `738f6b3`.
+- **The Phase 2 envelope is now fixed** (AD-038): 20 devices · overnight 8 h bulk window · live-sync **p95 < 30 s measured while a backfill runs**. The per-device obligation (~1.7 enrolments/s) does not move with D; the binding constraint is the live lane under bulk, which makes the priority lane load-bearing rather than an optimisation.
+- **OD-3 is deliberately still open** (AD-039). `replication-queue` must ship **runner-agnostic** — table plus domain rules, priority lane as data, no execution path, no enqueue API shaped around a runner, tests driving it by direct invocation. Feature 4 `replication-worker` owns the runner choice. Research carried forward: Hangfire guarantees no in-queue ordering under concurrency and prioritises queues alphabetically on PostgreSQL, so per-device ordering lives in our own table under either candidate.
+- **Next step**: open the PR for `docs/resolve-od5-phase-2-load-envelope`, merge it, then **Specify `replication-queue`** off an updated `main` — Large scope, so full spec with requirement IDs, then design.md and tasks.md.
+- **Blockers**: none.
+- **Uncommitted files**: none tracked. `.agents/` and `.claude/` are untracked and undecided — gitignore them or commit them, but do not leave them to accumulate.
+- **Branch**: `docs/resolve-od5-phase-2-load-envelope`, not yet pushed, based on `main` at `38dbbfc`.
 
-### Outstanding follow-ups — deliberately not in PR #15
+### Still outstanding from `user-registry`
 
-These were left out because the chosen landing path scoped the PR to the feature itself. They are
-real debt, not notes:
-
-1. ~~**AD-032 / AD-033 / AD-034 are proposed in `design.md` but never written to `## Decisions`.**~~
-   **Done, 2026-08-26.** All three are recorded above and **ROADMAP OD-4 is marked resolved** —
-   noting there that AD-032 rejected OD-4's own recommendation (an external object store) because
-   it cannot join the transaction that tombstones a user and destroys the biometric together.
-   `replication-queue` inherits all three.
-2. **The semantic-image-quality gap is missing from `ROADMAP.md` § Known Gaps.** It is named in
-   `user-registry`'s spec: the face pipeline proves an image is *mechanically* acceptable, never
-   that it is a usable face. A profile shot or a spectator in a cap passes all 45 criteria and
-   fails at a turnstile, and Phase 4 `reconciliation` will not catch it either — it compares our
-   belief against the device, not against reality.
-3. **A-13 carries a standing Phase 3 obligation.** The official ISAPI face-record envelope could
-   not be read directly (the wiki is behind a JS app); the 40–200 KB band and the 640×480 floor come
-   from Hikvision's DS-K1T606 terminal documentation. `isapi-device-client` must verify both against
-   real hardware and supersede A-13 if they differ. The envelope lives in `FaceImageOptions`, so a
-   correction is a config change, not a code change.
+1. **The semantic-image-quality gap is still missing from `ROADMAP.md` § Known Gaps.** The face pipeline proves an image is *mechanically* acceptable, never that it is a usable face: a profile shot or a spectator in a cap passes all 45 criteria and fails at a turnstile, and Phase 4 `reconciliation` will not catch it — it compares our belief against the device, not against reality. One table row; it was not folded into this session's commits to keep them to their own subject.
+2. **A-13 carries a standing Phase 3 obligation.** The 40–200 KB band and the 640×480 floor come from DS-K1T606 terminal documentation, not the official ISAPI envelope (the wiki is behind a JS app). `isapi-device-client` must verify both against real hardware and supersede A-13 if they differ. The envelope lives in `FaceImageOptions`, so a correction is a config change.
+3. **Lessons: 36 candidates, 1 confirmed.** Reading the log auto-prunes — `lessons.py list` dropped L-001…L-006 this session at the 45-day `window_days`, committed as `3ffedce`. Only **L-007** is confirmed, so it is the only lesson that loads at Specify and Design; the other 36 are tracked but not trusted. A promotion pass is unscheduled work, not a blocker.
 
 ### What `user-registry` established that later features inherit
 
-- **`PUT /api/users/{externalRef}`** upsert, `GET`, `DELETE`, paged `GET /api/users`. Removal
-  **tombstones** the row (`DeletedAt`) and **destroys the face bytes in the same transaction** —
-  Phase 2's Remove path gets a live FK target and no biometric.
-- **The two unique indexes are deliberately asymmetric.** `IX_users_ExternalRef` covers all rows
-  (resurrection must find a tombstone by key); `IX_users_AccessCode` is partial on
-  `WHERE "DeletedAt" IS NULL` (a removed spectator's PIN returns to the pool). Any change to one
-  must re-check the other — the Verifier killed a mutation in each direction.
-- **`IFaceImageNormalizer`** converts any reasonable upload into the device envelope. **The 40 KB
-  figure is a lower bound** — over-compression is a rejection cause, so an upper-bound-only check is
-  wrong. The encode ladder is **fixed, never a bisection search**, because a byte-identical re-upsert
-  must not advance `UpdatedAt`.
-- **SkiaSharp 3.119.4**, not ImageSharp: ImageSharp v4 fails the build without a committed
-  `sixlabors.lic` and its free sample licence expired 2026-09-04. Golden hashes are recorded against
-  that exact version; a SkiaSharp upgrade will fail them **by design** — review and re-record, never
-  loosen.
-- **Fixtures are generated**, so none carries authentic camera encoder output (`tests/assets/`,
-  generator + committed outputs). A green suite is not evidence of real-world coverage; see item 3.
-- **`InternalsVisibleTo` now covers `HikvisionReplicator.Tests`**, so `FromPersistence` and
-  aggregate-internal mutators are asserted directly rather than by reflection.
+- **`PUT /api/users/{externalRef}`** upsert, `GET`, `DELETE`, paged `GET /api/users`. Removal **tombstones** the row (`DeletedAt`) and **destroys the face bytes in the same transaction** — Phase 2's Remove path gets a live FK target and no biometric.
+- **The two unique indexes are deliberately asymmetric.** `IX_users_ExternalRef` covers all rows (resurrection must find a tombstone by key); `IX_users_AccessCode` is partial on `WHERE "DeletedAt" IS NULL` (a removed spectator's PIN returns to the pool). Any change to one must re-check the other — the Verifier killed a mutation in each direction.
+- **`IFaceImageNormalizer`** converts any reasonable upload into the device envelope. **The 40 KB figure is a lower bound** — over-compression is a rejection cause, so an upper-bound-only check is wrong. The encode ladder is **fixed, never a bisection search**, because a byte-identical re-upsert must not advance `UpdatedAt`.
+- **SkiaSharp 3.119.4**, not ImageSharp: ImageSharp v4 fails the build without a committed `sixlabors.lic` and its free sample licence expired 2026-09-04. Golden hashes are recorded against that exact version; a SkiaSharp upgrade will fail them **by design** — review and re-record, never loosen.
+- **Fixtures are generated**, so none carries authentic camera encoder output (`tests/assets/`, generator + committed outputs). A green suite is not evidence of real-world coverage; see item 1 above.
+- **`InternalsVisibleTo` covers `HikvisionReplicator.Tests`**, so `FromPersistence` and aggregate-internal mutators are asserted directly rather than by reflection.
 
 ### Verification findings worth carrying forward
 
-- **A wait-loop condition that can return empty is not a wait.** Polling `gh pr checks --json state`
-  returned blank rather than `PENDING`, so the loop exited immediately and CI was reported as
-  finished while it was still running. Key the condition off a field that cannot go blank.
-- **A comment can claim a safeguard the code does not implement.** The normalizer documented that its
-  resolution floor is judged on orientation-corrected dimensions; `Min`/`Max` are invariant under that
-  swap, so it cannot be. Found only by mutation — it killed no test. **The error originated in the
-  orchestrator's own instructions to three workers**, propagated into a code comment and a provenance
-  file, and would not have been caught by re-reading. This is the concrete argument for author ≠ verifier.
-- **An instrument with no reader records into nothing.** `Program.cs` had `.WithTracing(…)` and no
-  `.WithMetrics(…)` at all; USR-41's histograms passed their tests because the tests installed their
-  own listener. See L-037.
-- **CI and local warning counts differ legitimately.** Local `dotnet build` restores implicitly, so all
-  4 `NU1903` land in the build tally (14); CI restores in a separate step, so one is attributed there
-  (13). Compare per-rule, never by total.
-- **`%2F` is not decoded into a path separator.** An `ExternalRef` containing `/` does not 404 — it
-  registers under the literal escaped text, substituting one identity for another. A-15 was amended
-  to exclude `/`; the code was not changed, because the `/` never reaches the application.
-- Lessons **L-035…L-038** added as candidates. L-033/L-034 remain candidates from `context-engineering`;
-  **L-007 is confirmed** (×2) and is why any "no new warnings" claim must come from `--no-incremental`.
+- **A wait-loop condition that can return empty is not a wait.** Polling `gh pr checks --json state` returned blank rather than `PENDING`, so the loop exited immediately and CI was reported finished while still running. Key the condition off a field that cannot go blank.
+- **A comment can claim a safeguard the code does not implement.** The normalizer documented a resolution floor judged on orientation-corrected dimensions; `Min`/`Max` are invariant under that swap, so it cannot be. Found only by mutation — it killed no test. The error originated in the **orchestrator's own instructions** to three workers and propagated into a code comment and a provenance file. The concrete argument for author ≠ verifier.
+- **An instrument with no reader records into nothing.** `Program.cs` had `.WithTracing(…)` and no `.WithMetrics(…)`; USR-41's histograms passed because the tests installed their own listener (L-037).
+- **CI and local warning counts differ legitimately.** Local `dotnet build` restores implicitly, so all 4 `NU1903` land in the build tally (14); CI restores separately, attributing one there (13). Compare per-rule, never by total.
+- **`%2F` is not decoded into a path separator.** An `ExternalRef` containing `/` does not 404 — it registers under the literal escaped text, substituting one identity for another. A-15 excludes `/`; the code was not changed, because the `/` never reaches the application.
+- **Asserting a response against the same constant the production code uses is tautological** — swapping the constants' values passed all 190 tests. And a behaviour reachable only by winning a race is killed non-deterministically; both are why `Each_colliding_key_is_reported_as_the_key_that_actually_collided` exists. Second scheduling-dependent-guard incident after AD-026's `TracingTests`; the rule lives in `docs/test-patterns.md`.
 
-- **Pre-existing warnings, unchanged by this feature**: 10 `CA` + 4 `CS0618` + 4 `NU1903` (SSH.NET,
-  transitive via Testcontainers). Baseline, not debt introduced here. Never use `-warnaserror`.
-- **Test totals**: 282 unit · 193 integration, both green (224 → 191 via AD-036, → 193 after its Verifier's fixes; AD-037 renamed and re-split the classes without moving the count). **There is no E2E figure any more** — the project was deleted on this branch (AD-035) and its 17 tests were *removed, not converted*, each having duplicated an integration test. Entering `user-registry` the totals were 81 · 88 (+ 9 E2E).
-- **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`,
-  `002-adr-conformance` (local-only, no upstream).
+- **Pre-existing warnings, unchanged**: 10 `CA` + 4 `CS0618` + 4 `NU1903` (SSH.NET, transitive via Testcontainers). Baseline, not debt. Never use `-warnaserror`.
+- **Test totals**: 282 unit · 193 integration, both green. **No E2E level** — deleted on the `user-registry` branch (AD-035), its 17 tests removed as duplicates, not converted.
+- **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`, `002-adr-conformance` (local-only, no upstream).
