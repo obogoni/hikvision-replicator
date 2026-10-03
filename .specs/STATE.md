@@ -450,41 +450,36 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ## Handoff
 
-- **Feature**: between features. `user-registry` is **merged** — PR #15 squash-landed on `main` as `38dbbfc`, CI green. Phase 1 is complete (`device-registry`, `user-registry`), both verified PASS.
-- **Phase / Task**: Phase 2 entry work. No feature in flight; `.specs/features/replication-queue/` does not exist yet.
-- **Completed this session**: resolved **OD-5** and narrowed **OD-3**, recorded as **AD-038** and **AD-039**, with `ROADMAP.md` Scale Targets and `CLAUDE.md`'s job-runner note brought into line. Two commits on `docs/resolve-od5-phase-2-load-envelope` off `main` at `38dbbfc`.
+- **Feature**: `replication-queue` (`.specs/features/replication-queue/`) — **complete and verified**, awaiting review on a PR off `main` at `f2e3a9e`.
+- **Phase / Task**: all 5 phases, T1–T25 plus T6b, done. Execute finished; the Verifier returned **PASS**.
+- **Completed**: spec.md · context.md · design.md · tasks.md · validation.md. 36 commits on `feat/replication-queue` — 26 code commits, one per task, nothing batched. Executed as four sequential batch sub-agents (T1–T6, T6b+T7–T12, T13–T21, T22–T25), then a fresh Verifier. **Author ≠ verifier held** (AD-028).
 - **In-progress** (file:line): none.
-- **The Phase 2 envelope is now fixed** (AD-038): 20 devices · overnight 8 h bulk window · live-sync **p95 < 30 s measured while a backfill runs**. The per-device obligation (~1.7 enrolments/s) does not move with D; the binding constraint is the live lane under bulk, which makes the priority lane load-bearing rather than an optimisation.
-- **OD-3 is deliberately still open** (AD-039). `replication-queue` must ship **runner-agnostic** — table plus domain rules, priority lane as data, no execution path, no enqueue API shaped around a runner, tests driving it by direct invocation. Feature 4 `replication-worker` owns the runner choice. Research carried forward: Hangfire guarantees no in-queue ordering under concurrency and prioritises queues alphabetically on PostgreSQL, so per-device ordering lives in our own table under either candidate.
-- **Next step**: open the PR for `docs/resolve-od5-phase-2-load-envelope`, merge it, then **Specify `replication-queue`** off an updated `main` — Large scope, so full spec with requirement IDs, then design.md and tasks.md.
+- **Test totals**: **364 unit · 286 integration**, both green. Entering the feature: 282 · 193.
+- **Verifier result**: 47/47 criteria matched their spec-defined outcome, **0 spec-precision gaps**. Discrimination sensor at P0 depth: **17 mutations, 17 killed, 0 survived** — including dispatch moved after `base.SaveChangesAsync`, `UserChanged` raised outside the `changed` branch, the pending-index filter dropped, the two FK delete behaviours inverted, and the admission boundary flipped.
+- **Next step**: review and squash-merge the PR, then `replication-worker` (feature 4), which **owns OD-3** — the job-runner decision AD-039 deferred to it.
 - **Blockers**: none.
-- **Uncommitted files**: none tracked. `.agents/` and `.claude/` are untracked and undecided — gitignore them or commit them, but do not leave them to accumulate.
-- **Branch**: `docs/resolve-od5-phase-2-load-envelope`, not yet pushed, based on `main` at `38dbbfc`.
+- **Uncommitted files**: none tracked. `.agents/` and `.claude/` remain untracked and undecided.
+- **Branch**: `feat/replication-queue`, based on `main` at `f2e3a9e`.
+
+### What `replication-queue` established that later features inherit
+
+- **The write path fans out through domain events** (AD-042). Aggregates raise from the branch that already decided what happened; `AppDbContext.SaveChangesAsync` dispatches **before** `base` and clears events **only after it returns**. An after-commit dispatch would stage into a second save and silently void atomicity — the Verifier killed exactly that mutation with 35 tests.
+- **The queue stages, it never saves** (AD-041). `ReplicationFanOut` adds entities to the change tracker the calling slice already owns. Feature 4 inherits this: a worker writing a result alongside a transition stages both and saves once.
+- **`IX_replications_pending`** — `UNIQUE (UserId, DeviceId) WHERE Status = 'Pending'` — is the one-pending-per-pair invariant, enforced by the database, never by a read-then-write check. `UserRepository` consults the queue's translation, because the save that commits the fan-out is `SaveIfKeysFreeAsync` and an untranslated `23505` there surfaces as a **500**.
+- **The capacity guard is fleet admission, not per-replication.** Its basis is the active user count, so it fires at device registration and at a capacity reduction — the two moments that can change the answer. A drain that would overfill still fails in feature 4.
+- **Backfill is lazy**: registration records one intent; `ExpandBackfillAsync` is invocable directly and is what feature 4 will schedule. Nothing in this feature runs it.
+- **Counters fire at staging time**, before the commit, so a write that then loses the index race is counted for work it did not leave behind. The tables are the authority; the metrics are rate signals.
+
+### Findings worth carrying forward
+
+- **A registration event cannot carry an id.** `UserRegistered` and `DeviceRegistered` are raised inside the static factory, where the database-generated key is still `0`. The design said "carrying only the aggregate id" and was wrong; events carry the aggregate, and `Replication`/`BackfillIntent` carry navigations so EF fixes the key up at save (T6b). Found by a batch worker before any mapping existed to hide it.
+- **A task that says "X still compiles unchanged" after adding abstract members to its interface is unsatisfiable.** Twice: T1 (`User`/`Device`) and T15 (a startup guard that must fail when an event has no handler, while no handler type exists). Both were resolved by shipping the enabling type in the earlier task, not by weakening the criterion.
+- **EF Core 10 refuses `Migrate()` while the model carries changes no migration covers.** Mapping an aggregate without shipping its migration in the same task turns every integration test red at fixture startup. Migrations belong with their mapping task.
+- **`FaceCapacity` is persisted through a value converter, so `capacity < roster` does not translate to SQL.** The comparison runs in memory over AD-038's ≤20 readers.
+- **`scripts/lessons.py list` mutates the store.** `_auto_prune` runs on read, so a status check silently drops candidates past `window_days = 45`. It cost two agents this session: six lessons were pruned and committed early on, and the Verifier's read pruned a further 36 before it reverted them. **Only L-007 is confirmed**, so the rest are decaying out of a 45-day window on every read — either promote what has recurred or widen the window, or the store empties itself.
+- **`CA1711` on `IDomainEventHandler`** is a new, unsuppressed warning (17 total, 0 errors). The name comes from the design; the repo already carries the same rule unsuppressed for `PostgresCollection`. Left visible for a decision rather than hidden in `.editorconfig`.
 
 ### Still outstanding from `user-registry`
 
-1. **The semantic-image-quality gap is still missing from `ROADMAP.md` § Known Gaps.** The face pipeline proves an image is *mechanically* acceptable, never that it is a usable face: a profile shot or a spectator in a cap passes all 45 criteria and fails at a turnstile, and Phase 4 `reconciliation` will not catch it — it compares our belief against the device, not against reality. One table row; it was not folded into this session's commits to keep them to their own subject.
-2. **A-13 carries a standing Phase 3 obligation.** The 40–200 KB band and the 640×480 floor come from DS-K1T606 terminal documentation, not the official ISAPI envelope (the wiki is behind a JS app). `isapi-device-client` must verify both against real hardware and supersede A-13 if they differ. The envelope lives in `FaceImageOptions`, so a correction is a config change.
-3. **Lessons: 36 candidates, 1 confirmed.** Reading the log auto-prunes — `lessons.py list` dropped L-001…L-006 this session at the 45-day `window_days`, committed as `3ffedce`. Only **L-007** is confirmed, so it is the only lesson that loads at Specify and Design; the other 36 are tracked but not trusted. A promotion pass is unscheduled work, not a blocker.
-
-### What `user-registry` established that later features inherit
-
-- **`PUT /api/users/{externalRef}`** upsert, `GET`, `DELETE`, paged `GET /api/users`. Removal **tombstones** the row (`DeletedAt`) and **destroys the face bytes in the same transaction** — Phase 2's Remove path gets a live FK target and no biometric.
-- **The two unique indexes are deliberately asymmetric.** `IX_users_ExternalRef` covers all rows (resurrection must find a tombstone by key); `IX_users_AccessCode` is partial on `WHERE "DeletedAt" IS NULL` (a removed spectator's PIN returns to the pool). Any change to one must re-check the other — the Verifier killed a mutation in each direction.
-- **`IFaceImageNormalizer`** converts any reasonable upload into the device envelope. **The 40 KB figure is a lower bound** — over-compression is a rejection cause, so an upper-bound-only check is wrong. The encode ladder is **fixed, never a bisection search**, because a byte-identical re-upsert must not advance `UpdatedAt`.
-- **SkiaSharp 3.119.4**, not ImageSharp: ImageSharp v4 fails the build without a committed `sixlabors.lic` and its free sample licence expired 2026-09-04. Golden hashes are recorded against that exact version; a SkiaSharp upgrade will fail them **by design** — review and re-record, never loosen.
-- **Fixtures are generated**, so none carries authentic camera encoder output (`tests/assets/`, generator + committed outputs). A green suite is not evidence of real-world coverage; see item 1 above.
-- **`InternalsVisibleTo` covers `HikvisionReplicator.Tests`**, so `FromPersistence` and aggregate-internal mutators are asserted directly rather than by reflection.
-
-### Verification findings worth carrying forward
-
-- **A wait-loop condition that can return empty is not a wait.** Polling `gh pr checks --json state` returned blank rather than `PENDING`, so the loop exited immediately and CI was reported finished while still running. Key the condition off a field that cannot go blank.
-- **A comment can claim a safeguard the code does not implement.** The normalizer documented a resolution floor judged on orientation-corrected dimensions; `Min`/`Max` are invariant under that swap, so it cannot be. Found only by mutation — it killed no test. The error originated in the **orchestrator's own instructions** to three workers and propagated into a code comment and a provenance file. The concrete argument for author ≠ verifier.
-- **An instrument with no reader records into nothing.** `Program.cs` had `.WithTracing(…)` and no `.WithMetrics(…)`; USR-41's histograms passed because the tests installed their own listener (L-037).
-- **CI and local warning counts differ legitimately.** Local `dotnet build` restores implicitly, so all 4 `NU1903` land in the build tally (14); CI restores separately, attributing one there (13). Compare per-rule, never by total.
-- **`%2F` is not decoded into a path separator.** An `ExternalRef` containing `/` does not 404 — it registers under the literal escaped text, substituting one identity for another. A-15 excludes `/`; the code was not changed, because the `/` never reaches the application.
-- **Asserting a response against the same constant the production code uses is tautological** — swapping the constants' values passed all 190 tests. And a behaviour reachable only by winning a race is killed non-deterministically; both are why `Each_colliding_key_is_reported_as_the_key_that_actually_collided` exists. Second scheduling-dependent-guard incident after AD-026's `TracingTests`; the rule lives in `docs/test-patterns.md`.
-
-- **Pre-existing warnings, unchanged**: 10 `CA` + 4 `CS0618` + 4 `NU1903` (SSH.NET, transitive via Testcontainers). Baseline, not debt. Never use `-warnaserror`.
-- **Test totals**: 282 unit · 193 integration, both green. **No E2E level** — deleted on the `user-registry` branch (AD-035), its 17 tests removed as duplicates, not converted.
-- **Surviving pre-rewrite branches**, untouched and unreviewed: `001-hikvision-device-api`, `002-adr-conformance` (local-only, no upstream).
+1. **The semantic-image-quality gap is still missing from `ROADMAP.md` § Known Gaps.** The face pipeline proves an image is mechanically acceptable, never that it is a usable face. One table row.
+2. **A-13 carries a standing Phase 3 obligation.** The 40–200 KB band and 640×480 floor come from DS-K1T606 documentation, not the official ISAPI envelope. `isapi-device-client` must verify both against real hardware.
