@@ -316,7 +316,7 @@ and assert the meter name appears in the provider registration rather than only 
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 47 total, 0 mapped to tasks, 47 unmapped ⚠️ (tasks.md not yet written)
+**Coverage:** 47 total, 47 mapped to tasks, 0 unmapped — see `tasks.md` § Requirement Coverage
 
 ---
 
