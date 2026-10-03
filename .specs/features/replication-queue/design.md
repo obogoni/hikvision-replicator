@@ -8,12 +8,21 @@
 
 ## Architecture Overview
 
-A write-path port, two aggregates and one partial unique index. Nothing runs.
+Domain events, one fan-out handler, two aggregates and one partial unique index. Nothing runs.
 
-The central mechanic: **the queue stages, it never saves.** `IReplicationQueue` adds entities to
-the change tracker the calling slice already owns, and the slice's existing single
-`SaveChangesAsync` commits user and replications together. REP-07's atomicity is therefore
-structural — there is no transaction scope to forget, because there is only ever one save.
+Two mechanics carry the design.
+
+**The aggregate decides whether anything happened.** `User.Update` already computes whether a
+field actually differs — that is how USR-26 keeps `UpdatedAt` still on a no-op. It now raises
+`UserChanged` from inside that same branch, so REP-04 is not a rule a caller must remember; it is
+the absence of an event. `MarkDeleted` is unreachable for an already-tombstoned spectator, so
+REP-42 is structural for the same reason, and `Restore` raises a different event than `Update`,
+which is REP-06.
+
+**The queue stages, it never saves.** The fan-out handler adds entities to the change tracker the
+calling slice already owns, and the slice's existing single `SaveChangesAsync` commits user and
+replications together. Dispatch happens **before** `base.SaveChangesAsync`, never after: an
+after-commit dispatch would put the rows in a second save and lose REP-07 outright.
 
 ```mermaid
 graph TD
@@ -21,26 +30,35 @@ graph TD
     DEL["DELETE /api/users/{externalRef}"] --> REM[RemoveUserService]
     REG["POST /api/devices"] --> RGD[RegisterDeviceService]
 
-    UPS -->|stage Add / Update| Q[IReplicationQueue]
-    REM -->|stage Remove| Q
-    RGD -->|stage BackfillIntent| Q
-    RGD -->|active user count| GUARD[Fleet-admission guard]
+    UPS --> AGG["User aggregate<br/>raises UserRegistered / UserChanged / UserRestored"]
+    REM --> AGG2["User.MarkDeleted<br/>raises UserRemoved"]
+    RGD --> AGG3["Device.Create<br/>raises DeviceRegistered"]
+    RGD -->|active user count, before the write| GUARD[Fleet-admission guard]
 
-    Q -->|adds entities| CT[(Change tracker)]
-    UPS -->|SaveIfKeysFreeAsync| CT
-    REM -->|SaveChangesAsync| CT
-    RGD -->|AddIfAddressFreeAsync| CT
-
+    AGG --> SAVE
+    AGG2 --> SAVE
+    AGG3 --> SAVE
+    SAVE["AppDbContext.SaveChangesAsync override"] -->|1 · dispatch| DISP[IDomainEventDispatcher]
+    DISP --> FAN["ReplicationFanOut<br/>the only place the rules live"]
+    FAN -->|stages rows| CT[(Change tracker)]
+    SAVE -->|2 · base.SaveChangesAsync| CT
     CT -->|one transaction| DB[(PostgreSQL)]
+    SAVE -->|3 · clear events, only on success| AGG
+
     DB --- IDX["IX_replications_pending<br/>UNIQUE (UserId, DeviceId)<br/>WHERE Status = 'Pending'"]
 
-    EXP[ExpandBackfill operation] -->|lane = Bulk| Q
+    EXP[ExpandBackfill operation] -->|lane = Bulk| FAN
     F4["feature 4 · replication-worker"] -.invokes later.-> EXP
     F4 -.drains.-> DB
 ```
 
-The dotted edges are feature 4's. Nothing in this feature calls `ExpandBackfill`; it exists as a
-directly-invocable operation, which is how AD-039 says this feature must be testable.
+The slices do not appear on the fan-out path at all — they save, and the aggregate's own events do
+the rest. The dotted edges are feature 4's: nothing here calls `ExpandBackfill`, which exists as a
+directly-invocable operation because that is how AD-039 says this feature must be testable.
+
+The guard is the one thing that stays an explicit call in the device slices (REP-21, REP-23). It
+**refuses** a write with a `409`, and an event raised by an aggregate that has already been
+constructed cannot refuse anything.
 
 ---
 
@@ -55,18 +73,21 @@ directly-invocable operation, which is how AD-039 says this feature must be test
 | Cascade delete | `Infrastructure/UserConfiguration.cs` (`DeleteBehavior.Cascade` for the face picture) | Same for `Device → Replication` and `Device → BackfillIntent` |
 | `IRepository<T>` + Ardalis specs | `Shared/IRepository.cs`, `Domain/Specs/` | All queries go through new specs; no inline LINQ in services (AD-006) |
 | `TimeProvider` injection | every service, AD-023 | `now` passed into every factory and transition |
-| `ToMinimalApiResult()` | `Infrastructure/DomainErrorExtensions.cs` | The capacity refusal is a `ConflictError`, so it maps with no endpoint change |
+| `ToMinimalApiResult()` | `Infrastructure/DomainErrorExtensions.cs` | Both the capacity refusal and the lost duplicate-pending race are `ConflictError`, so each maps to a `409` with no endpoint change |
+| The `changed` branch inside `User.Update` | `Domain/User.cs` | Already computes whether a field differs (USR-26) — the event is raised from that same branch, so REP-04 needs no new logic |
 | Meter registration | `Program.cs:93-96` (`.WithMetrics(...).AddMeter(...)`) | New meter name added here — L-037 |
 
 ### Integration Points
 
 | System | Integration Method |
 | --- | --- |
-| `UpsertUserService` | Stage fan-out at **three** save sites — create (`:86`), restore (`:147`), update (`:205`) |
-| `RemoveUserService` | Stage `Remove` **after** the already-tombstoned early return (`:40-41`) |
-| `RegisterDeviceService` | Capacity guard before the address check; stage the backfill intent before `AddIfAddressFreeAsync` (`:47`) |
+| `UpsertUserService` | **No fan-out code at all.** Its three save sites (`:86`, `:147`, `:205`) are untouched — the events come from the aggregate |
+| `RemoveUserService` | **No fan-out code.** The already-tombstoned early return (`:40-41`) never reaches `MarkDeleted`, so no event is raised and REP-42 holds without a guard to remember |
+| `RegisterDeviceService` | Capacity guard before the address check (REP-21) — the only explicit call this feature adds to a user-facing slice |
 | `UpdateDeviceService` | Capacity guard on a `FaceCapacity` change (REP-23) |
 | `RemoveDeviceService` | **No code change** — the cascade is schema-level (`:23` stays a plain hard delete) |
+| `AppDbContext` | Gains a `SaveChangesAsync` override: dispatch, then `base`, then clear events on success |
+| `User`, `Device` | Raise events from the branches that already decide whether anything changed |
 
 ---
 
@@ -96,16 +117,34 @@ directly-invocable operation, which is how AD-039 says this feature must be test
 - **Dependencies**: none
 - **Reuses**: same aggregate conventions
 
-### `IReplicationQueue` (port)
+### Domain events
 
-- **Purpose**: The only way work enters the queue. **Stages into the caller's change tracker; never saves.**
-- **Location**: `Shared/IReplicationQueue.cs`
+- **Purpose**: Let the aggregate say what happened, so no caller has to.
+- **Location**: `Shared/IDomainEvent.cs`, `Domain/Events/`
+- **Events**: `UserRegistered`, `UserChanged`, `UserRestored`, `UserRemoved`, `DeviceRegistered` — each carrying only the aggregate id and the `now` that produced it
+- **Raised from**: `User.Create`, the `changed` branch of `User.Update`, `User.Restore`, `User.MarkDeleted`, `Device.Create`
+- **Storage**: `IAggregateRoot` gains `IReadOnlyCollection<IDomainEvent> DomainEvents` and `ClearDomainEvents()`. This extends AD-005's aggregate contract and touches `User` and `Device`, both shipped and verified — recorded as **AD-042**
+
+### `IDomainEventDispatcher`
+
+- **Purpose**: Resolve and run the handlers for every event on every tracked aggregate, once, before the save.
+- **Location**: `Shared/IDomainEventDispatcher.cs` / `Infrastructure/DomainEventDispatcher.cs`
+- **Interfaces**: `Task DispatchAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken ct)`
+- **Dependencies**: `IServiceProvider` for `IDomainEventHandler<T>` resolution — **no MediatR, no new package**
+- **Called from**: `AppDbContext.SaveChangesAsync`, before `base`. Events are cleared **only after `base` succeeds**, so a failed save never silently swallows them
+
+### `ReplicationFanOut` (the single handler)
+
+- **Purpose**: The one place every fan-out rule lives. Handles all five events.
+- **Location**: `Infrastructure/ReplicationFanOut.cs`
 - **Interfaces**:
-  - `Task StageForUserAsync(User user, ReplicationOperation operation, ReplicationLane lane, CancellationToken ct)` — supersedes existing `Pending` rows for each pair, stages one new row per registered device
-  - `Task StageBackfillAsync(Device device, DateTime now, CancellationToken ct)` — one intent row
-  - `Task<int> ExpandBackfillAsync(int deviceId, DateTime now, CancellationToken ct)` — the REP-17…REP-20 rule; stages `Bulk` rows for active users, skipping pairs that already hold a `Pending` row; marks the intent `Expanded`; returns the count staged
+  - `IDomainEventHandler<UserRegistered|UserRestored>` → stages `Add`, lane `Live`
+  - `IDomainEventHandler<UserChanged>` → stages `Update`, lane `Live`
+  - `IDomainEventHandler<UserRemoved>` → stages `Remove`, lane `Live`, superseding any pending `Add`/`Update` (REP-11)
+  - `IDomainEventHandler<DeviceRegistered>` → stages one `BackfillIntent`
+  - `Task<int> ExpandBackfillAsync(int deviceId, DateTime now, CancellationToken ct)` — the REP-17…REP-20 rule; stages `Bulk` rows for active users, skipping pairs that already hold a `Pending` row; marks the intent `Expanded`; returns the count staged. Not an event handler: feature 4 invokes it directly
 - **Dependencies**: `IReplicationRepository`, `IRepository<Device>`, `IRepository<User>`, `TimeProvider`
-- **Reuses**: specifications for every read (AD-006)
+- **Reuses**: specifications for every read (AD-006). **Stages only — never calls `SaveChanges`** (AD-041)
 
 ### `IReplicationRepository`
 
@@ -188,7 +227,7 @@ inserting a new enum member cannot silently re-map existing rows.
 | Device registered below the active user count (REP-21) | `ConflictError` naming capacity and count | `409` with both numbers in `detail` |
 | `FaceCapacity` lowered below the count (REP-23) | Same `ConflictError` | `409` |
 | Active count crosses a device's ceiling (REP-24) | Warning log with device, capacity, count + counter | **None** — user is accepted (`2xx`) |
-| Duplicate `Pending` row loses the index race (REP-13) | `23505` on `IX_replications_pending` → `ConflictError`; the slice retries the whole operation **once**, since the retry sees the committed row and supersedes it | Normally invisible; a second loss returns `409`, never `500` |
+| Duplicate `Pending` row loses the index race (REP-13) | `23505` on `IX_replications_pending` → `ConflictError` → `409`. **No in-process retry**: a failed save leaves the already-staged entities tracked, so re-dispatching would double-stage. The integrator re-sends, exactly as it already does for the upsert races `user-registry` ships | `409`, never `500` |
 | Replication staging fails for any other reason | Exception propagates; `SaveChanges` never commits | `500`, and **no user row** — REP-07 |
 | Expansion invoked for a deleted device (REP-44) | No intent found → stage nothing, return 0 | None — feature 4 sees a no-op |
 
@@ -198,12 +237,13 @@ inserting a new enum member cannot silently re-map existing rows.
 
 | Concern | Location (file:line) | Impact | Mitigation |
 | --- | --- | --- | --- |
-| **Five call sites, one rule.** Fan-out must be staged at three `UpsertUserService` save points, one in `RemoveUserService`, one in `RegisterDeviceService` — the approach's known cost | `Features/Users/UpsertUser/UpsertUserService.cs:86,147,205` | A missed site is a spectator silently queued nowhere — the failure mode this feature exists to remove | One task per call site, each with its own integration test asserting rows exist after the real HTTP call; the verifier's sensor must mutate each site independently |
-| **The already-tombstoned early return** — a second `DELETE` returns success without changing anything | `Features/Users/RemoveUser/RemoveUserService.cs:40-41` | Staging before this guard re-queues removals for an already-removed spectator on every repeat call (REP-42) | Stage strictly after the guard; REP-42 is an explicit edge-case criterion, not a code comment |
-| **No-op upserts are only detectable by watching `UpdatedAt`** — `User.Update` reports "nothing changed" by not advancing it, and returns no signal | `Domain/User.cs` `Update(...)`, `Features/.../UpsertUserService.cs:205` | Staging unconditionally on the update path breaks REP-04 and fills the live lane with no-ops | Capture `UpdatedAt` before `Update`, compare after, stage only on a change. Chosen over changing the aggregate's signature, which would touch shipped, verified behaviour |
+| **Events are raised from inside shipped, verified aggregates.** `User.Create`, `User.Update`'s changed branch, `User.Restore`, `User.MarkDeleted`, `Device.Create` all gain a line | `Domain/User.cs`, `Domain/Device.cs` | A misplaced raise — outside the `changed` branch, say — breaks REP-04 silently, and these aggregates carry 282 unit tests that will not notice an extra event | One task per aggregate, unit tests asserting *which* events a call raises and that a no-op raises none. The sensor must mutate the raise out of each branch independently |
+| **An event with no registered handler is a silent no-op.** Dispatch resolves handlers from DI; a missing registration fans out nothing and throws nothing | `Infrastructure/DomainEventDispatcher.cs`, `Program.cs` | The exact L-037 shape: wired in tests, dead in production | A startup assertion that every `IDomainEvent` in the assembly has at least one handler registered, plus REP-39's meter check in the same test |
+| **Events must survive a failed save.** Clearing on dispatch would mean a save that throws loses them | `Infrastructure/AppDbContext.cs` | A retried or subsequent save fans out nothing; the spectator is queued nowhere | Clear **only after `base.SaveChangesAsync` returns**. Asserted by a test that forces a `23505` and then inspects the aggregate's event collection |
+| **Dispatch must precede the save, not follow it** | `Infrastructure/AppDbContext.cs` | An after-commit dispatch stages into a *second* save and loses REP-07's atomicity entirely — the whole point of the design | Ordering is one line and one test: force the handler to throw, assert the user row did not commit |
 | **Device delete becomes a 500 without the cascade** — `RemoveDeviceService` hard-deletes, and `Replication` holds an FK to it | `Features/Devices/RemoveDevice/RemoveDeviceService.cs:23` | Any device with queued work could not be deleted; DEV-25 regresses from `204` to a constraint violation | `DeleteBehavior.Cascade` on both FKs, with REP-16/REP-40 asserting a delete succeeds *while* pending rows exist |
 | **Every user write now reads the device list** | new, in `IReplicationQueue` | An extra query plus N inserts on the hot path AD-038 measures | One id-only specification (`RegisteredDeviceIdsSpec`), not full aggregates; N = 20 at the fixed envelope. REP-38 records fan-out size so the cost is observable rather than assumed |
-| **A bounded retry is new control flow in a shipped slice** | `UpsertUserService` | A retry loop that is wrong could double-write or mask a real fault | Bound is exactly one; the retried operation is an idempotent upsert; a second loss returns `409`. Asserted by a test that forces the conflict rather than races for it — a guard reachable only by winning a coin-flip is not a guard (AD-036) |
+| **`AppDbContext` stops being a 20-line class** and now runs application logic on every save, for every aggregate, forever | `Infrastructure/AppDbContext.cs` | Every future save pays dispatch cost, and a slow handler slows every write path in the system | The dispatcher short-circuits when no tracked aggregate has events — which is every device read, every list, every get. Measured by REP-38's fan-out histogram |
 | **Test coverage gap: nothing today proves a write enqueues anything**, because there is no queue | whole feature | Every REP-01…REP-07 criterion is new ground with no existing test to lean on | Integration tests drive real HTTP and verify by reading the replications table — permitted by AD-036, which governs what *drives* a test, not what it inspects |
 | **Expansion has no HTTP surface at all** | `IReplicationQueue.ExpandBackfillAsync` | Its tests cannot be black box, which AD-036 restricts to two named classes | Extended explicitly by **AD-040** — a third contract class, each test carrying the blind-spot sentence |
 
@@ -213,13 +253,19 @@ inserting a new enum member cannot silently re-map existing rows.
 
 | Decision | Choice | Rationale |
 | --- | --- | --- |
-| Where fan-out is triggered | Explicit port staged by the slices | Confirmed with the user. Matches AD-002/003 explicitness; atomicity falls out of the single existing `SaveChanges` |
-| How atomicity is obtained | Staging into the caller's change tracker — **no explicit transaction** | There is nothing to forget. A `BeginTransaction` in five places is five chances to miss one |
-| How REP-04 is detected | Compare `UpdatedAt` across `User.Update` | Does not alter a shipped, verified aggregate's signature |
-| Concurrent duplicate `Pending` | Partial unique index + one bounded retry | The index is the authority (AD-022). Rejected pessimistic `SELECT … FOR UPDATE` on the user row: it puts a lock on the hot path AD-038 measures, to serialise a race that is rare at 35 ops/s |
+| Where fan-out is triggered | **Domain events raised by the aggregate**, dispatched once | Revised from an explicit port called by five sites. Three of this table's original risks — five call sites, the tombstone early return, the `UpdatedAt` comparison — were one root cause: the trigger sat outside the aggregate that already knew the answer |
+| Where dispatch hooks in | Override `AppDbContext.SaveChangesAsync`, dispatch **before** `base` | The handler must query the device list. Doing that before the save pipeline opens is unambiguously safe; doing it from inside a `SavingChangesAsync` interceptor depends on reentrancy behaviour I could not verify, and I will not build on an unverified assumption |
+| Event plumbing | Hand-rolled `IDomainEventHandler<T>` from DI | MediatR would be a dependency and a pipeline for five events and one handler |
+| How atomicity is obtained | Staging into the change tracker — **no explicit transaction** | There is nothing to forget, and dispatch-before-save means the rows are simply part of the save that was already happening |
+| How REP-04 is detected | The `changed` branch of `User.Update` raises the event | Not a rule a caller must remember — the absence of a change is the absence of an event |
+| Concurrent duplicate `Pending` | Partial unique index → `409`, **no retry** | The index is the authority (AD-022). A retry would re-dispatch over a poisoned change tracker; `user-registry`'s upsert racers already resolve this way. Pessimistic `SELECT … FOR UPDATE` was rejected separately: a lock on the hot path AD-038 measures, to serialise a race that is rare at 35 ops/s |
+| Per-user dispatch watermark | **Rejected** | Proposed as a cheap self-heal index for feature 4. Under transactional fan-out it would always equal `UpdatedAt` by construction — a column that can never be behind, and a query that always returns empty. It was load-bearing only in the after-commit design |
+| After-commit dispatch + periodic sweeper | **Rejected** | Considered seriously: it decouples and shortens the user write. But decoupling comes from events regardless of *when* they fire; the 20 narrow rows are ~1% of a transaction that already carries a 40–200 KB picture; and the sweeper that makes it safe is a job runner, which AD-039 places in feature 4. The safety net could not be built in this feature |
 | Enum storage | Strings | Operator-facing via feature 8; ordinals re-map silently when a member is inserted |
 | `Replication → User` delete behaviour | Restrict | Users are tombstoned, never deleted (AD-034), so a cascade would be dead code that hides a real violation if it ever fired |
 | Expansion's return value | Count of rows staged | Gives feature 4 something to log and gives REP-20's "second invocation stages nothing" a direct assertion |
 
-> **Project-level:** two entries go to `.specs/STATE.md` — **AD-040** (AD-036 extended to a third
-> contract class) and **AD-041** (the stage-never-save contract, which feature 4 inherits).
+> **Project-level:** three entries in `.specs/STATE.md` — **AD-040** (AD-036 extended to a third
+> contract class), **AD-041** (the stage-never-save contract, which feature 4 inherits), and
+> **AD-042** (the write path fans out through domain events; amends AD-041's trigger clause and
+> AD-005's aggregate contract).
