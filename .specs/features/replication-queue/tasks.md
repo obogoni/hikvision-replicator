@@ -12,7 +12,7 @@ Verifier, discrimination sensor).
 ---
 
 **Design**: `.specs/features/replication-queue/design.md`
-**Status**: In Progress — Phases 1–4 complete (T1–T21 + T6b). 364 unit · 262 integration, all green; Phase 2 complete
+**Status**: All tasks complete (T1–T25 + T6b). **364 unit · 286 integration**, all green. Awaiting Verifier.; Phase 2 complete
 (T6b, T7–T12, 358 unit · 209 integration)
 
 ---
@@ -132,11 +132,34 @@ for delegates. The name is mandated by `design.md` and T13's `Where`, and the re
 the same rule unsuppressed for `PostgresCollection`, so the warning was kept rather than editing
 `.editorconfig`. Flagged for review rather than silently suppressed.
 
-### Phase 5: Capacity guard and observability
+### Phase 5: Capacity guard and observability — ✅ COMPLETE
 
 ```
-T22 → T23 → T24 → T25
+T22 ✅ → T23 ✅ → T24 ✅ → T25 ✅
 ```
+
+Commits: `2aa8d5d`, `eb79bef`, `7b9f815`, `eb633d0`. 262 → **286 integration tests**, unit unchanged
+at 364. **No conflict with existing device coverage** — the four device test classes are unmodified
+except for appended tests, including `Device_with_a_boundary_face_capacity_is_accepted(1)`, which
+survives because REP-47 lets an empty registry admit any size.
+
+Two files beyond their task's `Where`, both justified: **`Features/Devices/FleetAdmission.cs`**
+(T22), because REP-23 refusing "on the same terms as REP-21" is a promise about one rule, not two
+that happen to agree; and **`Domain/Specs/ReaderCeilingsSpec.cs`** (T24), because `FaceCapacity` is
+persisted through a value converter so `capacity < roster` will not translate to SQL — the spec
+projects the pairs and compares in memory over AD-038's ≤20 readers.
+
+**T25 also instruments the Bulk lane** in `ExpandBackfillAsync`: REP-35 is unconditional about
+enqueues, and leaving the expansion uncounted would mean the `lane` tag could never read `Bulk`.
+That proof sits in `ReplicationQueueContractTests` with its own blind-spot sentence (AD-040).
+
+**Known limitation, documented in code**: counters fire at **staging** time, before the save that
+commits the rows (AD-041), so a write that then loses the pending-index race is counted for work it
+did not leave behind. The queue tables remain the authority; these are rate signals.
+
+**REP-39 was sensor-checked, not assumed.** Removing `.AddMeter(ReplicationMetrics.MeterName)` from
+`Program.cs` makes `Configured_deployment_collects_the_queue_metrics` fail, while the
+listener-based metric tests stayed green through the same mutation — the L-037 shape, demonstrated.
 
 ---
 
@@ -766,7 +789,7 @@ Execution is strictly sequential — there is no intra-phase parallelism.
 | 1 ✅ | Phase 1 | T1–T6 | 6 |
 | 2 ✅ | Phase 2 | T6b, T7–T12 | 7 |
 | 3 ✅ | Phase 3 + Phase 4 | T13–T21 | 9 |
-| 4 | Phase 5 | T22–T25 | 4 |
+| 4 ✅ | Phase 5 | T22–T25 | 4 |
 
 26 tasks (T6b added mid-flight) → **4 sequential batches**. More than one batch, so the sub-agent offer applies.
 
