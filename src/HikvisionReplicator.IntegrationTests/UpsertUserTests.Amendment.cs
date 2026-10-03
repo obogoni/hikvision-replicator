@@ -316,4 +316,223 @@ public partial class UpsertUserTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Empty(await QueuedWorkAsync());
     }
+
+    // ─── REP-08 / REP-10 / REP-12 / REP-13: one outstanding piece of work ─
+
+    /// <summary>
+    /// Puts one piece of work in the queue for the pair and leaves it in whatever state the
+    /// caller asks for, so supersession can be asserted against a row that already carries a
+    /// history (REP-10) or is already in a reader's hands (REP-12).
+    /// </summary>
+    private async Task<int> GivenQueuedWorkAsync(int userId, int deviceId, bool alreadyFailedOnce)
+    {
+        await using var context = Fixture.CreateDbContext();
+        var work = Replication.Create(
+            userId,
+            deviceId,
+            ReplicationOperation.Add,
+            ReplicationLane.Live,
+            Kickoff.UtcDateTime
+        );
+
+        if (alreadyFailedOnce)
+        {
+            work.Begin(Kickoff.UtcDateTime);
+            work.Fail(QueuedWorkFailure, Kickoff.UtcDateTime);
+            work.Retry(Kickoff.UtcDateTime);
+        }
+
+        context.Replications.Add(work);
+        await context.SaveChangesAsync();
+        return work.Id;
+    }
+
+    private const string QueuedWorkFailure = "the reader refused the enrolment";
+
+    [Fact]
+    public async Task Three_corrections_leave_one_outstanding_piece_of_work_per_reader()
+    {
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Katherine Johnson"));
+
+        var queued = await QueuedWorkAsync();
+
+        // Three intents, three rows — the log keeps what was replaced — but only one of them
+        // is still owed.
+        Assert.Equal(3, queued.Count);
+        Assert.Equal(2, queued.Count(work => work.Status == ReplicationStatus.Superseded));
+
+        var outstanding = Assert.Single(
+            queued,
+            work => work.Status == ReplicationStatus.Pending
+        );
+        Assert.Equal(ReplicationOperation.Update, outstanding.Operation);
+        Assert.Equal(queued.Max(work => work.CreatedAt), outstanding.CreatedAt);
+    }
+
+    [Fact]
+    public async Task Superseding_replaces_the_work_owed_to_each_reader_separately()
+    {
+        var first = await GivenRegisteredDeviceAsync("10.0.0.1");
+        var second = await GivenRegisteredDeviceAsync("10.0.0.2");
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        var queued = await QueuedWorkAsync();
+
+        Assert.Equal(4, queued.Count);
+        foreach (var deviceId in new[] { first, second })
+        {
+            var forReader = queued.Where(work => work.DeviceId == deviceId).ToList();
+            Assert.Equal(2, forReader.Count);
+            Assert.Single(forReader, work => work.Status == ReplicationStatus.Pending);
+        }
+    }
+
+    [Fact]
+    public async Task A_superseded_row_keeps_the_intent_and_the_history_it_recorded()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync("10.0.0.1");
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        var spectator = await StoredUserAsync("TICKET-1");
+        Assert.NotNull(spectator);
+
+        // Clear what the registration queued, then put back one row that has already been
+        // attempted and failed once — the only shape that can prove the count and the error
+        // survive supersession.
+        await ExecuteSqlAsync("DELETE FROM replications");
+        var attemptedId = await GivenQueuedWorkAsync(
+            spectator.Id,
+            deviceId,
+            alreadyFailedOnce: true
+        );
+
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        var replaced = Assert.Single(await QueuedWorkAsync(), work => work.Id == attemptedId);
+        Assert.Equal(ReplicationStatus.Superseded, replaced.Status);
+        Assert.Equal(ReplicationOperation.Add, replaced.Operation);
+        Assert.Equal(ReplicationLane.Live, replaced.Lane);
+        Assert.Equal(1, replaced.AttemptCount);
+        Assert.Equal(QueuedWorkFailure, replaced.LastError);
+    }
+
+    [Fact]
+    public async Task Work_already_in_a_readers_hands_is_left_to_finish()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync("10.0.0.1");
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        var spectator = await StoredUserAsync("TICKET-1");
+        Assert.NotNull(spectator);
+
+        await ExecuteSqlAsync("DELETE FROM replications");
+        var inFlightId = await GivenQueuedWorkAsync(
+            spectator.Id,
+            deviceId,
+            alreadyFailedOnce: false
+        );
+        await ExecuteSqlAsync(
+            $"""UPDATE replications SET "Status" = 'InProgress' WHERE "Id" = {inFlightId}"""
+        );
+
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        var queued = await QueuedWorkAsync();
+
+        // The reader may already have taken the face: saying the write was replaced while it
+        // was still being made would be a lie the queue cannot recover from.
+        var inFlight = Assert.Single(queued, work => work.Id == inFlightId);
+        Assert.Equal(ReplicationStatus.InProgress, inFlight.Status);
+        Assert.Equal(ReplicationOperation.Add, inFlight.Operation);
+
+        var alongside = Assert.Single(queued, work => work.Id != inFlightId);
+        Assert.Equal(ReplicationStatus.Pending, alongside.Status);
+        Assert.Equal(ReplicationOperation.Update, alongside.Operation);
+        Assert.Equal(deviceId, alongside.DeviceId);
+    }
+
+    [Fact]
+    public async Task Work_that_was_already_carried_out_is_left_alone_and_a_new_piece_queued()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync("10.0.0.1");
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        await ExecuteSqlAsync("""UPDATE replications SET "Status" = 'Succeeded'""");
+
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        var queued = await QueuedWorkAsync();
+
+        Assert.Equal(2, queued.Count);
+        Assert.Single(queued, work => work.Status == ReplicationStatus.Succeeded);
+        var outstanding = Assert.Single(queued, work => work.Status == ReplicationStatus.Pending);
+        Assert.Equal(ReplicationOperation.Update, outstanding.Operation);
+        Assert.Equal(deviceId, outstanding.DeviceId);
+    }
+
+    [Fact]
+    public async Task Corrections_arriving_at_once_leave_one_outstanding_piece_of_work_per_reader()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync("10.0.0.1");
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var racers = Enumerable
+            .Range(0, 4)
+            .Select(async index =>
+            {
+                await start.Task;
+                return await UpsertAsync("TICKET-1", ValidUpsert(name: $"Correction {index}"));
+            })
+            .ToList();
+
+        start.SetResult();
+        var responses = await Task.WhenAll(racers);
+
+        // Which racer wins is scheduling, so nothing is asserted about that. What REP-13
+        // promises is that the queue is never left with two outstanding rows for a pair and
+        // that no caller is ever told the service broke: the index is the arbiter, and its
+        // refusal is a conflict.
+        Assert.DoesNotContain(
+            responses,
+            response => response.StatusCode == HttpStatusCode.InternalServerError
+        );
+
+        var queued = await QueuedWorkAsync();
+        var outstanding = Assert.Single(
+            queued,
+            work => work.Status == ReplicationStatus.Pending && work.DeviceId == deviceId
+        );
+
+        // One intent in full, not a mixture: a row is one insert, so its lane and status have
+        // to belong to the operation beside them.
+        Assert.Equal(ReplicationOperation.Update, outstanding.Operation);
+        Assert.Equal(ReplicationLane.Live, outstanding.Lane);
+
+        foreach (var response in responses)
+            response.Dispose();
+    }
+
+    [Fact]
+    public async Task Correcting_a_spectator_leaves_another_spectators_outstanding_work_alone()
+    {
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await UpsertAsync("TICKET-1", ValidUpsert(accessCode: "111111"));
+        await UpsertAsync("TICKET-2", ValidUpsert(accessCode: "222222"));
+        var bystander = await StoredUserAsync("TICKET-2");
+        Assert.NotNull(bystander);
+
+        await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper", accessCode: "111111"));
+
+        var untouched = Assert.Single(
+            await QueuedWorkAsync(),
+            work => work.UserId == bystander.Id
+        );
+        Assert.Equal(ReplicationStatus.Pending, untouched.Status);
+        Assert.Equal(ReplicationOperation.Add, untouched.Operation);
+    }
 }

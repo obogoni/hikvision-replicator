@@ -21,7 +21,11 @@ namespace HikvisionReplicator.Api.Infrastructure;
 /// and a second removal queues nothing (REP-42) without a guard anywhere in this file.
 /// </para>
 /// </summary>
-public class ReplicationFanOut(AppDbContext context, IDeviceRepository devices)
+public class ReplicationFanOut(
+    AppDbContext context,
+    IDeviceRepository devices,
+    IReplicationRepository replications
+)
     : IDomainEventHandler<UserRegistered>,
         IDomainEventHandler<UserRestored>,
         IDomainEventHandler<UserChanged>,
@@ -101,6 +105,23 @@ public class ReplicationFanOut(AppDbContext context, IDeviceRepository devices)
         // materialising the catalogue to use its keys would put twenty aggregates through
         // the change tracker for nothing.
         var readers = await devices.ListAsync(new RegisteredDeviceIdsSpec(), cancellationToken);
+
+        // Room is made before the new intent is staged. The queue is an intent log, not a
+        // history of keystrokes: a spectator edited five times before kickoff owes each
+        // reader one piece of work, not five (REP-08). The pending index is what enforces
+        // that — this is not a read-then-write check standing in for it, it is the
+        // supersession the index leaves room for (AD-022).
+        //
+        // The specification returns Pending rows only, which is where REP-12 comes from:
+        // work already in a reader's hands is left to reach its own terminal status, and
+        // the new intent is inserted beside it. The partial index permits exactly that.
+        var outstanding = await replications.ListAsync(
+            new PendingReplicationsForUserSpec(user.Id),
+            cancellationToken
+        );
+
+        foreach (var superseded in outstanding)
+            superseded.Supersede(now);
 
         foreach (var deviceId in readers)
         {

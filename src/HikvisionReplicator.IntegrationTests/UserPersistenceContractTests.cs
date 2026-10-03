@@ -112,6 +112,24 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         return await context.Users.CountAsync();
     }
 
+    private async Task<int> GivenRegisteredDeviceAsync(string ipAddress = "10.0.0.5")
+    {
+        await using var context = fixture.CreateDbContext();
+        var device = Device.Create("Turnstile A", ipAddress, 80, "admin", "cipher", 50_000, Now)
+            .AsT0;
+        context.Devices.Add(device);
+        await context.SaveChangesAsync();
+        return device.Id;
+    }
+
+    /// <summary>
+    /// The repository over one context, wired the way the container wires it. The queue is a
+    /// collaborator rather than a copied switch, because the fan-out commits in this
+    /// repository's save and its index can refuse the write (REP-13).
+    /// </summary>
+    private static UserRepository RepositoryOver(AppDbContext context) =>
+        new(context, new ReplicationRepository(context));
+
     private AppDbContext CreateRecordingContext(SqlRecorder recorder) =>
         new(
             new DbContextOptionsBuilder<AppDbContext>()
@@ -154,7 +172,7 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
 
         var recorder = new SqlRecorder();
         await using var context = CreateRecordingContext(recorder);
-        var repository = new UserRepository(context);
+        var repository = RepositoryOver(context);
 
         var found = await repository.FirstOrDefaultAsync(
             new UserByExternalRefSpec(Ref("TICKET-1")),
@@ -183,7 +201,7 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         var recorder = new SqlRecorder();
         await using var context = CreateRecordingContext(recorder);
 
-        var listed = await new UserRepository(context).ListAsync(
+        var listed = await RepositoryOver(context).ListAsync(
             new ActiveUsersPagedSpec(0, 10),
             CancellationToken.None
         );
@@ -229,7 +247,7 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
             await GivenRegisteredUserAsync($"TICKET-{index}", $"20000{index}");
 
         await using var context = fixture.CreateDbContext();
-        var repository = new UserRepository(context);
+        var repository = RepositoryOver(context);
 
         var firstTwo = await repository.ListAsync(new ActiveUsersPagedSpec(0, 2), CancellationToken.None);
         var nextTwo = await repository.ListAsync(new ActiveUsersPagedSpec(2, 2), CancellationToken.None);
@@ -286,7 +304,7 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
             await GivenRegisteredUserAsync("TICKET-1", "111111");
 
             await using var context = fixture.CreateDbContext();
-            var repository = new UserRepository(context);
+            var repository = RepositoryOver(context);
 
             // A 23505, but on an index this repository knows nothing about. Reporting it as one
             // of the two key conflicts would tell the caller to change a key that is already free.
@@ -319,13 +337,13 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         await GivenRegisteredUserAsync("TICKET-1", "123456");
 
         await using var refContext = fixture.CreateDbContext();
-        var byExternalRef = await new UserRepository(refContext).AddIfKeysFreeAsync(
+        var byExternalRef = await RepositoryOver(refContext).AddIfKeysFreeAsync(
             NewUser("TICKET-1", "222222"),
             CancellationToken.None
         );
 
         await using var codeContext = fixture.CreateDbContext();
-        var byAccessCode = await new UserRepository(codeContext).AddIfKeysFreeAsync(
+        var byAccessCode = await RepositoryOver(codeContext).AddIfKeysFreeAsync(
             NewUser("TICKET-2", "123456"),
             CancellationToken.None
         );
@@ -354,7 +372,7 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         await GivenRegisteredUserAsync("TICKET-1");
 
         await using var context = fixture.CreateDbContext();
-        var repository = new UserRepository(context);
+        var repository = RepositoryOver(context);
         var user = await context.Users.SingleAsync();
 
         // Remove the row behind the tracked instance, so saving fails for a reason that
@@ -377,7 +395,7 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
     public async Task Registering_a_spectator_aborts_when_the_caller_has_already_cancelled()
     {
         await using var context = fixture.CreateDbContext();
-        var repository = new UserRepository(context);
+        var repository = RepositoryOver(context);
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
 
@@ -405,5 +423,61 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
 
         await using var verification = fixture.CreateDbContext();
         Assert.Equal(0, await verification.Set<FacePicture>().CountAsync());
+    }
+
+    // ─── REP-13: the queue's index refuses inside this repository's save ─
+
+    /// <summary>
+    /// Which answer a write gets when the queue's pending index, not a user key, is what
+    /// refused it.
+    /// <para>
+    /// HTTP cannot distinguish it. The fan-out supersedes before it stages, so through a
+    /// route this collision is reachable only when two upserts for one spectator genuinely
+    /// interleave — and which of them loses is scheduling, not evidence (AD-026). Left
+    /// untranslated it is a <c>500</c>: a <c>23505</c> on an index this repository's own
+    /// switch does not name falls straight through. Here the index refuses every time.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_write_losing_the_outstanding_work_index_is_reported_as_a_conflict()
+    {
+        var userId = await GivenRegisteredUserAsync("TICKET-1", "123456");
+        var deviceId = await GivenRegisteredDeviceAsync();
+
+        await using (var seed = fixture.CreateDbContext())
+        {
+            seed.Replications.Add(
+                Replication.Create(
+                    userId,
+                    deviceId,
+                    ReplicationOperation.Add,
+                    ReplicationLane.Live,
+                    Now
+                )
+            );
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = fixture.CreateDbContext();
+        context.Replications.Add(
+            Replication.Create(
+                userId,
+                deviceId,
+                ReplicationOperation.Update,
+                ReplicationLane.Live,
+                Now.AddMinutes(1)
+            )
+        );
+
+        var result = await RepositoryOver(context)
+            .SaveIfKeysFreeAsync(CancellationToken.None);
+
+        // Literal text, for the reason the mapping test above gives: comparing only against
+        // the constant would prove the right branch ran, not that the sentence says anything.
+        Assert.Equal(
+            "Replication work for this user and device is already queued.",
+            result.AsT1.Message
+        );
+        Assert.Equal(IReplicationRepository.DuplicatePendingWork, result.AsT1.Message);
     }
 }
