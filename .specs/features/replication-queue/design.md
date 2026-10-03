@@ -121,7 +121,7 @@ constructed cannot refuse anything.
 
 - **Purpose**: Let the aggregate say what happened, so no caller has to.
 - **Location**: `Shared/IDomainEvent.cs`, `Domain/Events/`
-- **Events**: `UserRegistered`, `UserChanged`, `UserRestored`, `UserRemoved`, `DeviceRegistered` — each carrying only the aggregate id and the `now` that produced it
+- **Events**: `UserRegistered`, `UserChanged`, `UserRestored`, `UserRemoved`, `DeviceRegistered` — each carrying **the aggregate itself** and the `now` that produced it. **Corrected after Phase 1**: the original "only the aggregate id" shape is wrong for the two registration events, which are raised from inside the static factory where the database-generated key is still `0` (`Domain/User.cs:71`, `Domain/Device.cs:77`). Carrying the instance also spares the handler a re-read it would otherwise need
 - **Raised from**: `User.Create`, the `changed` branch of `User.Update`, `User.Restore`, `User.MarkDeleted`, `Device.Create`
 - **Storage**: `IAggregateRoot` gains `IReadOnlyCollection<IDomainEvent> DomainEvents` and `ClearDomainEvents()`. This extends AD-005's aggregate contract and touches `User` and `Device`, both shipped and verified — recorded as **AD-042**
 
@@ -206,6 +206,14 @@ public class BackfillIntent : IAggregateRoot
 **Relationships**: `Replication` → `User` (restrict; the user row always survives, AD-034) and
 → `Device` (**cascade**; DEV-25 is a hard delete). `BackfillIntent` → `Device` (cascade, unique).
 
+**Navigations exist for the unsaved case, and only there.** `Replication` carries a `User`
+navigation and `BackfillIntent` a `Device` navigation, so a row staged for an aggregate that has
+not been inserted yet gets its foreign key from EF's fix-up at save time rather than from a `0`.
+Both keep their int-based factories for the paths where the aggregate is already persisted and the
+id is known — the whole backfill expansion, and live fan-out across already-registered devices.
+`Replication` needs no `Device` navigation: a replication is only ever staged against a device that
+is already in the catalogue.
+
 **Indexes**:
 
 | Index | Shape | Serves |
@@ -237,6 +245,7 @@ inserting a new enum member cannot silently re-map existing rows.
 
 | Concern | Location (file:line) | Impact | Mitigation |
 | --- | --- | --- | --- |
+| **A registration event's id is `0` at raise time.** The key is database-generated and the event is raised inside the static factory, before any insert | `Domain/User.cs:71`, `Domain/Device.cs:77` | A handler staging a row from that id writes a foreign key to a nonexistent row — caught by the Phase 1 worker, before any mapping existed to hide it | Events carry the aggregate, not the id, and `Replication`/`BackfillIntent` carry navigations so EF fixes the key up at save. **T6b**, ahead of the mapping tasks |
 | **Events are raised from inside shipped, verified aggregates.** `User.Create`, `User.Update`'s changed branch, `User.Restore`, `User.MarkDeleted`, `Device.Create` all gain a line | `Domain/User.cs`, `Domain/Device.cs` | A misplaced raise — outside the `changed` branch, say — breaks REP-04 silently, and these aggregates carry 282 unit tests that will not notice an extra event | One task per aggregate, unit tests asserting *which* events a call raises and that a no-op raises none. The sensor must mutate the raise out of each branch independently |
 | **An event with no registered handler is a silent no-op.** Dispatch resolves handlers from DI; a missing registration fans out nothing and throws nothing | `Infrastructure/DomainEventDispatcher.cs`, `Program.cs` | The exact L-037 shape: wired in tests, dead in production | A startup assertion that every `IDomainEvent` in the assembly has at least one handler registered, plus REP-39's meter check in the same test |
 | **Events must survive a failed save.** Clearing on dispatch would mean a save that throws loses them | `Infrastructure/AppDbContext.cs` | A retried or subsequent save fans out nothing; the spectator is queued nowhere | Clear **only after `base.SaveChangesAsync` returns**. Asserted by a test that forces a `23505` and then inspects the aggregate's event collection |

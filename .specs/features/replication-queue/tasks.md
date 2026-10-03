@@ -12,7 +12,7 @@ Verifier, discrimination sensor).
 ---
 
 **Design**: `.specs/features/replication-queue/design.md`
-**Status**: Draft
+**Status**: In Progress — Phase 1 complete (T1–T6, 348 unit tests, was 282)
 
 ---
 
@@ -56,20 +56,30 @@ up-to-date incremental build re-reports zero diagnostics even when the code stil
 Phases are ordered and run sequentially — each phase completes before the next begins, and tasks
 within a phase execute in order.
 
-### Phase 1: Domain foundation (Docker-free)
+### Phase 1: Domain foundation (Docker-free) — ✅ COMPLETE
 
 Pure logic. Nothing here touches EF, so the whole phase runs on the quick gate.
 
 ```
-T1 → T2 → T3 → T4 → T5 → T6
+T1 ✅ → T2 ✅ → T3 ✅ → T4 ✅ → T5 ✅ → T6 ✅
 ```
+
+Commits: `3f44aec`, `b39532a`, `862c3ce`, `cb4228f`, `b1dd1c7`, `3fc2ddc`. 282 → **348 unit tests**,
+0 failed, no existing test touched. Three deviations, all accepted:
+**(1)** `IAggregateRoot` gaining abstract members made T1's "User and Device compile unchanged"
+unsatisfiable, so an `abstract class AggregateRoot` holds the event list and the protected `Raise`;
+default interface implementations were rejected as exactly the silent-no-op shape the design warns
+about. **(2)** Aggregate-contract tests live in `Tests/Domain/`, not a `Tests/Shared/` namespace that
+would add a CA1716 warning. **(3)** `BackfillStatus` ships with T4 rather than T2, so T2 carries no
+unused type.
 
 ### Phase 2: Persistence
 
-Schema, mapping and the constraint translation the invariant depends on.
+Schema, mapping and the constraint translation the invariant depends on. **T6b is a Phase 1
+correction found by the Phase 1 worker** and must land before anything is mapped.
 
 ```
-T7 → T8 → T9 → T10 → T11 → T12
+T6b → T7 → T8 → T9 → T10 → T11 → T12
 ```
 
 ### Phase 3: Dispatch plumbing
@@ -234,6 +244,33 @@ T22 → T23 → T24 → T25
 
 ---
 
+### T6b: Carry the aggregate in domain events, not its id
+
+**What**: Change all five events to carry the aggregate instance, and give `Replication` a `User` navigation and `BackfillIntent` a `Device` navigation with matching factories.
+**Where**: `src/HikvisionReplicator.Api/Domain/Events/*.cs`, `Domain/Replication.cs`, `Domain/BackfillIntent.cs`, `Domain/User.cs`, `Domain/Device.cs` (modify)
+**Depends on**: T6
+**Reuses**: T2/T4's factory shapes
+**Requirement**: corrects the design for REP-01, REP-14 — see design.md § Risks, first row
+
+**Why this exists**: `UserRegistered` and `DeviceRegistered` are raised from inside the static factories (`Domain/User.cs:71`, `Domain/Device.cs:77`), where the database-generated key is still `0`. A handler staging a row from that id would write a foreign key to a row that does not exist. Carrying the aggregate lets EF fix the key up at save, and spares the handler a re-read.
+
+**Tools**: MCP: NONE · Skill: NONE
+
+**Done when**:
+- [ ] All five events carry the aggregate instance and `OccurredAt`; no event carries a bare id
+- [ ] `Replication` has a `User` navigation **and keeps** its int-based factory for the already-persisted paths (bulk expansion, live fan-out over registered devices)
+- [ ] `BackfillIntent` has a `Device` navigation and an instance factory, keeping the int-based one
+- [ ] `Replication` gains **no** `Device` navigation — a replication is only ever staged against a device already in the catalogue
+- [ ] A unit test asserts a registration event exposes the aggregate whose `Id` is still `0`, so the defect cannot silently return
+- [ ] All 348 existing unit tests still pass
+- [ ] Gate passes: quick
+- [ ] ≥ 6 unit tests pass
+
+**Tests**: unit · **Gate**: quick
+**Commit**: `fix(domain): carry the aggregate in domain events instead of its id`
+
+---
+
 ### T7: Map Replication, with the partial unique index
 
 **What**: `IEntityTypeConfiguration<Replication>` — enums as strings, FK behaviours, and the three indexes, with index names as constants.
@@ -249,6 +286,7 @@ T22 → T23 → T24 → T25
 - [ ] `Replication → Device` cascades; `Replication → User` restricts (users are tombstoned, AD-034)
 - [ ] Enums are stored as strings, not ordinals
 - [ ] Index names are `const` on the configuration class, so the repository can key off them
+- [ ] The `User` navigation from T6b is mapped, so EF fixes up the foreign key for a replication staged against an unsaved spectator
 - [ ] A contract test asserts the index **shape**, naming in its doc comment what HTTP cannot distinguish (AD-040)
 - [ ] Gate passes: full
 - [ ] ≥ 3 integration tests pass in `ReplicationQueueContractTests`
@@ -271,6 +309,7 @@ T22 → T23 → T24 → T25
 **Done when**:
 - [ ] `UNIQUE (DeviceId)` — one intent per device
 - [ ] Cascade on device delete
+- [ ] The `Device` navigation from T6b is mapped, so an intent staged against an unsaved device gets its key
 - [ ] Gate passes: build
 - [ ] Build emits no new warnings, verified with `--no-incremental` (L-007)
 
@@ -682,12 +721,12 @@ Execution is strictly sequential — there is no intra-phase parallelism.
 
 | Batch | Phases | Tasks | Count |
 | --- | --- | --- | --- |
-| 1 | Phase 1 | T1–T6 | 6 |
-| 2 | Phase 2 | T7–T12 | 6 |
+| 1 ✅ | Phase 1 | T1–T6 | 6 |
+| 2 | Phase 2 | T6b, T7–T12 | 7 |
 | 3 | Phase 3 + Phase 4 | T13–T21 | 9 |
 | 4 | Phase 5 | T22–T25 | 4 |
 
-25 tasks → **4 sequential batches**. More than one batch, so the sub-agent offer applies.
+26 tasks (T6b added mid-flight) → **4 sequential batches**. More than one batch, so the sub-agent offer applies.
 
 ---
 
@@ -720,7 +759,8 @@ Execution is strictly sequential — there is no intra-phase parallelism.
 | T4 | T1 | T1→T4 | ✅ |
 | T5 | T1 | T1→T5 | ✅ |
 | T6 | T1 | T1→T6 | ✅ |
-| T7 | T3 | T3→T7 | ✅ |
+| T6b | T6 | T6→T6b | ✅ |
+| T7 | T3, T6b | T3,T6b→T7 | ✅ |
 | T8 | T4 | T4→T8 | ✅ |
 | T9 | T7, T8 | T7,T8→T9 | ✅ |
 | T10 | T9 | T9→T10 | ✅ |
