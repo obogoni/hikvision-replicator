@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace HikvisionReplicator.IntegrationTests;
 
@@ -90,6 +91,18 @@ public class DomainEventDispatchTests(PostgresFixture fixture) : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Keeps an event handled without doing anything about it. The startup guard refuses to
+    /// boot an application where an event reaches nobody, so a host that removes the real
+    /// fan-out has to put something in its place.
+    /// </summary>
+    private sealed class SilentHandler<TEvent> : IDomainEventHandler<TEvent>
+        where TEvent : IDomainEvent
+    {
+        public Task HandleAsync(TEvent domainEvent, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+    }
+
     private sealed class ThrowingHandler : IDomainEventHandler<UserRegistered>
     {
         public const string Refusal = "the handler refused this write";
@@ -100,11 +113,40 @@ public class DomainEventDispatchTests(PostgresFixture fixture) : IAsyncLifetime
 
     // ─── The harness ─────────────────────────────────────────────────────
 
+    private static readonly Type[] EveryDomainEvent =
+    [
+        typeof(UserRegistered),
+        typeof(UserRestored),
+        typeof(UserChanged),
+        typeof(UserRemoved),
+        typeof(DeviceRegistered),
+    ];
+
+    /// <summary>
+    /// A host whose handler set is entirely the test's own.
+    /// <para>
+    /// These tests are about the hook, not about the rules, so the real fan-out is taken out
+    /// and a silent handler left in its place: a row found in the queue afterwards can only
+    /// have come from the handler under test, and the startup guard still has something to
+    /// find for every event.
+    /// </para>
+    /// </summary>
     private WebApplicationFactory<Program> HostWith(Action<IServiceCollection> register) =>
         fixture.Factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+
+                foreach (var domainEvent in EveryDomainEvent)
+                {
+                    var handler = typeof(IDomainEventHandler<>).MakeGenericType(domainEvent);
+                    services.RemoveAll(handler);
+                    services.AddScoped(
+                        handler,
+                        typeof(SilentHandler<>).MakeGenericType(domainEvent)
+                    );
+                }
+
                 register(services);
             })
         );

@@ -1,9 +1,12 @@
 using System.Net;
+using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Trace;
@@ -13,7 +16,9 @@ namespace HikvisionReplicator.IntegrationTests;
 /// <summary>
 /// The behaviours that are decided while the application is starting, not while it is
 /// handling a request: encryption-key validation (DEV-15), conditional tracing (DEV-16),
-/// and the Development-only API documentation (DEV-17).
+/// the Development-only API documentation (DEV-17), the wiring the write path fans out
+/// through (AD-042), and what the assembly deliberately does <em>not</em> contain (REP-34,
+/// AD-039).
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public class StartupTests(PostgresFixture fixture)
@@ -24,6 +29,23 @@ public class StartupTests(PostgresFixture fixture)
 
     /// <summary>A three-byte key — valid Base64, but not the 32 bytes AES-256 needs.</summary>
     private const string ThreeByteBase64Key = "AAAA";
+
+    /// <summary>
+    /// The runners and schedulers AD-039 defers to feature 4. OD-3 is still open, so this is
+    /// the field of candidates rather than one rejected product.
+    /// </summary>
+    private static readonly string[] JobRunners =
+    [
+        "Hangfire",
+        "Quartz",
+        "Coravel",
+        "FluentScheduler",
+        "NCrontab",
+        "Cronos",
+        "Rebus",
+        "MassTransit",
+        "Silverback",
+    ];
 
     private WebApplicationFactory<Program> BootWith(
         string? environment = null,
@@ -138,5 +160,105 @@ public class StartupTests(PostgresFixture fixture)
         var response = await client.GetAsync(ApiReferencePath);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ─── AD-042: the write path can only fan out through what is registered ─
+
+    [Fact]
+    public void Application_resolves_the_queue_wiring_a_user_write_fans_out_through()
+    {
+        using var factory = BootWith();
+        using var scope = factory.Services.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetService<IReplicationRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IDomainEventDispatcher>());
+    }
+
+    [Fact]
+    public void Every_event_an_aggregate_can_raise_reaches_a_registered_handler()
+    {
+        using var factory = BootWith();
+        using var scope = factory.Services.CreateScope();
+
+        // Listed rather than discovered by reflection: production discovers them that way,
+        // and a test that repeats the discovery would agree with a broken scan.
+        Assert.NotEmpty(scope.ServiceProvider.GetServices<IDomainEventHandler<UserRegistered>>());
+        Assert.NotEmpty(scope.ServiceProvider.GetServices<IDomainEventHandler<UserRestored>>());
+        Assert.NotEmpty(scope.ServiceProvider.GetServices<IDomainEventHandler<UserChanged>>());
+        Assert.NotEmpty(scope.ServiceProvider.GetServices<IDomainEventHandler<UserRemoved>>());
+        Assert.NotEmpty(
+            scope.ServiceProvider.GetServices<IDomainEventHandler<DeviceRegistered>>()
+        );
+    }
+
+    [Fact]
+    public void Application_does_not_start_when_an_event_would_reach_nobody()
+    {
+        using var factory = fixture.Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.RemoveAll<IDomainEventHandler<UserRemoved>>()
+            )
+        );
+
+        var exception = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+
+        // The literal sentence is pinned here and nowhere else. Comparing only against the
+        // constant would prove the right branch ran, not that the message says anything —
+        // edit the constant and assertion and implementation move together, green all the
+        // way (AD-036's tautology trap).
+        Assert.Contains(
+            "No handler is registered for these domain events",
+            exception.Message,
+            StringComparison.Ordinal
+        );
+        Assert.Contains(nameof(UserRemoved), exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(UserRegistered), exception.Message, StringComparison.Ordinal);
+    }
+
+    // ─── REP-34 / AD-039: this feature ships nothing that runs ───────────
+
+    [Fact]
+    public void Application_ships_nothing_that_runs_on_its_own()
+    {
+        var assembly = typeof(AppDbContext).Assembly;
+
+        Assert.Empty(
+            assembly.GetTypes().Where(type => typeof(IHostedService).IsAssignableFrom(type))
+        );
+        Assert.Empty(
+            assembly.GetTypes().Where(type => typeof(BackgroundService).IsAssignableFrom(type))
+        );
+
+        // A hosted service could also arrive by registration alone, without a type of ours.
+        // The framework registers its own, so only this assembly's are in scope.
+        using var factory = BootWith();
+        Assert.Empty(
+            factory
+                .Services.GetServices<IHostedService>()
+                .Where(service => service.GetType().Assembly == assembly)
+        );
+    }
+
+    [Fact]
+    public void Application_carries_no_job_runner_or_scheduler()
+    {
+        // Two sweeps, because neither alone is enough. Compiled references name only what
+        // the code actually touches, so an unused package would not appear there; the
+        // output directory names everything that ships, including a package pulled in and
+        // not yet called.
+        var referenced = typeof(AppDbContext)
+            .Assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name ?? string.Empty);
+        var shipped = Directory
+            .EnumerateFiles(AppContext.BaseDirectory, "*.dll")
+            .Select(path => Path.GetFileNameWithoutExtension(path) ?? string.Empty);
+
+        foreach (var name in referenced.Concat(shipped))
+        {
+            Assert.DoesNotContain(
+                JobRunners,
+                runner => name.Contains(runner, StringComparison.OrdinalIgnoreCase)
+            );
+        }
     }
 }

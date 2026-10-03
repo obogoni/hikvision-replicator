@@ -1,3 +1,4 @@
+using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Features.Devices.GetDevice;
 using HikvisionReplicator.Api.Features.Devices.ListDevices;
 using HikvisionReplicator.Api.Features.Devices.RegisterDevice;
@@ -45,6 +46,29 @@ builder.Services.AddSingleton<IFaceImageNormalizer, SkiaFaceImageNormalizer>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IReplicationRepository, ReplicationRepository>();
+
+// The fan-out is one object serving five events, so it is registered once and surfaced
+// under each handler interface — a separate instance per interface would read the device
+// catalogue once per event on a path AD-038 measures. The concrete type stays resolvable
+// because the backfill expansion is invoked directly, never through an event (AD-039).
+builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+builder.Services.AddScoped<ReplicationFanOut>();
+builder.Services.AddScoped<IDomainEventHandler<UserRegistered>>(services =>
+    services.GetRequiredService<ReplicationFanOut>()
+);
+builder.Services.AddScoped<IDomainEventHandler<UserRestored>>(services =>
+    services.GetRequiredService<ReplicationFanOut>()
+);
+builder.Services.AddScoped<IDomainEventHandler<UserChanged>>(services =>
+    services.GetRequiredService<ReplicationFanOut>()
+);
+builder.Services.AddScoped<IDomainEventHandler<UserRemoved>>(services =>
+    services.GetRequiredService<ReplicationFanOut>()
+);
+builder.Services.AddScoped<IDomainEventHandler<DeviceRegistered>>(services =>
+    services.GetRequiredService<ReplicationFanOut>()
+);
 
 builder.UseRegisterDevice();
 builder.UseGetDevice();
@@ -110,6 +134,33 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // L-037's shape, one level up. An event with no registered handler fans out nothing and
+    // throws nothing: the write succeeds, the spectator is queued nowhere, and the first
+    // symptom is a face that does not open a turnstile. A missing registration is a startup
+    // defect, so this is where it stops the process.
+    var unhandled = typeof(IDomainEvent)
+        .Assembly.GetTypes()
+        .Where(type =>
+            type is { IsAbstract: false, IsInterface: false }
+            && typeof(IDomainEvent).IsAssignableFrom(type)
+        )
+        .Where(eventType =>
+            !scope
+                .ServiceProvider.GetServices(
+                    typeof(IDomainEventHandler<>).MakeGenericType(eventType)
+                )
+                .Any()
+        )
+        .Select(eventType => eventType.Name)
+        .ToList();
+
+    if (unhandled.Count > 0)
+    {
+        throw new InvalidOperationException(
+            $"{Program.UnhandledDomainEvents} {string.Join(", ", unhandled)}"
+        );
+    }
 }
 
 app.UseExceptionHandler();
@@ -137,4 +188,12 @@ app.MapRemoveUser();
 
 app.Run();
 
-public partial class Program { }
+public partial class Program
+{
+    /// <summary>
+    /// What startup says when an event would reach nobody. Named so the assertion that
+    /// proves the refusal does not have to match on a sentence fragment.
+    /// </summary>
+    public const string UnhandledDomainEvents =
+        "No handler is registered for these domain events, so a write raising one would queue nothing:";
+}
