@@ -391,7 +391,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
   - The near-miss is the point, and it is the Verifier's lesson applied one step earlier: the queued plan said "delete the duplicate", and only checking the requirement and the assertion's actual content revealed that deleting it would have dropped USR-40's evidence *and* a cardinality/leak guard. **Read what an assertion protects before calling it redundant.**
 - **Scope**: `src/HikvisionReplicator.IntegrationTests/**` — deletes `UserRepositoryTests`, `UserSpecificationTests`, `UserSchemaTests`, `DeviceRepositoryTests`; adds `UserPersistenceContractTests`, `DevicePersistenceContractTests`. `docs/test-patterns.md`. **Amends AD-024**, whose integration row named "repositories and specifications" as a target — that clause is what produced the duplication and is replaced by the use-case rule. AD-024's unit definition and AD-026's project-declares-the-level rule are unchanged. **AD-022 is unaffected in substance** but its "a renamed index silently degrades a 409 into a 500 unless a test covers it" hazard is now covered by the race tests' existing `Assert.DoesNotContain(InternalServerError)` plus the new deterministic mapping test.
 - **Date**: 2026-08-26
-- **Status**: active
+- **Status**: active — **extended by AD-040**, which adds a third contract class for the replication queue. The two-class list above is the state as of this entry, not a cap.
 
 ### AD-037
 - **Decision**: **A test class is named after the use case it covers** — the slice folder under `Features/{Resource}/{Operation}/` with `Tests` appended. `UpsertUser` → `UpsertUserTests`, `RegisterDevice` → `RegisterDeviceTests`. Two riders:
@@ -421,6 +421,22 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: the decision sits on the critical path of the product's core capability one feature later than it could — the cost AD-030 already accepted — and feature 3 may not lean on a runner's retry, backoff or scheduling primitives in its own tests, which means some of that machinery is exercised only once feature 4 lands.
 - **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-queue` (runner-agnostic constraint) and `replication-worker` (owns the resolution).
 - **Date**: 2026-10-02
+- **Status**: active
+
+### AD-040
+- **Decision**: **AD-036's below-HTTP exception is extended to a third contract class**, `ReplicationQueueContractTests`. The rule itself is unchanged — a test may go below HTTP only if it names, in its own doc comment, an observable HTTP cannot distinguish — and the new class carries the same obligation per test. The list of classes in AD-036 is a snapshot of what qualified then, not a cap on what may qualify.
+- **Reason**: `replication-queue` ships with **no HTTP surface of its own**. Feature 8 `replication-visibility` owns the queue's API and feature 4 owns its execution, so the backfill expansion (REP-17…REP-20) can be neither invoked nor observed through a route. The blind-spot sentence AD-036 demands is true here in its strongest form: there is no response at all to compare, so a right and a wrong implementation are indistinguishable over HTTP. Most of the feature does *not* need the exception — AD-036 governs what **drives** a test, not what it inspects, so fan-out, supersession and the capacity guard are driven through real routes and verified by reading the replications table, exactly as `CountUsersAsync` does today.
+- **Trade-off**: AD-036 already warned that the exception is a door and doors get used, and this is the first time it has been widened — which is the moment the warning was written for. The mitigation stays what AD-036 chose: the `Contract` suffix reads as a mechanism and invites the question, and the per-test sentence is enforced by review, not by a compiler. A third class also makes "exactly two" no longer a memorable bound, so the rule now leans entirely on the sentence rather than on the count.
+- **Scope**: `src/HikvisionReplicator.IntegrationTests/**`, `docs/test-patterns.md`. Extends AD-036; AD-024's unit definition and AD-026's project-declares-the-level rule are untouched.
+- **Date**: 2026-10-03
+- **Status**: active
+
+### AD-041
+- **Decision**: **A cross-cutting write that must be atomic with the write that triggers it is staged into the caller's change tracker and never saved on its own.** `IReplicationQueue` adds entities and returns; the calling slice's existing single `SaveChangesAsync` commits everything. No `BeginTransaction`, no second save, no outbox. Any future port with the same obligation follows this shape, and feature 4 inherits it: a worker that writes a result alongside a queue transition stages both and saves once.
+- **Reason**: this is AD-034's argument applied to the write path instead of to storage. A spectator who exists with no queued work is undetectable until a turnstile, so the two writes cannot be allowed to come apart — and the cheapest guarantee is the one with nothing to remember. The user slices already end in exactly one save (`AddIfKeysFreeAsync`, `SaveIfKeysFreeAsync`, `SaveChangesAsync`), so staging makes atomicity structural rather than procedural. An explicit transaction scope would have to be opened correctly at five separate call sites; a missed one fails silently and only under a crash.
+- **Trade-off**: the port's methods are not self-contained — calling one without a following save is a no-op that looks like success, which is a sharper edge than a method that persists what it is asked to persist. Mitigated by naming (`Stage…`) and by the fact that every caller is a slice that already saves. It also means the port cannot be used from anywhere that has no save of its own, which is a real constraint on feature 4's drain loop rather than an accident.
+- **Scope**: `Shared/IReplicationQueue.cs`, `Infrastructure/ReplicationQueue.cs`, the five staging call sites in `Features/Users/**` and `Features/Devices/**`. Binds `replication-worker` and any later port with an atomicity obligation.
+- **Date**: 2026-10-03
 - **Status**: active
 
 ## Handoff
