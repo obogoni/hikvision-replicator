@@ -139,6 +139,58 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
         Assert.Contains("\"Lane\", \"Status\"", definition, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// That a reader can be owed a backfill once, and only once.
+    /// <para>
+    /// HTTP cannot distinguish it. Nothing in this feature returns an intent, and registering
+    /// the same reader twice is already refused by the address index (REP-43), so the second
+    /// insert never happens through a route at all. The index is what makes a repeated
+    /// expansion impossible to record, and it is unfiltered on purpose: an <c>Expanded</c>
+    /// intent still occupies the reader's slot.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_reader_is_owed_at_most_one_backfill_whether_or_not_it_has_been_expanded()
+    {
+        var definition = await IndexDefinitionAsync(BackfillIntentConfiguration.DeviceIndexName);
+
+        Assert.Contains("UNIQUE", definition, StringComparison.Ordinal);
+        Assert.Contains("\"DeviceId\"", definition, StringComparison.Ordinal);
+        Assert.DoesNotContain(" WHERE ", definition, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// That the schema carries every index the design names, under the names it names.
+    /// <para>
+    /// HTTP is blind to all four: an index changes a query plan, not a response body. Two of
+    /// them are load-bearing beyond performance — the pending index is REP-09's only enforcement
+    /// and the backfill index is REP-14's — and the repository translates a violation by
+    /// matching the index <em>name</em>, so a rename degrades a 409 into a 500 with nothing
+    /// else noticing.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_queue_schema_carries_every_index_the_design_names()
+    {
+        await using var context = fixture.CreateDbContext();
+        var indexes = await context
+            .Database.SqlQuery<string>(
+                $"""
+                SELECT indexname AS "Value" FROM pg_indexes
+                WHERE tablename IN ('replications', 'backfill_intents')
+                """
+            )
+            .ToListAsync();
+
+        Assert.Contains(ReplicationConfiguration.PendingIndexName, indexes);
+        Assert.Contains(ReplicationConfiguration.LaneStatusIndexName, indexes);
+        Assert.Contains(BackfillIntentConfiguration.DeviceIndexName, indexes);
+
+        // EF's own convention index on the cascading foreign key — what keeps a device delete
+        // from sequentially scanning the queue to find the rows it takes with it.
+        Assert.Contains("IX_replications_DeviceId", indexes);
+    }
+
     // ─── REP-16 / AD-034: the two foreign keys are deliberately asymmetric ───
 
     /// <summary>
@@ -161,6 +213,26 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
         Assert.Equal(
             "RESTRICT",
             await DeleteRuleAsync(ReplicationConfiguration.TableName, nameof(Replication.UserId))
+        );
+    }
+
+    /// <summary>
+    /// That a backfill debt dies with the reader it was owed to.
+    /// <para>
+    /// HTTP cannot distinguish it from the delete side: a reader with an outstanding intent
+    /// either returns 204 or fails the constraint, and until the intent exists no route can
+    /// tell which. The rule lives in the schema, so this is where it is read.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_backfill_debt_follows_the_reader_it_was_recorded_for()
+    {
+        Assert.Equal(
+            "CASCADE",
+            await DeleteRuleAsync(
+                BackfillIntentConfiguration.TableName,
+                nameof(BackfillIntent.DeviceId)
+            )
         );
     }
 
