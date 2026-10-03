@@ -65,4 +65,22 @@ public class DeviceEventTests
 
         Assert.Empty(device.DomainEvents);
     }
+
+    // ─── The announcement carries the reader, never a key the database has not issued ───
+
+    /// <summary>
+    /// The same defect as on the spectator side: the registration is announced from inside the
+    /// factory, where the key is still <c>0</c>. An intent staged from that number would point
+    /// at a reader that does not exist, so the event carries the aggregate instead.
+    /// </summary>
+    [Fact]
+    public void A_registration_announces_the_reader_itself_before_the_database_has_keyed_it()
+    {
+        var device = Created();
+
+        var registered = Assert.IsType<DeviceRegistered>(Assert.Single(device.DomainEvents));
+
+        Assert.Same(device, registered.Device);
+        Assert.Equal(0, registered.Device.Id);
+    }
 }

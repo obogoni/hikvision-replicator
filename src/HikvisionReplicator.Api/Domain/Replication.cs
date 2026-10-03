@@ -20,6 +20,14 @@ public class Replication : AggregateRoot, IAggregateRoot
     public int Id { get; private set; }
     public int UserId { get; private set; }
     public int DeviceId { get; private set; }
+
+    /// <summary>
+    /// Set only when the work is staged for a spectator that has not been inserted yet, where
+    /// <see cref="UserId"/> is still <c>0</c> — EF fixes the foreign key up at save time from
+    /// this navigation. There is deliberately no counterpart for the device: a replication is
+    /// only ever staged against a reader already in the catalogue.
+    /// </summary>
+    public User? User { get; private set; }
     public ReplicationOperation Operation { get; private set; }
     public ReplicationLane Lane { get; private set; }
     public ReplicationStatus Status { get; private set; }
@@ -58,6 +66,27 @@ public class Replication : AggregateRoot, IAggregateRoot
         ReplicationLane lane,
         DateTime now
     ) => new(userId, deviceId, operation, lane, now);
+
+    /// <summary>
+    /// Queues the intent for a spectator whose key the database has not generated yet — the
+    /// registration path, where the aggregate arrives from the event that announced it. The
+    /// navigation is what carries the relationship until EF fixes up <see cref="UserId"/>.
+    /// </summary>
+    public static Replication Create(
+        User user,
+        int deviceId,
+        ReplicationOperation operation,
+        ReplicationLane lane,
+        DateTime now
+    )
+    {
+        ArgumentNullException.ThrowIfNull(user);
+
+        var replication = new Replication(user.Id, deviceId, operation, lane, now);
+        replication.User = user;
+
+        return replication;
+    }
 
     /// <summary>Takes the work in hand: <c>Pending → InProgress</c>.</summary>
     public OneOf<Success, ValidationError> Begin(DateTime now) =>

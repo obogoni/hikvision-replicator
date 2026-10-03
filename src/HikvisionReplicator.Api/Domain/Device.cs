@@ -74,7 +74,7 @@ public class Device : AggregateRoot, IAggregateRoot
             return capacityError;
 
         var device = new Device(name, ip, port, username, encryptedPassword, capacity, now);
-        device.Raise(new DeviceRegistered(device.Id, now));
+        device.Raise(new DeviceRegistered(device, now));
 
         return device;
     }

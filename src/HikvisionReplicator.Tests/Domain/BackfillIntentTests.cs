@@ -78,4 +78,32 @@ public class BackfillIntentTests
 
         Assert.Empty(reachable);
     }
+
+    // ─── An intent staged for a reader the database has not keyed yet ───
+
+    [Fact]
+    public void An_intent_staged_for_an_unsaved_reader_carries_the_reader_itself()
+    {
+        var device = Device
+            .Create("Turnstile A", "10.0.0.5", 80, "admin", "cipher", 50_000, RegisteredOn)
+            .AsT0;
+
+        var intent = BackfillIntent.Create(device, RegisteredOn);
+
+        Assert.Same(device, intent.Device);
+        Assert.Equal(BackfillStatus.Pending, intent.Status);
+    }
+
+    /// <summary>
+    /// The int-based factory stays for the paths that already know the key and have no
+    /// aggregate to hand.
+    /// </summary>
+    [Fact]
+    public void An_intent_staged_for_a_known_reader_carries_only_its_key()
+    {
+        var intent = Owed();
+
+        Assert.Equal(42, intent.DeviceId);
+        Assert.Null(intent.Device);
+    }
 }

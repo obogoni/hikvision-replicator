@@ -153,4 +153,56 @@ public class UserEventTests
 
         Assert.Empty(user.DomainEvents);
     }
+
+    // ─── The announcement carries the spectator, never a key the database has not issued ───
+
+    /// <summary>
+    /// The defect this guards against: the registration is announced from inside the factory,
+    /// so the key is still <c>0</c>. An event carrying that number would have a handler stage a
+    /// foreign key to a row that does not exist. Carrying the aggregate is what lets EF fix the
+    /// key up at save, and this test fails the moment the payload goes back to an id.
+    /// </summary>
+    [Fact]
+    public void A_registration_announces_the_spectator_itself_before_the_database_has_keyed_it()
+    {
+        var user = Created();
+
+        var registered = Assert.IsType<UserRegistered>(Assert.Single(user.DomainEvents));
+
+        Assert.Same(user, registered.User);
+        Assert.Equal(0, registered.User.Id);
+    }
+
+    [Fact]
+    public void A_correction_announces_the_spectator_it_corrected()
+    {
+        var user = Registered();
+
+        user.Update("Ada King", "004215", null, null, Later);
+
+        var changed = Assert.IsType<UserChanged>(Assert.Single(user.DomainEvents));
+        Assert.Same(user, changed.User);
+    }
+
+    [Fact]
+    public void A_resurrection_announces_the_spectator_it_brought_back()
+    {
+        var user = Tombstoned();
+
+        user.Restore("Ada King", "778899", NewFace, NewContent, LaterStill);
+
+        var restored = Assert.IsType<UserRestored>(Assert.Single(user.DomainEvents));
+        Assert.Same(user, restored.User);
+    }
+
+    [Fact]
+    public void A_removal_announces_the_spectator_it_tombstoned()
+    {
+        var user = Registered();
+
+        user.MarkDeleted(Later);
+
+        var removed = Assert.IsType<UserRemoved>(Assert.Single(user.DomainEvents));
+        Assert.Same(user, removed.User);
+    }
 }

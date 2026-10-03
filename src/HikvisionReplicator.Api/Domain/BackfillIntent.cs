@@ -12,6 +12,13 @@ public class BackfillIntent : AggregateRoot, IAggregateRoot
 {
     public int Id { get; private set; }
     public int DeviceId { get; private set; }
+
+    /// <summary>
+    /// Set only when the intent is staged for a reader that has not been inserted yet, where
+    /// <see cref="DeviceId"/> is still <c>0</c> — EF fixes the foreign key up at save time
+    /// from this navigation.
+    /// </summary>
+    public Device? Device { get; private set; }
     public BackfillStatus Status { get; private set; }
     public DateTime? ExpandedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -28,6 +35,21 @@ public class BackfillIntent : AggregateRoot, IAggregateRoot
     }
 
     public static BackfillIntent Create(int deviceId, DateTime now) => new(deviceId, now);
+
+    /// <summary>
+    /// Records the debt for a reader whose key the database has not generated yet — the
+    /// registration path, where the aggregate arrives from the event that announced it. The
+    /// navigation is what carries the relationship until EF fixes up <see cref="DeviceId"/>.
+    /// </summary>
+    public static BackfillIntent Create(Device device, DateTime now)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+
+        var intent = new BackfillIntent(device.Id, now);
+        intent.Device = device;
+
+        return intent;
+    }
 
     /// <summary>
     /// The roster has been staged: terminal. A second call is refused, which is what stops

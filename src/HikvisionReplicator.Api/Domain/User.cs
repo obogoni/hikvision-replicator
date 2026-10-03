@@ -68,7 +68,7 @@ public class User : AggregateRoot, IAggregateRoot
             return codeError;
 
         var user = new User(reference, trimmedName, code, fingerprint, pictureContent, now);
-        user.Raise(new UserRegistered(user.Id, now));
+        user.Raise(new UserRegistered(user, now));
 
         return user;
     }
@@ -121,7 +121,7 @@ public class User : AggregateRoot, IAggregateRoot
         if (changed)
         {
             UpdatedAt = now;
-            Raise(new UserChanged(Id, now));
+            Raise(new UserChanged(this, now));
         }
 
         return new Success();
@@ -141,7 +141,7 @@ public class User : AggregateRoot, IAggregateRoot
         DeletedAt = now;
         UpdatedAt = now;
         Picture = null;
-        Raise(new UserRemoved(Id, now));
+        Raise(new UserRemoved(this, now));
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ public class User : AggregateRoot, IAggregateRoot
         SetPicture(pictureContent);
         DeletedAt = null;
         UpdatedAt = now;
-        Raise(new UserRestored(Id, now));
+        Raise(new UserRestored(this, now));
 
         return new Success();
     }

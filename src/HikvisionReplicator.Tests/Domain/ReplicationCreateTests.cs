@@ -89,4 +89,56 @@ public class ReplicationCreateTests
     {
         Assert.Equal(1000, Replication.MaxLastErrorLength);
     }
+
+    // ─── Work staged for a spectator the database has not keyed yet ───
+
+    [Fact]
+    public void Work_staged_for_an_unsaved_spectator_carries_the_spectator_itself()
+    {
+        var user = User
+            .Create(
+                "TICKET-1",
+                "Ada Lovelace",
+                "004215",
+                FaceFingerprint.Create("0f1e2d3c", 51_200, 800, 600).AsT0,
+                [0x01, 0x02, 0x03],
+                QueuedOn
+            )
+            .AsT0;
+
+        var replication = Replication.Create(
+            user,
+            42,
+            ReplicationOperation.Add,
+            ReplicationLane.Live,
+            QueuedOn
+        );
+
+        Assert.Same(user, replication.User);
+        Assert.Equal(42, replication.DeviceId);
+        Assert.Equal(ReplicationStatus.Pending, replication.Status);
+    }
+
+    /// <summary>
+    /// The int-based factory stays, because the expansion and the live fan-out across
+    /// already-registered readers both know the key and have no aggregate to hand.
+    /// </summary>
+    [Fact]
+    public void Work_staged_for_a_known_spectator_carries_only_its_key()
+    {
+        var replication = Queued();
+
+        Assert.Equal(7, replication.UserId);
+        Assert.Null(replication.User);
+    }
+
+    /// <summary>
+    /// A replication is only ever staged against a reader already in the catalogue, so the
+    /// unsaved-aggregate problem does not exist on that side and no navigation is carried.
+    /// </summary>
+    [Fact]
+    public void Queued_work_carries_no_reader_navigation()
+    {
+        Assert.Null(typeof(Replication).GetProperty(nameof(Device)));
+    }
 }
