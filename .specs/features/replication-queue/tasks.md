@@ -12,7 +12,7 @@ Verifier, discrimination sensor).
 ---
 
 **Design**: `.specs/features/replication-queue/design.md`
-**Status**: In Progress — Phase 1 complete (T1–T6, 348 unit tests, was 282); Phase 2 complete
+**Status**: In Progress — Phases 1–4 complete (T1–T21 + T6b). 364 unit · 262 integration, all green; Phase 2 complete
 (T6b, T7–T12, 358 unit · 209 integration)
 
 ---
@@ -93,19 +93,44 @@ T9 to register both DbSets and prove the schema (both tables, all four indexes, 
 behaviours, no pending model diff, and the upgrade onto a database already holding spectators
 and readers). T9's commit subject was adjusted to match what it actually does.
 
-### Phase 3: Dispatch plumbing
+### Phase 3: Dispatch plumbing — ✅ COMPLETE
 
 The hook that makes Phase 1's events reach Phase 4's handler.
 
 ```
-T13 → T14 → T15
+T13 ✅ → T14 ✅ → T15 ✅
 ```
 
-### Phase 4: Fan-out rules
+Commits: `a506c3e`, `6b5cce2`, `0cc9314`. **T15 created `ReplicationFanOut` rather than T16**: its
+done-when requires startup to *fail* when an event has no handler, which is unsatisfiable while no
+handler type exists — so T15 ships the class with empty bodies, registered and guarded, and T16/T19
+fill them. T15 also isolated T14's `DomainEventDispatchTests.HostWith` harness, which would
+otherwise stage the same pair twice into one save and hit the pending index; harness only, no
+assertion changed. **AD-042's ordering is behaviourally pinned**: a throwing handler leaves no user
+row, and a failed save leaves the aggregate's events intact while a committed one clears them.
+
+### Phase 4: Fan-out rules — ✅ COMPLETE
 
 ```
-T16 → T17 → T18 → T19 → T20 → T21
+T16 ✅ → T17 ✅ → T18 ✅ → T19 ✅ → T20 ✅ → T21 ✅
 ```
+
+Commits: `21ca2d3`, `72da358`, `9c04c12`, `3a65ba6`, `3d6920b`, `a3bdde2`. **T17 injected
+`IReplicationRepository` into `UserRepository`** so the pending-index name lives in one place
+instead of being copied into a second switch; the eight construction sites in
+`UserPersistenceContractTests` moved to a `RepositoryOver(context)` factory, signature only.
+**T18 needed no production change** — T17's supersession helper already served the `UserRemoved`
+path, so T18 is purely its proof. **T20 reads intents through `WithSpecification` on the context**
+rather than adding an `IRepository<BackfillIntent>` registration, the expansion being their only
+consumer; the read still goes through `PendingBackfillIntentForDeviceSpec` (AD-006).
+**REP-13 has the deterministic proof the lesson demands**:
+`A_write_losing_the_outstanding_work_index_is_reported_as_a_conflict` drives the real index and pins
+the literal message, while the racing test asserts only the invariant and "never a 500".
+
+**One new build warning**: `CA1711` on `IDomainEventHandler` — the "EventHandler" suffix is reserved
+for delegates. The name is mandated by `design.md` and T13's `Where`, and the repo already carries
+the same rule unsuppressed for `PostgresCollection`, so the warning was kept rather than editing
+`.editorconfig`. Flagged for review rather than silently suppressed.
 
 ### Phase 5: Capacity guard and observability
 
@@ -739,8 +764,8 @@ Execution is strictly sequential — there is no intra-phase parallelism.
 | Batch | Phases | Tasks | Count |
 | --- | --- | --- | --- |
 | 1 ✅ | Phase 1 | T1–T6 | 6 |
-| 2 | Phase 2 | T6b, T7–T12 | 7 |
-| 3 | Phase 3 + Phase 4 | T13–T21 | 9 |
+| 2 ✅ | Phase 2 | T6b, T7–T12 | 7 |
+| 3 ✅ | Phase 3 + Phase 4 | T13–T21 | 9 |
 | 4 | Phase 5 | T22–T25 | 4 |
 
 26 tasks (T6b added mid-flight) → **4 sequential batches**. More than one batch, so the sub-agent offer applies.
