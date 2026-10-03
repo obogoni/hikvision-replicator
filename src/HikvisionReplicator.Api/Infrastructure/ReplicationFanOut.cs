@@ -80,8 +80,30 @@ public class ReplicationFanOut(
         );
     }
 
-    public Task HandleAsync(DeviceRegistered domainEvent, CancellationToken cancellationToken) =>
-        Task.CompletedTask;
+    /// <summary>
+    /// A new reader is owed the whole active roster, and that debt is <b>one row</b> — not
+    /// one per spectator (REP-14). At 50,000 spectators the naive form puts a 50,000-row
+    /// insert inside the HTTP request an operator is waiting on at the turnstile.
+    /// <para>
+    /// The expansion that turns the debt into work is deliberately not called from here:
+    /// it is invoked directly, by whatever ends up draining the queue (AD-039).
+    /// </para>
+    /// <para>
+    /// The aggregate is carried into the row rather than its key, for the same reason the
+    /// user path does it — the event is raised inside the factory, before the database has
+    /// issued one.
+    /// </para>
+    /// </summary>
+    public Task HandleAsync(DeviceRegistered domainEvent, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+
+        context.BackfillIntents.Add(
+            BackfillIntent.Create(domainEvent.Device, domainEvent.OccurredAt)
+        );
+
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// One piece of outstanding work per reader in the catalogue, in the live lane — AD-038's
