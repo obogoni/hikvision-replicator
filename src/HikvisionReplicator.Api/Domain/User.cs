@@ -1,3 +1,4 @@
+using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
@@ -66,7 +67,10 @@ public class User : AggregateRoot, IAggregateRoot
         if (codeResult.TryPickT1(out var codeError, out var code))
             return codeError;
 
-        return new User(reference, trimmedName, code, fingerprint, pictureContent, now);
+        var user = new User(reference, trimmedName, code, fingerprint, pictureContent, now);
+        user.Raise(new UserRegistered(user.Id, now));
+
+        return user;
     }
 
     /// <summary>
@@ -115,7 +119,10 @@ public class User : AggregateRoot, IAggregateRoot
         }
 
         if (changed)
+        {
             UpdatedAt = now;
+            Raise(new UserChanged(Id, now));
+        }
 
         return new Success();
     }
@@ -134,6 +141,7 @@ public class User : AggregateRoot, IAggregateRoot
         DeletedAt = now;
         UpdatedAt = now;
         Picture = null;
+        Raise(new UserRemoved(Id, now));
     }
 
     /// <summary>
@@ -172,6 +180,7 @@ public class User : AggregateRoot, IAggregateRoot
         SetPicture(pictureContent);
         DeletedAt = null;
         UpdatedAt = now;
+        Raise(new UserRestored(Id, now));
 
         return new Success();
     }
