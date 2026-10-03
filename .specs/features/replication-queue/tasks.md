@@ -461,8 +461,10 @@ T22 → T23 → T24 → T25
 
 ### T15: Register the handlers and assert the feature runs nothing
 
-**What**: DI registration for the dispatcher and handlers, a startup assertion that every `IDomainEvent` has at least one handler, and the AD-039 assembly check.
+**What**: DI registration for the dispatcher, the handlers **and `IReplicationRepository`**, a startup assertion that every `IDomainEvent` has at least one handler, and the AD-039 assembly check.
 **Where**: `src/HikvisionReplicator.Api/Program.cs` (modify), `src/HikvisionReplicator.IntegrationTests/StartupTests.cs` (modify)
+
+> **Carried from Batch 2:** `IReplicationRepository` was deliberately left unregistered — T10's done-when did not ask for it and this is the registration task. Without `AddScoped<IReplicationRepository, ReplicationRepository>()` here, T16 fails at startup resolving the fan-out.
 **Depends on**: T14
 **Reuses**: `StartupTests.cs` patterns
 **Requirement**: REP-34
@@ -470,6 +472,7 @@ T22 → T23 → T24 → T25
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
+- [ ] `IReplicationRepository` resolves from the container
 - [ ] Every `IDomainEvent` type in the assembly resolves at least one handler — an unregistered event fails startup rather than fanning out nothing (the L-037 shape)
 - [ ] A test asserts the API assembly contains no `IHostedService`, no `BackgroundService`, no scheduler and no job-runner package reference (REP-34, AD-039)
 - [ ] Gate passes: full
@@ -507,8 +510,10 @@ T22 → T23 → T24 → T25
 
 ### T17: Supersede pending work instead of duplicating it
 
-**What**: Before staging, move any `Pending` row for the pair to `Superseded`; leave `InProgress` rows alone.
-**Where**: `src/HikvisionReplicator.Api/Infrastructure/ReplicationFanOut.cs` (modify)
+**What**: Before staging, move any `Pending` row for the pair to `Superseded`; leave `InProgress` rows alone — and make the user save path report a lost pending-index race as a conflict rather than a crash.
+**Where**: `src/HikvisionReplicator.Api/Infrastructure/ReplicationFanOut.cs` (modify), `Infrastructure/UserRepository.cs` (modify)
+
+> **Carried from Batch 2, and load-bearing for REP-13:** `TranslateIfDuplicatePending` returns `Success` to mean *"not a duplicate-pending violation — let it propagate"*. `UserRepository.SaveIfKeysFreeAsync` is the save that commits the fan-out, and its `ConflictMessage` switch matches only the two **user** indexes — a `23505` on `IX_replications_pending` falls through and surfaces as a **`500`**. REP-13 says never a `500`, so that save must consult the replication translation. Do not break the two existing user-index messages while doing it.
 **Depends on**: T16
 **Reuses**: `PendingReplicationsForUserSpec` from T12
 **Requirement**: REP-08, REP-09, REP-10, REP-12, REP-13
@@ -519,7 +524,8 @@ T22 → T23 → T24 → T25
 - [ ] Three successive upserts leave one `Pending` row and two `Superseded` ones, the `Pending` carrying the newest intent (REP-08)
 - [ ] A superseded row keeps its operation, lane, attempt count and last error (REP-10)
 - [ ] An `InProgress` row is **not** superseded; the new intent is inserted `Pending` beside it (REP-12)
-- [ ] Concurrent upserts leave exactly one `Pending` row per pair, with **no `500`** anywhere (REP-13)
+- [ ] Concurrent upserts leave exactly one `Pending` row per pair, with **no `500`** anywhere (REP-13) — proven against the real index, not a mocked failure
+- [ ] The two existing user-index conflict messages still map correctly; `UserPersistenceContractTests` stays green
 - [ ] The duplicate-pending conflict is proven **deterministically**, not only by racing — a guard reachable only by winning a coin-flip is not a guard (AD-036)
 - [ ] Gate passes: full
 - [ ] ≥ 8 integration tests pass
