@@ -1,7 +1,9 @@
+using Ardalis.Specification.EntityFrameworkCore;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Domain.Specs;
 using HikvisionReplicator.Api.Shared;
+using Microsoft.EntityFrameworkCore;
 
 namespace HikvisionReplicator.Api.Infrastructure;
 
@@ -24,6 +26,7 @@ namespace HikvisionReplicator.Api.Infrastructure;
 public class ReplicationFanOut(
     AppDbContext context,
     IDeviceRepository devices,
+    IUserRepository users,
     IReplicationRepository replications
 )
     : IDomainEventHandler<UserRegistered>,
@@ -103,6 +106,71 @@ public class ReplicationFanOut(
         );
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Turns a reader's recorded debt into the work it stands for: one bulk-lane enrolment
+    /// per active spectator, and the debt settled. Returns how many rows were staged.
+    /// <para>
+    /// <b>Nothing in this feature calls this.</b> It is a directly-invocable operation
+    /// because AD-039 ships the queue runner-agnostic: whatever drains the queue decides
+    /// when a backfill is expanded, and that decision is feature 4's. Like everything else
+    /// here it stages and never saves (AD-041), so the caller's own save is what commits
+    /// the roster and the settled debt together.
+    /// </para>
+    /// <para>
+    /// Finding no outstanding debt is the answer to two different questions at once: the
+    /// reader was deleted and the cascade took its debt with it (REP-44), or the debt has
+    /// already been expanded (REP-20). Both mean nothing is owed, so both stage nothing and
+    /// neither is an error.
+    /// </para>
+    /// </summary>
+    public async Task<int> ExpandBackfillAsync(
+        int deviceId,
+        DateTime now,
+        CancellationToken cancellationToken
+    )
+    {
+        // Queried through the specification rather than an inline predicate (AD-006). There
+        // is no repository for intents because nothing else reads them: this operation is
+        // their only consumer.
+        var debt = await context
+            .BackfillIntents.WithSpecification(new PendingBackfillIntentForDeviceSpec(deviceId))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (debt is null)
+            return 0;
+
+        var roster = await users.ListAsync(new ActiveUserIdsSpec(), cancellationToken);
+
+        // A live intent outranks a backfill one (REP-19). The spectator whose ticket was
+        // bought while the reader was being registered is already owed an Add on the live
+        // lane, and a Bulk duplicate would both lose to the pending index and demote the
+        // work AD-038 wants to preempt with.
+        var alreadyOwed = await replications.ListAsync(
+            new PendingReplicationPairsForDeviceSpec(deviceId),
+            cancellationToken
+        );
+
+        var owed = roster.Except(alreadyOwed).ToList();
+
+        foreach (var userId in owed)
+        {
+            context.Replications.Add(
+                Replication.Create(
+                    userId,
+                    deviceId,
+                    ReplicationOperation.Add,
+                    ReplicationLane.Bulk,
+                    now
+                )
+            );
+        }
+
+        // Terminal, so a second invocation finds no outstanding debt and stages nothing.
+        debt.MarkExpanded(now);
+
+        return owed.Count;
     }
 
     /// <summary>

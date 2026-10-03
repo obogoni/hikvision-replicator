@@ -2,6 +2,7 @@ using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HikvisionReplicator.IntegrationTests;
 
@@ -496,5 +497,330 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
         Assert.NotEqual(0, stored.UserId);
         Assert.Equal(expectedUserId, stored.UserId);
         Assert.Equal(deviceId, stored.DeviceId);
+    }
+
+    // ─── REP-17…REP-20, REP-44…REP-46: the backfill expansion ───────────
+    //
+    // The expansion is the strongest form of AD-040's blind spot: it has no HTTP surface at
+    // all. Feature 8 owns the queue's API and feature 4 owns its execution, so there is no
+    // response to compare a right implementation against a wrong one — every test below
+    // still names its own observable, because the rule is the sentence and not the count.
+
+    private async Task<int> GivenRecordedDebtAsync(int deviceId)
+    {
+        await using var context = fixture.CreateDbContext();
+        var debt = BackfillIntent.Create(deviceId, Now);
+        context.BackfillIntents.Add(debt);
+        await context.SaveChangesAsync();
+        return debt.Id;
+    }
+
+    private async Task GivenActiveSpectatorsAsync(int count)
+    {
+        await using var context = fixture.CreateDbContext();
+        for (var index = 0; index < count; index++)
+            context.Users.Add(NewUser($"TICKET-{index}", $"{100_000 + index}"));
+        await context.SaveChangesAsync();
+    }
+
+    private async Task<int> GivenTombstonedSpectatorAsync(string externalRef, string accessCode)
+    {
+        await using var context = fixture.CreateDbContext();
+        var user = NewUser(externalRef, accessCode);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        user.MarkDeleted(Now.AddMinutes(1));
+        await context.SaveChangesAsync();
+        return user.Id;
+    }
+
+    /// <summary>
+    /// Runs the expansion the way feature 4 will: resolved from the container, invoked
+    /// directly, and committed by the caller's own save — because it stages and never saves
+    /// (AD-041).
+    /// </summary>
+    private async Task<int> ExpandAsync(int deviceId, bool commit = true)
+    {
+        using var scope = fixture.Factory.Services.CreateScope();
+        var fanOut = scope.ServiceProvider.GetRequiredService<ReplicationFanOut>();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var staged = await fanOut.ExpandBackfillAsync(deviceId, Now, CancellationToken.None);
+
+        if (commit)
+            await context.SaveChangesAsync();
+
+        return staged;
+    }
+
+    private async Task<List<Replication>> QueuedWorkAsync()
+    {
+        await using var context = fixture.CreateDbContext();
+        return await context.Replications.OrderBy(work => work.Id).ToListAsync();
+    }
+
+    /// <summary>
+    /// What a reader's recorded debt actually turns into.
+    /// <para>
+    /// HTTP cannot distinguish it, in the strongest sense AD-040 describes: nothing invokes
+    /// the expansion over a route and nothing returns a replication, so there is no response
+    /// at all to tell a correct expansion from one that staged the wrong lane, the wrong
+    /// operation, or nothing.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_queues_one_bulk_enrolment_per_active_spectator()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(5);
+
+        var staged = await ExpandAsync(deviceId);
+
+        Assert.Equal(5, staged);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(5, queued.Count);
+        Assert.All(
+            queued,
+            work =>
+            {
+                Assert.Equal(ReplicationOperation.Add, work.Operation);
+
+                // Bulk, not Live. AD-038's whole preemption relationship is that a spectator
+                // at a turnstile goes ahead of a roster being loaded; staging a backfill on
+                // the live lane would put 50,000 rows in front of them.
+                Assert.Equal(ReplicationLane.Bulk, work.Lane);
+                Assert.Equal(ReplicationStatus.Pending, work.Status);
+                Assert.Equal(deviceId, work.DeviceId);
+            }
+        );
+    }
+
+    /// <summary>
+    /// That a spectator whose ticket was refunded is not enrolled by the backfill.
+    /// <para>
+    /// HTTP cannot distinguish it: a tombstoned spectator already reads as not found on
+    /// every route (USR-31), so enrolling them anyway changes no response — it puts a
+    /// destroyed face on a turnstile and nothing in the API says so.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_skips_tombstoned_spectators()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(5);
+        var refunded = await GivenTombstonedSpectatorAsync("REFUNDED-1", "900001");
+        var alsoRefunded = await GivenTombstonedSpectatorAsync("REFUNDED-2", "900002");
+
+        var staged = await ExpandAsync(deviceId);
+
+        Assert.Equal(5, staged);
+
+        var queued = await QueuedWorkAsync();
+        Assert.DoesNotContain(queued, work => work.UserId == refunded);
+        Assert.DoesNotContain(queued, work => work.UserId == alsoRefunded);
+    }
+
+    /// <summary>
+    /// That a live intent outranks a backfill one.
+    /// <para>
+    /// HTTP cannot distinguish it twice over: the expansion has no route, and the duplicate
+    /// a wrong implementation would stage is refused by the pending index rather than
+    /// returned to anyone. Staging it would either fail the whole expansion or, with the
+    /// filter dropped, demote work the live lane was meant to carry first.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_spectator_already_owed_work_by_the_reader_keeps_their_live_intent()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(3);
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            var first = await context.Users.OrderBy(user => user.Id).FirstAsync();
+            await GivenPendingWorkAsync(first.Id, deviceId);
+        }
+
+        var staged = await ExpandAsync(deviceId);
+
+        Assert.Equal(2, staged);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(3, queued.Count);
+        Assert.Single(queued, work => work.Lane == ReplicationLane.Live);
+        Assert.Equal(3, queued.Select(work => work.UserId).Distinct().Count());
+    }
+
+    /// <summary>
+    /// That a settled debt is recorded as settled, with the clock it was settled by.
+    /// <para>
+    /// HTTP cannot distinguish it: no route returns an intent, and the status is the only
+    /// thing that stops the roster being queued a second time — which is itself invisible
+    /// until the queue is read.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_settles_it()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(2);
+
+        await ExpandAsync(deviceId);
+
+        await using var context = fixture.CreateDbContext();
+        var debt = await context.BackfillIntents.SingleAsync();
+        Assert.Equal(BackfillStatus.Expanded, debt.Status);
+        Assert.Equal(Now, debt.ExpandedAt);
+    }
+
+    /// <summary>
+    /// That expanding a settled debt does nothing at all.
+    /// <para>
+    /// HTTP cannot distinguish it: whatever drains the queue gets no response a route can
+    /// show, and a second expansion that staged the roster again would be refused row by
+    /// row by the pending index — turning an idempotent no-op into a failure nobody asked
+    /// for.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_a_second_time_queues_nothing_further()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(4);
+        await ExpandAsync(deviceId);
+        var afterTheFirst = (await QueuedWorkAsync()).Select(work => work.Id).ToList();
+
+        var staged = await ExpandAsync(deviceId);
+
+        Assert.Equal(0, staged);
+        Assert.Equal(afterTheFirst, (await QueuedWorkAsync()).Select(work => work.Id));
+    }
+
+    /// <summary>
+    /// That a debt owed to a decommissioned reader is simply gone.
+    /// <para>
+    /// HTTP cannot distinguish it: the delete already answered 204 and the expansion answers
+    /// nobody. A throw here would surface in whatever drains the queue as a failure to retry
+    /// forever, for a reader that will never come back.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_for_a_reader_that_has_been_deleted_queues_nothing()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(3);
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            await context.Devices.Where(device => device.Id == deviceId).ExecuteDeleteAsync();
+        }
+
+        var staged = await ExpandAsync(deviceId);
+
+        Assert.Equal(0, staged);
+        Assert.Empty(await QueuedWorkAsync());
+    }
+
+    /// <summary>
+    /// That two expansions of the same debt cannot leave a spectator owed the same work
+    /// twice.
+    /// <para>
+    /// HTTP cannot distinguish it — the expansion has no route — and the duplicate would not
+    /// be visible from one either: both callers are whatever drains the queue. The pending
+    /// index is the arbiter, exactly as it is for two upserts, and this is where that can be
+    /// made to happen.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_concurrently_leaves_one_piece_of_work_per_spectator()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(3);
+
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var racers = Enumerable
+            .Range(0, 2)
+            .Select(async _ =>
+            {
+                await start.Task;
+                try
+                {
+                    return await ExpandAsync(deviceId);
+                }
+                catch (DbUpdateException)
+                {
+                    // The loser's save is refused by the pending index, which is the
+                    // guarantee rather than a defect: nothing of its roster is committed.
+                    return 0;
+                }
+            })
+            .ToList();
+
+        start.SetResult();
+        await Task.WhenAll(racers);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(3, queued.Count);
+        Assert.Equal(3, queued.Select(work => work.UserId).Distinct().Count());
+        Assert.All(queued, work => Assert.Equal(ReplicationStatus.Pending, work.Status));
+    }
+
+    /// <summary>
+    /// That the expansion stages into its caller's transaction and commits nothing itself.
+    /// <para>
+    /// HTTP cannot distinguish it — there is no route — and neither can a test that saves
+    /// straight afterwards: both end with the rows in the table. The difference only shows
+    /// when the caller's save never comes, which is the case AD-041 exists for.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_expansion_stages_the_roster_without_committing_it()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(3);
+
+        var staged = await ExpandAsync(deviceId, commit: false);
+
+        Assert.Equal(3, staged);
+        Assert.Empty(await QueuedWorkAsync());
+
+        await using var context = fixture.CreateDbContext();
+        Assert.Equal(BackfillStatus.Pending, (await context.BackfillIntents.SingleAsync()).Status);
+    }
+
+    /// <summary>
+    /// That a debt owed when the registry is empty is still settled.
+    /// <para>
+    /// HTTP cannot distinguish it: nothing is queued either way, and the only difference is
+    /// whether the debt stays outstanding — which, left Pending, would re-expand against
+    /// whatever roster exists by then and silently re-run on every sweep.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_owed_when_nobody_is_registered_still_settles_it()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+
+        var staged = await ExpandAsync(deviceId);
+
+        Assert.Equal(0, staged);
+        Assert.Empty(await QueuedWorkAsync());
+
+        await using var context = fixture.CreateDbContext();
+        Assert.Equal(
+            BackfillStatus.Expanded,
+            (await context.BackfillIntents.SingleAsync()).Status
+        );
     }
 }
