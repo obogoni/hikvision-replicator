@@ -265,4 +265,55 @@ public partial class UpsertUserTests
         Assert.Equal("111111", stored.AccessCode.Value);
         Assert.Equal("Grace Hopper", stored.Name);
     }
+
+    // ─── REP-02 / REP-04 / REP-05: a correction queues an update ─────────
+    // The reader is registered after the spectator in these, so the registration queued
+    // nothing and whatever is in the queue was put there by the correction.
+
+    [Fact]
+    public async Task Correcting_a_spectator_queues_an_update_for_every_reader()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await GivenRegisteredDeviceAsync("10.0.0.2");
+
+        var response = await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(2, queued.Count);
+        Assert.All(
+            queued,
+            work =>
+            {
+                Assert.Equal(ReplicationOperation.Update, work.Operation);
+                Assert.Equal(ReplicationLane.Live, work.Lane);
+                Assert.Equal(ReplicationStatus.Pending, work.Status);
+            }
+        );
+    }
+
+    [Fact]
+    public async Task Re_sending_an_identical_representation_queues_nothing()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+
+        var response = await UpsertAsync("TICKET-1", ValidUpsert());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await QueuedWorkAsync());
+    }
+
+    [Fact]
+    public async Task Correcting_a_spectator_with_no_readers_queues_nothing()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        var response = await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await QueuedWorkAsync());
+    }
 }

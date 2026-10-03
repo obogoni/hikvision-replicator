@@ -183,4 +183,62 @@ public class RemoveUserTests(PostgresFixture fixture) : UserApiTests(fixture)
         Assert.NotNull(claimant);
         Assert.Equal("123456", claimant.AccessCode.Value);
     }
+
+    // ─── REP-03 / REP-42 / REP-05: a removal queues a removal ────────────
+
+    [Fact]
+    public async Task Removing_a_spectator_queues_a_removal_for_every_reader()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await GivenRegisteredDeviceAsync("10.0.0.2");
+
+        var response = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(2, queued.Count);
+        Assert.All(
+            queued,
+            work =>
+            {
+                Assert.Equal(ReplicationOperation.Remove, work.Operation);
+                Assert.Equal(ReplicationLane.Live, work.Lane);
+                Assert.Equal(ReplicationStatus.Pending, work.Status);
+            }
+        );
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_a_second_time_queues_nothing_further()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await RemoveAsync("TICKET-1");
+        var afterTheFirst = await QueuedWorkAsync();
+
+        // USR-32 and A-16 make the second removal answer success, not 404, which is exactly
+        // why this is a live trap: work hung off a successful response would fan out again
+        // against a spectator who is already a tombstone.
+        var second = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Single(afterTheFirst);
+        Assert.Equal(
+            afterTheFirst.Select(work => work.Id),
+            (await QueuedWorkAsync()).Select(work => work.Id)
+        );
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_with_no_readers_queues_nothing()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        var response = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await QueuedWorkAsync());
+    }
 }

@@ -327,4 +327,104 @@ public partial class UpsertUserTests
             );
         }
     }
+
+    // ─── REP-01 / REP-05 / REP-07: registering a spectator queues the fleet ─
+
+    [Fact]
+    public async Task Registering_a_spectator_queues_an_add_for_every_reader()
+    {
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await GivenRegisteredDeviceAsync("10.0.0.2");
+        await GivenRegisteredDeviceAsync("10.0.0.3");
+
+        var response = await UpsertAsync("TICKET-1", ValidUpsert());
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(3, queued.Count);
+        Assert.All(
+            queued,
+            work =>
+            {
+                Assert.Equal(ReplicationOperation.Add, work.Operation);
+                Assert.Equal(ReplicationLane.Live, work.Lane);
+                Assert.Equal(ReplicationStatus.Pending, work.Status);
+            }
+        );
+    }
+
+    [Fact]
+    public async Task Work_queued_for_a_new_spectator_names_them_and_one_distinct_reader()
+    {
+        int[] readers =
+        [
+            await GivenRegisteredDeviceAsync("10.0.0.1"),
+            await GivenRegisteredDeviceAsync("10.0.0.2"),
+        ];
+
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        var spectator = await StoredUserAsync("TICKET-1");
+        Assert.NotNull(spectator);
+
+        var queued = await QueuedWorkAsync();
+
+        // The key is issued by the database only after the event was raised, so a fan-out
+        // reading the id off the event would have written a foreign key of 0 here.
+        Assert.All(queued, work => Assert.Equal(spectator.Id, work.UserId));
+        Assert.Equal(readers.Order(), queued.Select(work => work.DeviceId).Order());
+    }
+
+    [Fact]
+    public async Task Registering_a_spectator_with_no_readers_queues_nothing()
+    {
+        var response = await UpsertAsync("TICKET-1", ValidUpsert());
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Empty(await QueuedWorkAsync());
+    }
+
+    [Fact]
+    public async Task Each_spectator_is_queued_for_every_reader_independently()
+    {
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await GivenRegisteredDeviceAsync("10.0.0.2");
+
+        await UpsertAsync("TICKET-1", ValidUpsert(accessCode: "111111"));
+        await UpsertAsync("TICKET-2", ValidUpsert(accessCode: "222222"));
+
+        var queued = await QueuedWorkAsync();
+
+        Assert.Equal(4, queued.Count);
+        Assert.Equal(4, queued.Select(work => (work.UserId, work.DeviceId)).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task A_registration_that_fails_queues_nothing()
+    {
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+
+        // Refuses the second half of the user write at the database, after the fan-out has
+        // already staged its row into the same save.
+        await ExecuteSqlAsync(
+            """ALTER TABLE face_pictures ADD CONSTRAINT refuse_writes CHECK (false)"""
+        );
+
+        try
+        {
+            var response = await UpsertAsync("TICKET-1", ValidUpsert());
+
+            Assert.False(response.IsSuccessStatusCode);
+            Assert.Equal(0, await CountUsersAsync());
+
+            // Had the fan-out saved rows of its own (AD-041) they would have outlived the
+            // failure, leaving work queued for a spectator who does not exist.
+            Assert.Empty(await QueuedWorkAsync());
+        }
+        finally
+        {
+            await ExecuteSqlAsync("""ALTER TABLE face_pictures DROP CONSTRAINT refuse_writes""");
+        }
+    }
 }

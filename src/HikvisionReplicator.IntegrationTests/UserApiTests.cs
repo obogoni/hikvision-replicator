@@ -99,6 +99,40 @@ public abstract class UserApiTests(PostgresFixture fixture) : IAsyncLifetime
         Assert.Equal(expectedDetail, body.GetProperty("detail").GetString());
     }
 
+    /// <summary>
+    /// Registers a reader through its own route and returns its id. The queue has no API of
+    /// its own, so a fan-out test still drives every side of the story over HTTP (AD-036).
+    /// </summary>
+    protected async Task<int> GivenRegisteredDeviceAsync(string ipAddress)
+    {
+        var response = await Client.PostAsJsonAsync(
+            "/api/devices",
+            new
+            {
+                name = $"Turnstile {ipAddress}",
+                ipAddress,
+                httpPort = 80,
+                username = "admin",
+                password = "s3cr3t-Passw0rd",
+                faceCapacity = 50_000,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await ReadBodyAsync(response)).GetProperty("id").GetInt32();
+    }
+
+    /// <summary>
+    /// The queue as the database holds it. Nothing returns a replication over HTTP — feature
+    /// 8 owns that surface — so what was queued is read where it lives, exactly as
+    /// <see cref="StoredPictureAsync"/> reads the face bytes.
+    /// </summary>
+    protected async Task<List<Replication>> QueuedWorkAsync()
+    {
+        await using var context = Fixture.CreateDbContext();
+        return await context.Replications.OrderBy(work => work.Id).ToListAsync();
+    }
+
     protected async Task<int> CountUsersAsync()
     {
         await using var context = Fixture.CreateDbContext();

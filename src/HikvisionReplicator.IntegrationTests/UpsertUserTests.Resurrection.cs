@@ -197,4 +197,27 @@ public partial class UpsertUserTests
         Assert.NotNull(stored);
         Assert.NotNull(stored.DeletedAt);
     }
+
+    // ─── REP-06: a resurrection owes an add, not an update ───────────────
+
+    [Fact]
+    public async Task Resurrecting_a_spectator_queues_an_add_rather_than_an_update()
+    {
+        await GivenRemovedSpectatorAsync();
+
+        // Registered after the removal, so nothing the earlier writes did is in the queue
+        // and the operation below is the resurrection's own.
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+
+        var response = await UpsertAsync("TICKET-1", ValidUpsert(name: "Grace Hopper"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // The readers no longer hold that face: the removal destroyed it, so what is owed is
+        // an enrolment and not a correction of something that is there.
+        var queued = Assert.Single(await QueuedWorkAsync());
+        Assert.Equal(ReplicationOperation.Add, queued.Operation);
+        Assert.Equal(ReplicationLane.Live, queued.Lane);
+        Assert.Equal(ReplicationStatus.Pending, queued.Status);
+    }
 }
