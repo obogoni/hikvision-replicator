@@ -43,6 +43,8 @@ builder
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 // Stateless and CPU-bound, so one instance serves every request (A-14).
 builder.Services.AddSingleton<IFaceImageNormalizer, SkiaFaceImageNormalizer>();
+// One set of instruments for the process, published on a meter the factory owns.
+builder.Services.AddSingleton<ReplicationMetrics>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -118,6 +120,10 @@ if (!string.IsNullOrEmpty(otlpEndpoint))
             metrics
                 .AddAspNetCoreInstrumentation()
                 .AddMeter(SkiaFaceImageNormalizer.MeterName)
+                // REP-39, the same lesson one feature later: without this line every
+                // instrument in ReplicationMetrics records into nothing in production while
+                // a test that installs its own listener goes on passing (L-037).
+                .AddMeter(ReplicationMetrics.MeterName)
                 .AddOtlpExporter(options =>
                 {
                     options.Endpoint = new Uri(otlpEndpoint);

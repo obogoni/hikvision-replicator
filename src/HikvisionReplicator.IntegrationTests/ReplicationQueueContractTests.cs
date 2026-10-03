@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Shared;
@@ -822,5 +823,71 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
             BackfillStatus.Expanded,
             (await context.BackfillIntents.SingleAsync()).Status
         );
+    }
+
+    /// <summary>
+    /// REP-35's other lane. HTTP cannot distinguish it in the same absolute sense the
+    /// expansion tests above describe: nothing invokes the expansion over a route, so an
+    /// enqueue counter that never records a single <c>Bulk</c> row returns byte-identical
+    /// responses to one that records them all — and the lane tag is what tells an operator
+    /// the backfill is moving at all.
+    /// </summary>
+    [Fact]
+    public async Task Expanding_a_debt_counts_the_work_it_queues_on_the_bulk_lane()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(2);
+
+        var enqueued = await EnqueueTagsWhileAsync(() => ExpandAsync(deviceId));
+
+        Assert.Equal(2, enqueued.Count);
+        Assert.All(
+            enqueued,
+            tags =>
+            {
+                Assert.Equal("Add", tags[ReplicationMetrics.OperationTag]);
+                Assert.Equal("Bulk", tags[ReplicationMetrics.LaneTag]);
+            }
+        );
+    }
+
+    /// <summary>
+    /// The tags of every enqueue the application recorded while the given work ran. The meter
+    /// is taken from the host's own factory, which caches by name, so reference equality keeps
+    /// any other host's measurements out.
+    /// </summary>
+    private async Task<List<Dictionary<string, object?>>> EnqueueTagsWhileAsync(Func<Task> work)
+    {
+        var meter = fixture
+            .Factory.Services.GetRequiredService<IMeterFactory>()
+            .Create(ReplicationMetrics.MeterName);
+        var recorded = new List<Dictionary<string, object?>>();
+
+        using (var listener = new MeterListener())
+        {
+            listener.InstrumentPublished = (instrument, subscription) =>
+            {
+                if (
+                    ReferenceEquals(instrument.Meter, meter)
+                    && instrument.Name == ReplicationMetrics.EnqueuedMetricName
+                )
+                    subscription.EnableMeasurementEvents(instrument);
+            };
+            listener.SetMeasurementEventCallback<long>(
+                (_, _, tags, _) =>
+                {
+                    var captured = new Dictionary<string, object?>(StringComparer.Ordinal);
+                    foreach (var tag in tags)
+                        captured[tag.Key] = tag.Value;
+                    recorded.Add(captured);
+                }
+            );
+            listener.Start();
+
+            await work();
+        }
+
+        return recorded;
     }
 }

@@ -29,6 +29,7 @@ public partial class ReplicationFanOut(
     IDeviceRepository devices,
     IUserRepository users,
     IReplicationRepository replications,
+    ReplicationMetrics metrics,
     ILogger<ReplicationFanOut> logger
 )
     : IDomainEventHandler<UserRegistered>,
@@ -167,6 +168,7 @@ public partial class ReplicationFanOut(
                     now
                 )
             );
+            metrics.Enqueued(ReplicationOperation.Add, ReplicationLane.Bulk);
         }
 
         // Terminal, so a second invocation finds no outstanding debt and stages nothing.
@@ -213,14 +215,22 @@ public partial class ReplicationFanOut(
         );
 
         foreach (var superseded in outstanding)
+        {
             superseded.Supersede(now);
+            metrics.Superseded();
+        }
 
         foreach (var deviceId in readers)
         {
             context.Replications.Add(
                 Replication.Create(user, deviceId, operation, ReplicationLane.Live, now)
             );
+            metrics.Enqueued(operation, ReplicationLane.Live);
         }
+
+        // One record per write, not per row: the question REP-38 answers is what one
+        // spectator costs the catalogue.
+        metrics.FanOut(readers.Count);
 
         // Only an arrival raises the roster: an amendment leaves it where it was and a
         // removal lowers it, so neither can push a reader over its ceiling.
@@ -250,7 +260,10 @@ public partial class ReplicationFanOut(
         var ceilings = await devices.ListAsync(new ReaderCeilingsSpec(), cancellationToken);
 
         foreach (var reader in ceilings.Where(reader => reader.FaceCapacity.Value < roster))
+        {
             LogRosterOutgrewReader(logger, reader.DeviceId, reader.FaceCapacity.Value, roster);
+            metrics.CapacityExceeded(reader.DeviceId);
+        }
     }
 
     /// <summary>
