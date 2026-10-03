@@ -6,6 +6,7 @@ namespace HikvisionReplicator.Api.Features.Devices.UpdateDevice;
 
 public class UpdateDeviceService(
     IDeviceRepository repository,
+    IUserRepository users,
     IEncryptionService encryptionService,
     TimeProvider timeProvider
 ) : IUpdateDeviceService
@@ -33,6 +34,8 @@ public class UpdateDeviceService(
             encryptedPassword = encryptionService.Encrypt(request.Password);
         }
 
+        var capacityBefore = device.FaceCapacity.Value;
+
         // Update validates every field before assigning any of them, so a rejected
         // update leaves the aggregate — and therefore the row — untouched (DEV-19).
         var updateResult = device.Update(
@@ -46,6 +49,20 @@ public class UpdateDeviceService(
         );
         if (updateResult.TryPickT1(out var validationError, out _))
             return validationError;
+
+        // Only a *change* to the ceiling is admission-checked (REP-23). A reader the roster
+        // has outgrown since it was registered keeps its place — that is REP-24's signal, not
+        // a refusal — so renaming it must not fail for a capacity nobody touched.
+        if (device.FaceCapacity.Value != capacityBefore)
+        {
+            var tooSmall = await FleetAdmission.RefuseIfTooSmallAsync(
+                users,
+                device.FaceCapacity.Value,
+                cancellationToken
+            );
+            if (tooSmall is not null)
+                return tooSmall;
+        }
 
         // The device's own address is never a conflict with itself (DEV-20).
         var addressTaken = await repository.AnyAsync(

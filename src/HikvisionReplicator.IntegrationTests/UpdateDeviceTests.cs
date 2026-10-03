@@ -245,4 +245,122 @@ public class UpdateDeviceTests(PostgresFixture fixture) : DeviceApiTests(fixture
             property => property.Name.Contains("password", StringComparison.OrdinalIgnoreCase)
         );
     }
+
+    // ─── REP-23: the admission guard applies to a lowered ceiling ────────
+
+    /// <summary>
+    /// REP-23 refuses on <em>the same terms</em> as REP-21, so the sentence is pinned here
+    /// too — with different numbers, so a format that silently stopped naming the capacity
+    /// cannot satisfy both tests by coincidence.
+    /// </summary>
+    [Fact]
+    public async Task Lowering_capacity_below_the_active_roster_is_refused()
+    {
+        var (id, _) = await GivenRegisteredDeviceAsync();
+        await GivenActiveSpectatorsAsync(7);
+
+        var response = await UpdateAsync(id, new { faceCapacity = 3 });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await ReadBodyAsync(response);
+        Assert.Equal(
+            "This device holds 3 faces, but 7 users are active.",
+            problem.GetProperty("detail").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task A_capacity_change_refused_for_the_roster_persists_nothing()
+    {
+        var (id, original) = await GivenRegisteredDeviceAsync();
+        await GivenActiveSpectatorsAsync(7);
+
+        await UpdateAsync(id, new { name = "Side Gate Reader", faceCapacity = 3 });
+
+        // The aggregate was already mutated in memory when the refusal was returned, so the
+        // thing worth proving is that nothing saved it — the name went nowhere either.
+        var reread = await ReadBodyAsync(await Client.GetAsync($"/api/devices/{id}"));
+        Assert.Equal(
+            original.GetProperty("faceCapacity").GetInt32(),
+            reread.GetProperty("faceCapacity").GetInt32()
+        );
+        Assert.Equal(
+            original.GetProperty("name").GetString(),
+            reread.GetProperty("name").GetString()
+        );
+        Assert.Equal(
+            original.GetProperty("updatedAt").GetDateTime(),
+            reread.GetProperty("updatedAt").GetDateTime()
+        );
+    }
+
+    [Fact]
+    public async Task Lowering_capacity_to_exactly_the_active_roster_is_accepted()
+    {
+        var (id, _) = await GivenRegisteredDeviceAsync();
+        await GivenActiveSpectatorsAsync(7);
+
+        var response = await UpdateAsync(id, new { faceCapacity = 7 });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(7, (await ReadBodyAsync(response)).GetProperty("faceCapacity").GetInt32());
+    }
+
+    /// <summary>
+    /// A reader the roster outgrew after it was registered is not refused its next rename.
+    /// The guard is admission, and this reader was already admitted — REP-24 signals the
+    /// overflow instead.
+    /// </summary>
+    [Fact]
+    public async Task Update_that_leaves_capacity_alone_is_accepted_though_the_roster_outgrew_it()
+    {
+        var (id, original) = await GivenSmallRegisteredDeviceAsync();
+        await GivenActiveSpectatorsAsync(7);
+
+        var response = await UpdateAsync(id, new { name = "Side Gate Reader" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await ReadBodyAsync(response);
+        Assert.Equal("Side Gate Reader", body.GetProperty("name").GetString());
+        Assert.True(
+            body.GetProperty("updatedAt").GetDateTime()
+                > original.GetProperty("updatedAt").GetDateTime(),
+            "A real change must still advance updatedAt."
+        );
+    }
+
+    /// <summary>
+    /// DEV-23 unbroken under the guard: resubmitting the capacity a reader already has is no
+    /// change at all, so it is neither refused nor allowed to move the timestamp — even
+    /// though that very number is now below the roster.
+    /// </summary>
+    [Fact]
+    public async Task Resubmitting_the_capacity_a_reader_already_has_moves_nothing()
+    {
+        var (id, original) = await GivenSmallRegisteredDeviceAsync();
+        await GivenActiveSpectatorsAsync(7);
+
+        var response = await UpdateAsync(id, new { faceCapacity = SmallFaceCapacity });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            original.GetProperty("updatedAt").GetDateTime(),
+            (await ReadBodyAsync(response)).GetProperty("updatedAt").GetDateTime()
+        );
+    }
+
+    /// <summary>A reader small enough for the roster to outgrow it mid-test.</summary>
+    private const int SmallFaceCapacity = 3;
+
+    private async Task<(int Id, JsonElement Device)> GivenSmallRegisteredDeviceAsync()
+    {
+        var registration = await RegisterAsync(ValidRegistration(faceCapacity: SmallFaceCapacity));
+        Assert.Equal(HttpStatusCode.Created, registration.StatusCode);
+
+        var id = (await ReadBodyAsync(registration)).GetProperty("id").GetInt32();
+
+        // Re-read so every timestamp comparison uses the value the database stores.
+        return (id, await ReadBodyAsync(await Client.GetAsync($"/api/devices/{id}")));
+    }
 }
