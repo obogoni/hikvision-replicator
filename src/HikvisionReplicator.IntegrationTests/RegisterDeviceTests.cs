@@ -420,4 +420,98 @@ public class RegisterDeviceTests(PostgresFixture fixture) : DeviceApiTests(fixtu
         var debt = Assert.Single(await BackfillDebtsAsync());
         Assert.Equal(accepted, debt.DeviceId);
     }
+
+    // ─── REP-21 / REP-22 / REP-47: a reader that cannot hold the crowd ───
+
+    /// <summary>
+    /// REP-21. The literal sentence is pinned here, in one place, rather than compared against
+    /// the application's own format string — a tautological assertion moves with the code it
+    /// is supposed to hold still (<c>docs/test-patterns.md</c>). Both numbers appear in it
+    /// because an operator at a turnstile has to know which reader to swap and for what.
+    /// </summary>
+    [Fact]
+    public async Task Reader_too_small_for_the_active_roster_is_refused()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 5));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await ReadBodyAsync(response);
+        Assert.Equal(
+            "This device holds 5 faces, but 10 users are active.",
+            problem.GetProperty("detail").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task A_reader_refused_for_capacity_joins_neither_the_catalogue_nor_the_queue()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 9));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // A debt left behind by the refusal would owe the whole roster to hardware that was
+        // never admitted — the REP-43 failure, reached by the other refusal path.
+        Assert.Equal(0, await CountDevicesAsync());
+        Assert.Empty(await BackfillDebtsAsync());
+    }
+
+    /// <summary>
+    /// REP-22 at the boundary the guard turns on. A reader holding exactly the crowd holds
+    /// the crowd, so equality is admission, not refusal.
+    /// </summary>
+    [Fact]
+    public async Task Reader_sized_exactly_to_the_active_roster_is_registered()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 10));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await CountDevicesAsync());
+    }
+
+    [Fact]
+    public async Task Reader_larger_than_the_active_roster_is_registered()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 11));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await CountDevicesAsync());
+    }
+
+    /// <summary>REP-47: an empty registry admits the smallest reader there is.</summary>
+    [Fact]
+    public async Task Reader_of_any_size_is_registered_while_no_spectator_is_active()
+    {
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 1));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await CountDevicesAsync());
+    }
+
+    /// <summary>
+    /// The ceiling is the <em>active</em> roster (AD-015, AD-034). A tombstoned spectator is
+    /// never sent anywhere, so counting them would refuse hardware over faces no reader will
+    /// ever be asked to hold — and the registry never deletes a row, so that error grows
+    /// without bound over a season.
+    /// </summary>
+    [Fact]
+    public async Task Tombstoned_spectators_do_not_count_against_a_reader_capacity()
+    {
+        await UpsertSpectatorAsync("TICKET-1", "778811");
+        await UpsertSpectatorAsync("TICKET-2", "778822");
+
+        var removal = await Client.DeleteAsync("/api/users/TICKET-2");
+        Assert.Equal(HttpStatusCode.NoContent, removal.StatusCode);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 1));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
 }

@@ -7,6 +7,7 @@ namespace HikvisionReplicator.Api.Features.Devices.RegisterDevice;
 
 public class RegisterDeviceService(
     IDeviceRepository repository,
+    IUserRepository users,
     IEncryptionService encryptionService,
     TimeProvider timeProvider
 ) : IRegisterDeviceService
@@ -34,6 +35,16 @@ public class RegisterDeviceService(
         );
         if (deviceResult.TryPickT1(out var validationError, out var device))
             return validationError;
+
+        // Admission before the address check: a reader that can never hold the crowd is
+        // refused whether or not something else already sits at that address (REP-21).
+        var tooSmall = await FleetAdmission.RefuseIfTooSmallAsync(
+            users,
+            device.FaceCapacity.Value,
+            cancellationToken
+        );
+        if (tooSmall is not null)
+            return tooSmall;
 
         // A friendly answer on the common path. The unique index remains the authority,
         // so a registration that slips past this check still comes back as a conflict.
