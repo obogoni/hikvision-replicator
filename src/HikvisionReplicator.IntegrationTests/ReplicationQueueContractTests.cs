@@ -1,5 +1,6 @@
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace HikvisionReplicator.IntegrationTests;
@@ -59,6 +60,19 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
         context.Users.Add(user);
         await context.SaveChangesAsync();
         return user.Id;
+    }
+
+    private async Task GivenPendingWorkAsync(
+        int userId,
+        int deviceId,
+        ReplicationOperation operation = ReplicationOperation.Add
+    )
+    {
+        await using var context = fixture.CreateDbContext();
+        context.Replications.Add(
+            Replication.Create(userId, deviceId, operation, ReplicationLane.Live, Now)
+        );
+        await context.SaveChangesAsync();
     }
 
     private async Task<string> IndexDefinitionAsync(string indexName)
@@ -278,6 +292,162 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
             .ToListAsync();
 
         Assert.Equal("Add/Live/Pending", Assert.Single(stored));
+    }
+
+    // ─── REP-13: the index's refusal is a domain answer, not a 500 ───
+
+    /// <summary>
+    /// Which message a lost duplicate-pending race produces.
+    /// <para>
+    /// HTTP cannot distinguish it in this feature at all: nothing saves a replication through
+    /// a route yet, and once the fan-out does, the mapping is reachable only when two upserts
+    /// for one spectator genuinely interleave. Which racer loses is scheduling, and a guard
+    /// that depends on thread scheduling is not evidence (AD-026) — so the mapping is proved
+    /// here, where the index decides every time.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_second_piece_of_outstanding_work_for_a_pair_is_reported_as_a_conflict()
+    {
+        var userId = await GivenRegisteredUserAsync();
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenPendingWorkAsync(userId, deviceId);
+
+        await using var context = fixture.CreateDbContext();
+        context.Replications.Add(
+            Replication.Create(
+                userId,
+                deviceId,
+                ReplicationOperation.Update,
+                ReplicationLane.Live,
+                Now
+            )
+        );
+        var violation = await Assert.ThrowsAsync<DbUpdateException>(() =>
+            context.SaveChangesAsync()
+        );
+
+        var translated = new ReplicationRepository(context).TranslateIfDuplicatePending(violation);
+
+        // Literal text, deliberately. Comparing only against the constant proves the right
+        // branch ran, not that the message is right: change the constant and assertion and
+        // implementation move together, green all the way (AD-036's tautology trap).
+        Assert.Equal(
+            "Replication work for this user and device is already queued.",
+            translated.AsT1.Message
+        );
+        Assert.Equal(IReplicationRepository.DuplicatePendingWork, translated.AsT1.Message);
+    }
+
+    /// <summary>
+    /// That a collision somewhere else is left alone.
+    /// <para>
+    /// HTTP cannot distinguish a mis-translation here from a correct one: both arms end in a
+    /// 409, and only the sentence differs — telling an operator its queued work collided when
+    /// what actually collided was a reader's backfill slot sends them to fix the wrong thing.
+    /// Provoking a violation on a specific other index needs the database, not a request.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_collision_on_another_index_is_not_reported_as_duplicate_pending_work()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+
+        await using (var first = fixture.CreateDbContext())
+        {
+            first.BackfillIntents.Add(BackfillIntent.Create(deviceId, Now));
+            await first.SaveChangesAsync();
+        }
+
+        await using var context = fixture.CreateDbContext();
+        context.BackfillIntents.Add(BackfillIntent.Create(deviceId, Now));
+        var violation = await Assert.ThrowsAsync<DbUpdateException>(() =>
+            context.SaveChangesAsync()
+        );
+
+        var translated = new ReplicationRepository(context).TranslateIfDuplicatePending(violation);
+
+        Assert.True(translated.IsT0);
+    }
+
+    /// <summary>
+    /// That a failure which is not a uniqueness violation at all is left alone.
+    /// <para>
+    /// HTTP cannot distinguish it: a swallowed foreign-key violation becomes a 409 the caller
+    /// can do nothing about, where the truth is a defect that should surface. Arranging a
+    /// dangling foreign key needs the database — no route can stage work for a reader that
+    /// was never catalogued.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_failure_that_is_not_a_unique_violation_is_not_reported_as_duplicate_pending_work()
+    {
+        var userId = await GivenRegisteredUserAsync();
+
+        await using var context = fixture.CreateDbContext();
+        context.Replications.Add(
+            Replication.Create(
+                userId,
+                deviceId: 9_999,
+                ReplicationOperation.Add,
+                ReplicationLane.Live,
+                Now
+            )
+        );
+        var violation = await Assert.ThrowsAsync<DbUpdateException>(() =>
+            context.SaveChangesAsync()
+        );
+
+        var translated = new ReplicationRepository(context).TranslateIfDuplicatePending(violation);
+
+        Assert.True(translated.IsT0);
+    }
+
+    /// <summary>
+    /// That superseding is what makes room for the next intent.
+    /// <para>
+    /// HTTP cannot distinguish this until the fan-out exists, and even then only by racing.
+    /// It is the other half of the pending index: if the filter were dropped the index would
+    /// refuse this insert, and the queue could never record a second intent for a pair at all
+    /// — which is the shape REP-08 depends on.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Superseding_outstanding_work_leaves_room_for_the_intent_that_replaced_it()
+    {
+        var userId = await GivenRegisteredUserAsync();
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenPendingWorkAsync(userId, deviceId);
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            var outstanding = await context.Replications.SingleAsync();
+            outstanding.Supersede(Now.AddMinutes(1));
+            context.Replications.Add(
+                Replication.Create(
+                    userId,
+                    deviceId,
+                    ReplicationOperation.Update,
+                    ReplicationLane.Live,
+                    Now.AddMinutes(1)
+                )
+            );
+
+            await context.SaveChangesAsync();
+        }
+
+        await using var verification = fixture.CreateDbContext();
+        var rows = await verification.Replications.ToListAsync();
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(
+            ReplicationOperation.Update,
+            Assert.Single(rows, row => row.Status == ReplicationStatus.Pending).Operation
+        );
+        Assert.Equal(
+            ReplicationOperation.Add,
+            Assert.Single(rows, row => row.Status == ReplicationStatus.Superseded).Operation
+        );
     }
 
     // ─── The navigation exists for exactly one case: a spectator with no key yet ───
