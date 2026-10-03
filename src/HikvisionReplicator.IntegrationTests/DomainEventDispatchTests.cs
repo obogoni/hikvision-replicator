@@ -173,7 +173,7 @@ public class DomainEventDispatchTests(PostgresFixture fixture) : IAsyncLifetime
     private static Task<HttpResponseMessage> UpsertAsync(HttpClient client, string externalRef) =>
         client.PutAsJsonAsync($"/api/users/{Uri.EscapeDataString(externalRef)}", ValidUpsert());
 
-    private async Task<int> RegisterDeviceAsync(HttpClient client)
+    private static async Task<int> RegisterDeviceAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync("/api/devices", ValidRegistration());
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

@@ -222,20 +222,21 @@ public class StartupTests(PostgresFixture fixture)
     {
         var assembly = typeof(AppDbContext).Assembly;
 
-        Assert.Empty(
-            assembly.GetTypes().Where(type => typeof(IHostedService).IsAssignableFrom(type))
+        Assert.DoesNotContain(
+            assembly.GetTypes(),
+            type => typeof(IHostedService).IsAssignableFrom(type)
         );
-        Assert.Empty(
-            assembly.GetTypes().Where(type => typeof(BackgroundService).IsAssignableFrom(type))
+        Assert.DoesNotContain(
+            assembly.GetTypes(),
+            type => typeof(BackgroundService).IsAssignableFrom(type)
         );
 
         // A hosted service could also arrive by registration alone, without a type of ours.
         // The framework registers its own, so only this assembly's are in scope.
         using var factory = BootWith();
-        Assert.Empty(
-            factory
-                .Services.GetServices<IHostedService>()
-                .Where(service => service.GetType().Assembly == assembly)
+        Assert.DoesNotContain(
+            factory.Services.GetServices<IHostedService>(),
+            service => service.GetType().Assembly == assembly
         );
     }
 

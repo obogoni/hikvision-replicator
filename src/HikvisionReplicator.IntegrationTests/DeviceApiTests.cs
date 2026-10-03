@@ -103,6 +103,31 @@ public abstract class DeviceApiTests(PostgresFixture fixture) : IAsyncLifetime
         return await db.Replications.CountAsync();
     }
 
+    protected async Task<List<Replication>> QueuedWorkAsync()
+    {
+        await using var db = Fixture.CreateDbContext();
+        return await db.Replications.OrderBy(work => work.Id).ToListAsync();
+    }
+
+    /// <summary>
+    /// Registers a spectator through its own route, so the live fan-out puts real work in
+    /// the queue for every reader already in the catalogue.
+    /// </summary>
+    protected async Task UpsertSpectatorAsync(string externalRef, string accessCode)
+    {
+        var response = await Client.PutAsJsonAsync(
+            $"/api/users/{Uri.EscapeDataString(externalRef)}",
+            new
+            {
+                name = "Ada Lovelace",
+                accessCode,
+                facePicture = FaceFixtures.Bytes(FaceFixtures.Portrait),
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
     /// <summary>
     /// Seeds spectators straight into the registry. Registration through the route would put
     /// a face picture through normalization for each one, which is minutes for the roster
