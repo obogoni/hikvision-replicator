@@ -12,7 +12,8 @@ Verifier, discrimination sensor).
 ---
 
 **Design**: `.specs/features/replication-queue/design.md`
-**Status**: In Progress — Phase 1 complete (T1–T6, 348 unit tests, was 282)
+**Status**: In Progress — Phase 1 complete (T1–T6, 348 unit tests, was 282); Phase 2 complete
+(T6b, T7–T12, 358 unit · 209 integration)
 
 ---
 
@@ -73,14 +74,24 @@ about. **(2)** Aggregate-contract tests live in `Tests/Domain/`, not a `Tests/Sh
 would add a CA1716 warning. **(3)** `BackfillStatus` ships with T4 rather than T2, so T2 carries no
 unused type.
 
-### Phase 2: Persistence
+### Phase 2: Persistence — ✅ COMPLETE
 
 Schema, mapping and the constraint translation the invariant depends on. **T6b is a Phase 1
 correction found by the Phase 1 worker** and must land before anything is mapped.
 
 ```
-T6b → T7 → T8 → T9 → T10 → T11 → T12
+T6b ✅ → T7 ✅ → T8 ✅ → T9 ✅ → T10 ✅ → T11 ✅ → T12 ✅
 ```
+
+Commits: `148cfeb`, `90fb5ec`, `2e7103a`, `79f5284`, `5da4900`, `f6b00ee`, `4454e21`.
+348 → **358 unit tests**, 193 → **209 integration tests**, 0 failed, no existing test touched.
+One deviation, accepted: **EF Core 10 refuses `Migrate()` while the model carries changes no
+migration covers**, so mapping an aggregate without its migration turns every integration test
+red. T9's single migration was therefore split and moved forward — `AddReplicationQueue` ships
+with T7 and `AddBackfillIntents` with T8, each with the configuration that needs it — leaving
+T9 to register both DbSets and prove the schema (both tables, all four indexes, both foreign-key
+behaviours, no pending model diff, and the upgrade onto a database already holding spectators
+and readers). T9's commit subject was adjusted to match what it actually does.
 
 ### Phase 3: Dispatch plumbing
 
