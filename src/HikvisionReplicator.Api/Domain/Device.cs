@@ -3,7 +3,7 @@ using OneOf;
 
 namespace HikvisionReplicator.Api.Domain;
 
-public class Device : IAggregateRoot
+public class Device : AggregateRoot, IAggregateRoot
 {
     public const int MaxNameLength = 100;
     public const int MaxUsernameLength = 100;

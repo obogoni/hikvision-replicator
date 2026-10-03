@@ -7,7 +7,7 @@ namespace HikvisionReplicator.Api.Domain;
 /// A spectator. Owns every identity invariant and the tombstone transition. The clock is
 /// always passed in, never read (AD-023), and the face picture arrives already normalized.
 /// </summary>
-public class User : IAggregateRoot
+public class User : AggregateRoot, IAggregateRoot
 {
     public const int MaxNameLength = 100;
 
