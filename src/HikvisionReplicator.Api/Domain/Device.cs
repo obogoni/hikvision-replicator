@@ -1,3 +1,4 @@
+using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
@@ -72,7 +73,10 @@ public class Device : AggregateRoot, IAggregateRoot
         if (capacityResult.TryPickT1(out var capacityError, out var capacity))
             return capacityError;
 
-        return new Device(name, ip, port, username, encryptedPassword, capacity, now);
+        var device = new Device(name, ip, port, username, encryptedPassword, capacity, now);
+        device.Raise(new DeviceRegistered(device.Id, now));
+
+        return device;
     }
 
     /// <summary>
