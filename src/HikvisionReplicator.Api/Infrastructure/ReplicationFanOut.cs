@@ -4,6 +4,7 @@ using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Domain.Specs;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace HikvisionReplicator.Api.Infrastructure;
 
@@ -23,11 +24,12 @@ namespace HikvisionReplicator.Api.Infrastructure;
 /// and a second removal queues nothing (REP-42) without a guard anywhere in this file.
 /// </para>
 /// </summary>
-public class ReplicationFanOut(
+public partial class ReplicationFanOut(
     AppDbContext context,
     IDeviceRepository devices,
     IUserRepository users,
-    IReplicationRepository replications
+    IReplicationRepository replications,
+    ILogger<ReplicationFanOut> logger
 )
     : IDomainEventHandler<UserRegistered>,
         IDomainEventHandler<UserRestored>,
@@ -219,5 +221,52 @@ public class ReplicationFanOut(
                 Replication.Create(user, deviceId, operation, ReplicationLane.Live, now)
             );
         }
+
+        // Only an arrival raises the roster: an amendment leaves it where it was and a
+        // removal lowers it, so neither can push a reader over its ceiling.
+        if (operation == ReplicationOperation.Add)
+            await SignalReadersTheRosterOutgrewAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// REP-24. The spectator is <b>accepted regardless</b> — refusing a ticket-holder at the
+    /// turnstile because a reader somewhere else is full is the failure this service exists to
+    /// prevent, and AD-021 puts the capacity guard at fleet admission for exactly that reason.
+    /// What crossing a ceiling produces is a signal to an operator, not an error to an
+    /// integrator.
+    /// <para>
+    /// Every reader the roster has outgrown is named, not just the one that tipped over
+    /// first: each is a separate piece of hardware that has to be swapped, and an operator
+    /// told about one of three learns the wrong size of the problem.
+    /// </para>
+    /// </summary>
+    private async Task SignalReadersTheRosterOutgrewAsync(CancellationToken cancellationToken)
+    {
+        // Dispatch runs before the save (AD-042), so the spectator who provoked this is not
+        // in the table yet. The number an operator needs is the one this write is about to
+        // make true: the stored count plus the one arriving.
+        var roster = await users.CountAsync(new ActiveUserCountSpec(), cancellationToken) + 1;
+
+        var ceilings = await devices.ListAsync(new ReaderCeilingsSpec(), cancellationToken);
+
+        foreach (var reader in ceilings.Where(reader => reader.FaceCapacity.Value < roster))
+            LogRosterOutgrewReader(logger, reader.DeviceId, reader.FaceCapacity.Value, roster);
+    }
+
+    /// <summary>
+    /// All three numbers are in the line because the counter of REP-37 can only carry the
+    /// reader: an active-user count is unbounded cardinality, and a metric tag that grows
+    /// with the crowd is a bill, not a signal.
+    /// </summary>
+    [LoggerMessage(
+        EventId = 1,
+        Level = LogLevel.Warning,
+        Message = "Device {DeviceId} holds {FaceCapacity} faces, but {ActiveUserCount} users are now active."
+    )]
+    private static partial void LogRosterOutgrewReader(
+        ILogger logger,
+        int deviceId,
+        int faceCapacity,
+        int activeUserCount
+    );
 }
