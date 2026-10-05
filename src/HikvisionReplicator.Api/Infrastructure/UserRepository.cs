@@ -18,8 +18,14 @@ namespace HikvisionReplicator.Api.Infrastructure;
 /// race. A <c>23505</c> on any other index is deliberately not matched: reporting an unrelated
 /// collision as one of these two would be a lie the caller cannot act on.
 /// </para>
+/// <para>
+/// <b>There is a third index in play, and it is not this repository's.</b> The fan-out stages
+/// its rows into the very save below (AD-041), so the queue's pending index can lose a race
+/// here too (REP-13). Rather than copy its name into a second switch — the exact fragility the
+/// paragraph above describes — the queue is asked to translate what it owns.
+/// </para>
 /// </summary>
-public class UserRepository(AppDbContext dbContext)
+public class UserRepository(AppDbContext dbContext, IReplicationRepository replications)
     : RepositoryBase<User>(dbContext),
         IUserRepository
 {
@@ -54,15 +60,29 @@ public class UserRepository(AppDbContext dbContext)
     /// The message for the key that actually collided, or <c>null</c> when the failure is
     /// something else — in which case the exception filter does not match and it propagates.
     /// </summary>
-    private static string? ConflictMessage(DbUpdateException exception) =>
-        exception.InnerException
-        is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } violation
-            ? violation.ConstraintName switch
-            {
-                UserConfiguration.ExternalRefIndexName =>
-                    IUserRepository.ExternalRefAlreadyRegistered,
-                UserConfiguration.AccessCodeIndexName => IUserRepository.AccessCodeAlreadyInUse,
-                _ => null,
-            }
+    private string? ConflictMessage(DbUpdateException exception)
+    {
+        var userKey =
+            exception.InnerException
+            is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } violation
+                ? violation.ConstraintName switch
+                {
+                    UserConfiguration.ExternalRefIndexName =>
+                        IUserRepository.ExternalRefAlreadyRegistered,
+                    UserConfiguration.AccessCodeIndexName =>
+                        IUserRepository.AccessCodeAlreadyInUse,
+                    _ => null,
+                }
+                : null;
+
+        if (userKey is not null)
+            return userKey;
+
+        // The queue's own answer, or nothing. Its Success arm means "not my index — let it
+        // propagate", which is what keeps a genuine fault a 500 rather than a conflict the
+        // caller can do nothing about.
+        return replications.TranslateIfDuplicatePending(exception).TryPickT1(out var queued, out _)
+            ? queued.Message
             : null;
+    }
 }

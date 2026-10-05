@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using HikvisionReplicator.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace HikvisionReplicator.IntegrationTests;
@@ -85,6 +86,78 @@ public abstract class DeviceApiTests(PostgresFixture fixture) : IAsyncLifetime
             .EnumerateObject()
             .Where(property => property.Name != "traceId")
             .ToDictionary(property => property.Name, property => property.Value.ToString());
+
+    /// <summary>
+    /// The backfill debts as the database holds them. Nothing returns an intent over HTTP —
+    /// there is no queue API in this feature — so what was recorded is read where it lives.
+    /// </summary>
+    protected async Task<List<BackfillIntent>> BackfillDebtsAsync()
+    {
+        await using var db = Fixture.CreateDbContext();
+        return await db.BackfillIntents.OrderBy(intent => intent.Id).ToListAsync();
+    }
+
+    protected async Task<int> CountQueuedWorkAsync()
+    {
+        await using var db = Fixture.CreateDbContext();
+        return await db.Replications.CountAsync();
+    }
+
+    protected async Task<List<Replication>> QueuedWorkAsync()
+    {
+        await using var db = Fixture.CreateDbContext();
+        return await db.Replications.OrderBy(work => work.Id).ToListAsync();
+    }
+
+    /// <summary>
+    /// Registers a spectator through its own route, so the live fan-out puts real work in
+    /// the queue for every reader already in the catalogue.
+    /// </summary>
+    protected async Task UpsertSpectatorAsync(string externalRef, string accessCode)
+    {
+        var response = await Client.PutAsJsonAsync(
+            $"/api/users/{Uri.EscapeDataString(externalRef)}",
+            new
+            {
+                name = "Ada Lovelace",
+                accessCode,
+                facePicture = FaceFixtures.Bytes(FaceFixtures.Portrait),
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Seeds spectators straight into the registry. Registration through the route would put
+    /// a face picture through normalization for each one, which is minutes for the roster
+    /// sizes REP-14 is about — and the arrangement here is only ever "there are N of them".
+    /// </summary>
+    protected async Task GivenActiveSpectatorsAsync(int count)
+    {
+        await using var db = Fixture.CreateDbContext();
+
+        for (var index = 0; index < count; index++)
+        {
+            // A fingerprint of its own per spectator: it is owned by the user row, so one
+            // shared instance cannot be written fifty times.
+            db.Users.Add(
+                User.Create(
+                        $"SEEDED-{index}",
+                        "Ada Lovelace",
+                        $"{100_000 + index}",
+                        FaceFingerprint.Create($"0f1e2d{index:x2}", 51_200, 800, 600).AsT0,
+                        [0x01, 0x02, 0x03],
+                        SeededAt
+                    )
+                    .AsT0
+            );
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static readonly DateTime SeededAt = new(2026, 10, 3, 10, 0, 0, DateTimeKind.Utc);
 
     protected async Task<int> CountDevicesAsync()
     {

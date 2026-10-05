@@ -183,4 +183,207 @@ public class RemoveUserTests(PostgresFixture fixture) : UserApiTests(fixture)
         Assert.NotNull(claimant);
         Assert.Equal("123456", claimant.AccessCode.Value);
     }
+
+    // ─── REP-03 / REP-42 / REP-05: a removal queues a removal ────────────
+
+    [Fact]
+    public async Task Removing_a_spectator_queues_a_removal_for_every_reader()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await GivenRegisteredDeviceAsync("10.0.0.2");
+
+        var response = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(2, queued.Count);
+        Assert.All(
+            queued,
+            work =>
+            {
+                Assert.Equal(ReplicationOperation.Remove, work.Operation);
+                Assert.Equal(ReplicationLane.Live, work.Lane);
+                Assert.Equal(ReplicationStatus.Pending, work.Status);
+            }
+        );
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_a_second_time_queues_nothing_further()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        await GivenRegisteredDeviceAsync("10.0.0.1");
+        await RemoveAsync("TICKET-1");
+        var afterTheFirst = await QueuedWorkAsync();
+
+        // USR-32 and A-16 make the second removal answer success, not 404, which is exactly
+        // why this is a live trap: work hung off a successful response would fan out again
+        // against a spectator who is already a tombstone.
+        var second = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Single(afterTheFirst);
+        Assert.Equal(
+            afterTheFirst.Select(work => work.Id),
+            (await QueuedWorkAsync()).Select(work => work.Id)
+        );
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_with_no_readers_queues_nothing()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+
+        var response = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await QueuedWorkAsync());
+    }
+
+    // ─── REP-11 / REP-41: the removal replaces what is owed and still runs ─
+
+    private static readonly DateTime QueuedAt = new(2026, 10, 3, 10, 0, 0, DateTimeKind.Utc);
+
+    private const string ReaderRefusal = "the reader refused the enrolment";
+
+    /// <summary>
+    /// Puts one piece of work in the queue for the pair, in whatever state the caller needs,
+    /// so a removal can be asserted against a queue that is not empty.
+    /// </summary>
+    private async Task<int> GivenQueuedWorkAsync(
+        int userId,
+        int deviceId,
+        ReplicationOperation operation = ReplicationOperation.Add,
+        bool alreadyFailed = false,
+        bool alreadyInFlight = false
+    )
+    {
+        await using var context = Fixture.CreateDbContext();
+        var work = Replication.Create(
+            userId,
+            deviceId,
+            operation,
+            ReplicationLane.Live,
+            QueuedAt
+        );
+
+        if (alreadyFailed)
+        {
+            work.Begin(QueuedAt);
+            work.Fail(ReaderRefusal, QueuedAt);
+        }
+        else if (alreadyInFlight)
+        {
+            work.Begin(QueuedAt);
+        }
+
+        context.Replications.Add(work);
+        await context.SaveChangesAsync();
+        return work.Id;
+    }
+
+    /// <summary>
+    /// Registers a spectator before any reader exists, so the queue starts empty and every
+    /// row in it afterwards was put there deliberately.
+    /// </summary>
+    private async Task<(int UserId, int DeviceId)> GivenSpectatorAndReaderAsync()
+    {
+        await UpsertAsync("TICKET-1", ValidUpsert());
+        var deviceId = await GivenRegisteredDeviceAsync("10.0.0.1");
+        var spectator = await StoredUserAsync("TICKET-1");
+        Assert.NotNull(spectator);
+        return (spectator.Id, deviceId);
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_replaces_the_enrolment_still_owed_and_queues_the_removal()
+    {
+        var (userId, deviceId) = await GivenSpectatorAndReaderAsync();
+        var enrolmentId = await GivenQueuedWorkAsync(userId, deviceId);
+
+        var response = await RemoveAsync("TICKET-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(2, queued.Count);
+
+        var enrolment = Assert.Single(queued, work => work.Id == enrolmentId);
+        Assert.Equal(ReplicationStatus.Superseded, enrolment.Status);
+        Assert.Equal(ReplicationOperation.Add, enrolment.Operation);
+
+        // The removal still executes: a pending Add is not evidence that no earlier Add ever
+        // reached the reader, and the queue does not track what a reader holds.
+        var removal = Assert.Single(queued, work => work.Id != enrolmentId);
+        Assert.Equal(ReplicationOperation.Remove, removal.Operation);
+        Assert.Equal(ReplicationStatus.Pending, removal.Status);
+        Assert.Equal(deviceId, removal.DeviceId);
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_replaces_an_outstanding_correction_too()
+    {
+        var (userId, deviceId) = await GivenSpectatorAndReaderAsync();
+        var correctionId = await GivenQueuedWorkAsync(
+            userId,
+            deviceId,
+            ReplicationOperation.Update
+        );
+
+        await RemoveAsync("TICKET-1");
+
+        var queued = await QueuedWorkAsync();
+        var correction = Assert.Single(queued, work => work.Id == correctionId);
+        Assert.Equal(ReplicationStatus.Superseded, correction.Status);
+        Assert.Equal(ReplicationOperation.Update, correction.Operation);
+
+        var removal = Assert.Single(queued, work => work.Id != correctionId);
+        Assert.Equal(ReplicationOperation.Remove, removal.Operation);
+        Assert.Equal(ReplicationStatus.Pending, removal.Status);
+    }
+
+    [Fact]
+    public async Task A_removal_is_queued_even_though_no_reader_ever_accepted_the_spectator()
+    {
+        var (userId, deviceId) = await GivenSpectatorAndReaderAsync();
+        var refusedId = await GivenQueuedWorkAsync(userId, deviceId, alreadyFailed: true);
+
+        await RemoveAsync("TICKET-1");
+
+        var queued = await QueuedWorkAsync();
+
+        // Nothing ever succeeded for this spectator, and the removal is queued anyway: the
+        // queue cannot know what a reader holds, so it cannot conclude there is nothing to
+        // take off one.
+        Assert.DoesNotContain(queued, work => work.Status == ReplicationStatus.Succeeded);
+
+        var refused = Assert.Single(queued, work => work.Id == refusedId);
+        Assert.Equal(ReplicationStatus.Failed, refused.Status);
+        Assert.Equal(ReaderRefusal, refused.LastError);
+
+        var removal = Assert.Single(queued, work => work.Id != refusedId);
+        Assert.Equal(ReplicationOperation.Remove, removal.Operation);
+        Assert.Equal(ReplicationStatus.Pending, removal.Status);
+    }
+
+    [Fact]
+    public async Task Removing_a_spectator_leaves_work_already_in_a_readers_hands_to_finish()
+    {
+        var (userId, deviceId) = await GivenSpectatorAndReaderAsync();
+        var inFlightId = await GivenQueuedWorkAsync(userId, deviceId, alreadyInFlight: true);
+
+        await RemoveAsync("TICKET-1");
+
+        var queued = await QueuedWorkAsync();
+
+        var inFlight = Assert.Single(queued, work => work.Id == inFlightId);
+        Assert.Equal(ReplicationStatus.InProgress, inFlight.Status);
+        Assert.Equal(ReplicationOperation.Add, inFlight.Operation);
+
+        var removal = Assert.Single(queued, work => work.Id != inFlightId);
+        Assert.Equal(ReplicationOperation.Remove, removal.Operation);
+        Assert.Equal(ReplicationStatus.Pending, removal.Status);
+    }
 }

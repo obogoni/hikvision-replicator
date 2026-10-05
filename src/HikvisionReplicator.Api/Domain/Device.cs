@@ -1,9 +1,10 @@
+using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
 namespace HikvisionReplicator.Api.Domain;
 
-public class Device : IAggregateRoot
+public class Device : AggregateRoot, IAggregateRoot
 {
     public const int MaxNameLength = 100;
     public const int MaxUsernameLength = 100;
@@ -72,7 +73,10 @@ public class Device : IAggregateRoot
         if (capacityResult.TryPickT1(out var capacityError, out var capacity))
             return capacityError;
 
-        return new Device(name, ip, port, username, encryptedPassword, capacity, now);
+        var device = new Device(name, ip, port, username, encryptedPassword, capacity, now);
+        device.Raise(new DeviceRegistered(device, now));
+
+        return device;
     }
 
     /// <summary>

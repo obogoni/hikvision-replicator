@@ -22,6 +22,40 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.BackfillIntent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ExpandedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_backfill_intents_device");
+
+                    b.ToTable("backfill_intents", (string)null);
+                });
+
             modelBuilder.Entity("HikvisionReplicator.Api.Domain.Device", b =>
                 {
                     b.Property<int>("Id")
@@ -92,6 +126,63 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                     b.ToTable("face_pictures", (string)null);
                 });
 
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.Replication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Lane")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("Lane", "Status")
+                        .HasDatabaseName("IX_replications_lane_status");
+
+                    b.HasIndex("UserId", "DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_replications_pending")
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.ToTable("replications", (string)null);
+                });
+
             modelBuilder.Entity("HikvisionReplicator.Api.Domain.User", b =>
                 {
                     b.Property<int>("Id")
@@ -138,6 +229,17 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.BackfillIntent", b =>
+                {
+                    b.HasOne("HikvisionReplicator.Api.Domain.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+                });
+
             modelBuilder.Entity("HikvisionReplicator.Api.Domain.FacePicture", b =>
                 {
                     b.HasOne("HikvisionReplicator.Api.Domain.User", null)
@@ -145,6 +247,23 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                         .HasForeignKey("HikvisionReplicator.Api.Domain.FacePicture", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("HikvisionReplicator.Api.Domain.Replication", b =>
+                {
+                    b.HasOne("HikvisionReplicator.Api.Domain.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HikvisionReplicator.Api.Domain.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("HikvisionReplicator.Api.Domain.User", b =>

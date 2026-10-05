@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using HikvisionReplicator.Api.Domain;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using HikvisionReplicator.Api.Shared;
@@ -338,5 +339,179 @@ public class RegisterDeviceTests(PostgresFixture fixture) : DeviceApiTests(fixtu
             "application/problem+json",
             response.Content.Headers.ContentType?.MediaType
         );
+    }
+
+    // ─── REP-14 / REP-15 / REP-43: registration records a debt, in one row ─
+
+    [Fact]
+    public async Task Registering_a_reader_with_a_full_roster_records_one_debt_and_no_work()
+    {
+        await GivenActiveSpectatorsAsync(50);
+
+        var response = await RegisterAsync(ValidRegistration());
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // One row, not fifty. The whole point of the intent is that registering hardware on
+        // match day costs the same whether the roster is empty or a stadium full.
+        Assert.Single(await BackfillDebtsAsync());
+        Assert.Equal(0, await CountQueuedWorkAsync());
+    }
+
+    [Fact]
+    public async Task Registering_a_reader_with_no_spectators_still_records_the_debt()
+    {
+        var response = await RegisterAsync(ValidRegistration());
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // Spectators may arrive before the debt is expanded, so there is nothing to wait for.
+        var debt = Assert.Single(await BackfillDebtsAsync());
+        Assert.Equal(BackfillStatus.Pending, debt.Status);
+        Assert.Null(debt.ExpandedAt);
+    }
+
+    [Fact]
+    public async Task A_recorded_debt_names_the_reader_the_database_stored()
+    {
+        var response = await RegisterAsync(ValidRegistration());
+        var registered = (await ReadBodyAsync(response)).GetProperty("id").GetInt32();
+
+        var debt = Assert.Single(await BackfillDebtsAsync());
+
+        // The key is issued only after the event was raised, so a handler reading the id off
+        // the event would have recorded the debt against reader 0.
+        Assert.NotEqual(0, debt.DeviceId);
+        Assert.Equal(registered, debt.DeviceId);
+    }
+
+    [Fact]
+    public async Task Each_reader_is_owed_a_debt_of_its_own()
+    {
+        await RegisterAsync(ValidRegistration(ipAddress: "10.0.0.1"));
+        await RegisterAsync(ValidRegistration(ipAddress: "10.0.0.2"));
+
+        var debts = await BackfillDebtsAsync();
+
+        Assert.Equal(2, debts.Count);
+        Assert.Equal(2, debts.Select(debt => debt.DeviceId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task A_reader_rejected_for_a_duplicate_address_leaves_no_debt_behind()
+    {
+        var accepted = (
+            await ReadBodyAsync(await RegisterAsync(ValidRegistration(ipAddress: "10.0.0.1")))
+        )
+            .GetProperty("id")
+            .GetInt32();
+
+        var rejected = await RegisterAsync(
+            ValidRegistration(ipAddress: "10.0.0.1", name: "Second Reader")
+        );
+
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+
+        // One debt, owed to the reader that actually entered the catalogue. A refused
+        // attempt that left an intent behind would owe a roster to a reader that does not
+        // exist, and the unique device index would then refuse the next real registration
+        // at that address.
+        Assert.Equal(1, await CountDevicesAsync());
+        var debt = Assert.Single(await BackfillDebtsAsync());
+        Assert.Equal(accepted, debt.DeviceId);
+    }
+
+    // ─── REP-21 / REP-22 / REP-47: a reader that cannot hold the crowd ───
+
+    /// <summary>
+    /// REP-21. The literal sentence is pinned here, in one place, rather than compared against
+    /// the application's own format string — a tautological assertion moves with the code it
+    /// is supposed to hold still (<c>docs/test-patterns.md</c>). Both numbers appear in it
+    /// because an operator at a turnstile has to know which reader to swap and for what.
+    /// </summary>
+    [Fact]
+    public async Task Reader_too_small_for_the_active_roster_is_refused()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 5));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await ReadBodyAsync(response);
+        Assert.Equal(
+            "This device holds 5 faces, but 10 users are active.",
+            problem.GetProperty("detail").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task A_reader_refused_for_capacity_joins_neither_the_catalogue_nor_the_queue()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 9));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // A debt left behind by the refusal would owe the whole roster to hardware that was
+        // never admitted — the REP-43 failure, reached by the other refusal path.
+        Assert.Equal(0, await CountDevicesAsync());
+        Assert.Empty(await BackfillDebtsAsync());
+    }
+
+    /// <summary>
+    /// REP-22 at the boundary the guard turns on. A reader holding exactly the crowd holds
+    /// the crowd, so equality is admission, not refusal.
+    /// </summary>
+    [Fact]
+    public async Task Reader_sized_exactly_to_the_active_roster_is_registered()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 10));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await CountDevicesAsync());
+    }
+
+    [Fact]
+    public async Task Reader_larger_than_the_active_roster_is_registered()
+    {
+        await GivenActiveSpectatorsAsync(10);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 11));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await CountDevicesAsync());
+    }
+
+    /// <summary>REP-47: an empty registry admits the smallest reader there is.</summary>
+    [Fact]
+    public async Task Reader_of_any_size_is_registered_while_no_spectator_is_active()
+    {
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 1));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await CountDevicesAsync());
+    }
+
+    /// <summary>
+    /// The ceiling is the <em>active</em> roster (AD-015, AD-034). A tombstoned spectator is
+    /// never sent anywhere, so counting them would refuse hardware over faces no reader will
+    /// ever be asked to hold — and the registry never deletes a row, so that error grows
+    /// without bound over a season.
+    /// </summary>
+    [Fact]
+    public async Task Tombstoned_spectators_do_not_count_against_a_reader_capacity()
+    {
+        await UpsertSpectatorAsync("TICKET-1", "778811");
+        await UpsertSpectatorAsync("TICKET-2", "778822");
+
+        var removal = await Client.DeleteAsync("/api/users/TICKET-2");
+        Assert.Equal(HttpStatusCode.NoContent, removal.StatusCode);
+
+        var response = await RegisterAsync(ValidRegistration(faceCapacity: 1));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 }

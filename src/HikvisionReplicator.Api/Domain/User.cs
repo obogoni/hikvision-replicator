@@ -1,3 +1,4 @@
+using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Shared;
 using OneOf;
 
@@ -7,7 +8,7 @@ namespace HikvisionReplicator.Api.Domain;
 /// A spectator. Owns every identity invariant and the tombstone transition. The clock is
 /// always passed in, never read (AD-023), and the face picture arrives already normalized.
 /// </summary>
-public class User : IAggregateRoot
+public class User : AggregateRoot, IAggregateRoot
 {
     public const int MaxNameLength = 100;
 
@@ -66,7 +67,10 @@ public class User : IAggregateRoot
         if (codeResult.TryPickT1(out var codeError, out var code))
             return codeError;
 
-        return new User(reference, trimmedName, code, fingerprint, pictureContent, now);
+        var user = new User(reference, trimmedName, code, fingerprint, pictureContent, now);
+        user.Raise(new UserRegistered(user, now));
+
+        return user;
     }
 
     /// <summary>
@@ -115,7 +119,10 @@ public class User : IAggregateRoot
         }
 
         if (changed)
+        {
             UpdatedAt = now;
+            Raise(new UserChanged(this, now));
+        }
 
         return new Success();
     }
@@ -134,6 +141,7 @@ public class User : IAggregateRoot
         DeletedAt = now;
         UpdatedAt = now;
         Picture = null;
+        Raise(new UserRemoved(this, now));
     }
 
     /// <summary>
@@ -172,6 +180,7 @@ public class User : IAggregateRoot
         SetPicture(pictureContent);
         DeletedAt = null;
         UpdatedAt = now;
+        Raise(new UserRestored(this, now));
 
         return new Success();
     }
