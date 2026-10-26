@@ -7,11 +7,214 @@
 `spec.md` and the diff, evidence-or-zero. Task checkboxes and commit messages were not taken as
 evidence.
 
+**Verdict (iteration 2, current): FAIL ❌.** All four iteration-1 gaps are closed: M15, M16,
+M20 and M21 are now killed. The production fix `f082fae` is sound, and its regression mutant M22
+is killed 5 of 5 runs. One gap remains, and it is minor and test-only. The gate is not reliably
+green: `DeviceChurnTests.A_deleted_reader_is_called_no_more` failed in 1 of 3 full integration
+runs. The test asserts more than design.md:234 promises, and the reload-to-call gap in
+`DeviceLoop` lets a call start just after a delete commits. See § Iteration 2.
+
+**Correction to iteration 1.** Iteration 1 said "No production defect was found." That was
+wrong. The supervisor had a WRK-34 race: it read the debts, then the catalogue. A reader
+registered between those two reads got a loop with no debt recorded against it, so its spectator
+could be enrolled twice. The race was found while F4 was being written and fixed in `f082fae`
+(§ Iteration 2.3).
+
+<details><summary>Iteration 1 verdict (superseded)</summary>
+
 **Verdict: FAIL ❌.** Every criterion's main outcome is implemented and asserted, and the gate is
 green. Four behaviour-level mutants survive, though. Three of them sit on parts of a criterion
 that no test asserts (WRK-03's claim timestamp, WRK-26's interval, WRK-31's idle wait), and one
 on the WRK-34 loop gate. `validate.md` § 5 says surviving mutants become fix tasks before the
-feature is marked done. All four gaps are minor and test-only. No production defect was found.
+feature is marked done. All four gaps are minor and test-only. No production defect was found
+*(corrected above)*.
+
+</details>
+
+---
+
+## Iteration 2 — re-verification (2026-10-26)
+
+**Scope**: `a59b39e..HEAD`. That is four test-only fixes, F1 `f3b4272` (WRK-26), F2 `85e7bd4`
+(WRK-03), F3 `e5f4622` (WRK-31) and F4 `9ebe6ac` (WRK-34), plus one production change,
+`f082fae`, with its regression test. Paths are relative to `src/`, and **IT** =
+`HikvisionReplicator.IntegrationTests/`. Commit messages were not taken as evidence: every
+claim below was re-run.
+
+### 2.1 Gate
+
+| Gate | Result |
+| --- | --- |
+| `dotnet build HikvisionReplicator.slnx --no-incremental` | 0 errors, **17 warnings** (baseline 17) |
+| `dotnet test src/HikvisionReplicator.Tests` | **465 / 0 failed / 0 skipped** |
+| `dotnet test src/HikvisionReplicator.IntegrationTests`, run 1 | **339 / 1 failed** / 0 skipped. The failure is `DeviceChurnTests.A_deleted_reader_is_called_no_more` (`IT/DeviceChurnTests.cs:78`) |
+| same, run 2 | **340 / 0** |
+| same, run 3 (added to characterise the flake) | **340 / 0** |
+
+Integration grew 337 → 340 (+3: F3, F4, and the `f082fae` regression test). F1 and F2 rewrote
+existing tests in place. No test was deleted or skipped. After the sensor, the tree was rebuilt
+clean and `git status src` was empty after every mutant.
+
+**The flake.** It does not come from this iteration's changes. The failing assertion is
+`DoesNotContain(call => call.DeviceId == reader && call.At > deletedAt)`, where `deletedAt` is
+read after the `DELETE` returns 204. `DeliverAsync` reloads the device at `DeviceLoop.cs:210-212`,
+then reads the user, loads the face picture and decrypts the password. Only then does it call the
+device. A delete that commits inside that gap produces one call stamped after `deletedAt`. The fake
+stamps a call when it starts, even on a cancelled token (`FakeDeviceClient.cs:174`). The
+supervisor cancelling the removed reader's loop (`ReplicationWorker.cs:189-191`) is the only
+other guard, and on a 20 ms poll it does not reliably land inside a gap of a few milliseconds.
+
+Reproduction:
+- 12 of 12 isolated runs pass.
+- With a 60 ms delay that ignores the token, inserted directly before `CallAsync` (temporary, reverted),
+  2 of 3 runs fail on the same assertion.
+- With the delay placed before the user read, all runs pass. Those awaits honour the stopping
+  token, so a cancel landing there throws before any call starts.
+
+The behaviour matches design.md:234's interpretation, "no call starts after the delete is
+*observed* (device reloaded right before the call)". The test asserts something stricter: no
+call after the delete *committed*. `DeviceLoop` has not changed since `5aa2c74`, and `f082fae`
+touches only the supervisor. → Fix 5.
+
+### 2.2 Gaps 1–4 re-checked
+
+Each original mutant was re-applied with the same exact-string edit as in iteration 1. Each was
+built, run against its new test, and reverted.
+
+| Gap | Mutant | Result | Killed by | Asserts the spec outcome? |
+| --- | --- | --- | --- | --- |
+| 1 · WRK-26 | **M15**: histogram measures claim → success | ✅ Killed | `IT/WorkerObservabilityTests.cs:120` (`A_delivery_records_the_seconds_from_queueing_to_success…`), failing at `:157` `Assert.Equal(3.0 + 7.0, duration.GetHistogramSum())`. Claim → success gives 3 + 4 = 7 | ✅ Yes. Two rows are created at Kickoff, and the second waits 3 s in the queue, so creation → success (3 s + 7 s) and claim → success (3 s + 4 s) differ. `:154-156` also pins lane `Live`, op `Add` and count 2 |
+| 2 · WRK-03 | **M20**: claim stamped with `DateTime.UtcNow` | ✅ Killed | `IT/DeliveryTests.cs:81` (`Work_is_in_progress_while_its_call_is_with_the_reader`), failing at `:100` `Assert.Equal(Kickoff.AddMinutes(1).UtcDateTime, inHand.UpdatedAt)` | ✅ Yes. The second row is claimed after the injected clock moves to +1 min, and `:99` pins `CreatedAt == Kickoff`, so the claim's own stamp is told apart from both creation time and wall time |
+| 3 · WRK-31 | **M21**: idle cycle skips the poll wait | ✅ Killed | `IT/DeliveryTests.cs:486` (`An_idle_reader_is_checked_once_a_poll_interval_rather_than_continuously`), failing at `:513` `Assert.InRange(looks, expected - 2, expected + 2)` | ✅ Yes. It counts claim queries (the only query filtering on `"NextAttemptAt" <=`), which is the "wait one idle poll interval between checks" rate. `:514` covers "no device call" |
+| 4 · WRK-34 | **M16**: supervisor gate removed | ✅ Killed **3/3** | `IT/BackfillDeliveryTests.cs:327` (`A_reader_whose_expansion_failed_is_not_served_until_its_debt_is_expanded`), failing at `:356` `Assert.Equal(0, hook.CallsWhenExpanded)` | ✅ Yes. `:357-358` assert the spec outcome, "queued once": a single `Live` row and a single `TICKET-1` call. `:356` is the deterministic guard. The other test in the class (`:233`) passed under M16, as expected |
+
+Line numbers name the assertion each mutation must break. The run recorded each killing test
+by name as `Failed`. Its assertion line was recorded verbatim for M16 (`:356`) and M22 (`:263`)
+and inferred for M15, M20 and M21: each of those tests has exactly one assertion that the
+mutation's value can falsify.
+
+**Soundness and flake risk of the new tests:**
+
+- **F1, F2**: frozen-clock steps, each with a margin of one reader latency (500 ms and 1 s). The
+  test must move the clock while a call is out. The only way to lose is for the test thread to
+  take longer than the latency between seeing the call and freezing, so the risk is low.
+- **F3, fixed window** (`DeliveryTests.cs:486-515`): 250 ms poll, 2 s window, bound 8 ± 2 looks.
+  A real time window is justified here because the criterion is a rate, and the test documents
+  that. The mutant produces hundreds or thousands of looks, so the kill is far outside the bound.
+  The lower bound (6) fails only if each idle cycle averages more than about 333 ms, roughly
+  80 ms of overhead per two-query cycle. That is unlikely, but it is the one new assertion
+  sensitive to a loaded machine. ⚠️ Watch it, no fix asked. It passed in every run here: 3 full
+  runs and 5 targeted runs.
+- **F4, "refuse two saves"**: sound. The arrangement is committed by the test, not inside a tick,
+  so it can land between a tick's catalogue read and its debt read. That tick has the reader in
+  `owed` but not in `readers`, so the gate is not what holds it. A second refusal guarantees one
+  tick with the reader in both, so the gate is always exercised. `Assert.Equal(2, hook.Refused)`
+  is deterministic. The SaveChanges interceptor picks expansions by a `BackfillIntent` modified to
+  `Expanded`, which matches nothing else. This is a declared deviation from Fix 4's "refuse once",
+  and it is a correct one: under `f082fae`'s read order, one refusal could fall wholly on the
+  ungated tick.
+- All five new tests passed **5 of 5** targeted runs on HEAD, and in all 3 full runs.
+
+### 2.3 `f082fae` reviewed as production code
+
+**Defect.** Before `f082fae`, `ExpandBackfillsAsync` read the pending debts, and then
+`SyncLoopsAsync` read the catalogue. A registration (the device and its `BackfillIntent`) that
+committed between the two reads was in `readers` but not in `owed`, so it got a loop. That loop
+delivered the pending live row, and the next tick's expansion no longer saw a *pending* live
+row for the spectator (REP-19), so it queued a Bulk duplicate. That breaks WRK-34 ("queued
+once"). It is a real production defect, not a test artefact.
+
+**The fix is correct under PostgreSQL read committed.**
+1. The device and its intent commit in **one transaction**. `ReplicationFanOut.HandleAsync(DeviceRegistered)`
+   adds the intent during domain-event dispatch, which runs inside the same
+   `AppDbContext.SaveChangesAsync` before `base.SaveChangesAsync` (`AppDbContext.cs:70-77`,
+   `ReplicationFanOut.cs:103-110`).
+2. The catalogue read (T1) and the debt read (T2 > T1) are separate statements in separate
+   scopes, so each takes its own snapshot. Any reader visible at T1 committed before T1, so its
+   intent is visible at T2. At T2 the intent is either still `Pending`, so it is in `owed`, or
+   already `Expanded` by another instance, which correctly needs no gate. The debt read is
+   therefore a superset of what the catalogue read admits.
+3. A reader registered after T1 is absent from `readers`, and gets its loop on the next tick,
+   after its expansion.
+4. `DeviceRegistered` is the only producer of an intent (`ReplicationFanOut.cs:107`), so no debt
+   can appear for a reader whose loop is already running.
+
+**New windows the change opens, judged harmless:**
+- *Reader deleted between T1 and `SyncLoopsAsync`.* The reader is in `readers`, and its intent
+  was cascade-deleted (`BackfillIntentConfiguration.cs:56`), so it is not in `owed`. A loop starts
+  for a reader that is gone. Its rows went with it (REP-16 cascade), so it claims nothing, and any
+  claim that survived meets the device reload (`DeviceLoop.cs:210-212`) → `ReaderGone`. The next
+  tick stops the loop. No call results.
+- *Delete committing during the expansion phase of a tick.* The catalogue snapshot is now older
+  by the length of the expansion, so a removed reader's loop is cancelled up to one tick later
+  than before. WRK-10's "within one poll interval" is unchanged in the worst case, because a
+  delete just after the catalogue read was always seen only on the next tick. WRK-25 is still
+  guarded per call by the reload. This lengthens how long the cancel (the secondary guard) takes
+  to arrive. It does not cause the run-1 flake, whose window is reload → call (§ 2.1).
+- *Expansion fails.* The reader stays in `owed`, so the gate holds it, which is exactly what F4
+  proves (M16 killed).
+
+**M22 — read order swapped back (debts before catalogue).** ✅ Killed **5 of 5** by
+`IT/BackfillDeliveryTests.cs:233` (`A_reader_registered_while_the_worker_reads_its_debts_is_not_served_before_they_are_expanded`),
+failing at `:263` `Assert.Single(queue)`: "The collection contained 2 items". The second row is
+created about 0.58 s after the first, the next tick's Bulk duplicate. The result is
+deterministic, not timing-dependent. The `AfterDebtRead` interceptor (`:192-222`) runs the
+registration *inside* the worker's debt-read command (`ReaderExecutedAsync`), so the tick cannot
+go on until the registration has committed. The landing is forced rather than raced. The test
+runs on an isolated database, so the first `backfill_intents` read after `Arm()` is the
+supervisor's debt read.
+
+### 2.4 Previously killed mutants, re-run after `f082fae`
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| M1 | Live/Bulk claim order swapped | ✅ Killed (3 failed in `DeliveryTests`/`LiveSyncSloTests`) |
+| M9b | newer-pending rule removed | ✅ Killed (4) |
+| M10 | tombstone check removed | ✅ Killed (1) |
+| M11 | lease sweep `<` → `>` | ✅ Killed (2, `WorkerRecoveryTests`) |
+| M13 | row-version token removed | ✅ Killed (4) |
+| M14 | deleted reader's outcome rethrown | ✅ Killed (1, `DeviceChurnTests`) |
+
+**Sensor total, iteration 2**: 11 mutants applied (M15, M16, M20, M21, M22, M1, M9b, M10, M11,
+M13, M14). **11 killed, 0 survived.** The repeats were M22 ×5 and M16 ×3.
+
+### 2.5 Spec-anchored status
+
+**35/35** criteria now match their spec-defined outcome. WRK-03, WRK-26 and WRK-31 have moved
+from partial to ✅ (§ 2.2), and WRK-34's guard is now discriminated deterministically.
+
+Spec-precision notes carried forward, none of them a missing outcome:
+- WRK-01 and WRK-10: "within one poll interval" is asserted loosely.
+- WRK-07: the paused half is structural, with no test of its own.
+- WRK-08: the released half is not exercised.
+- WRK-20: the lease variant's last error is not asserted.
+- WRK-25: the spec says "no further call … even if an item had been read before the delete",
+  but design.md:234 interprets it as "after the delete is observed". The run-1 flake is that
+  difference showing up in a test.
+
+That is **6 notes**.
+
+### 2.6 Remaining gap
+
+**Fix 5 (minor, test-only): WRK-25 test is stricter than the design and flaky under load**
+- **Root cause**: `IT/DeviceChurnTests.cs:78-81` bounds calls from the moment the test saw the
+  204. The design bounds them from the moment the loop reloads the device. The reload → call gap
+  at `DeviceLoop.cs:210-239` (user read, picture load, decrypt) lets the call already in hand
+  start just after the commit. It failed in 1 of 3 full runs.
+- **Fix task**: assert the design's guarantee. At most **one** call to the reader may start after
+  `deletedAt`, and it must be the replication that was already `InProgress` at the delete. No
+  other call may start after it. Optionally, also narrow the production gap by reloading the
+  device after the picture load, immediately before `CallAsync`. That narrows the gap but does not
+  close it, so the test change is still required.
+- **Done when**: the test asserts the design.md:234 interpretation, and it still kills M14 and a
+  mutant that skips the reload (`device is null → ReaderGone` removed). The full integration
+  suite passes 5 consecutive runs.
+
+**Ranked gaps**: 1. Fix 5 (above). That is the only gap.
+
+**Lessons recorded** (candidates, via `scripts/lessons.py add`, with the auto-pruned entries
+restored so the store only grew): L-054 is for the supervisor's read order, and L-055 for
+check-then-act tests bounded from the wrong instant.
 
 ---
 

@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 54,
+  "next_id": 56,
   "lessons": [
     {
       "id": "L-007",
@@ -854,6 +854,42 @@
       ],
       "created": "2026-10-26T21:45:49Z",
       "last_seen": "2026-10-26T21:45:49Z"
+    },
+    {
+      "id": "L-054",
+      "key": "ac_gap::when a periodic supervisor gates an action on several separate reads order the reads so each later read is a superset of what the earlier one admits because under read committed every query sees its own snapshot",
+      "text": "When a periodic supervisor gates an action on several separate reads, order the reads so each later read is a superset of what the earlier one admits, because under read committed every query sees its own snapshot",
+      "signal": "ac_gap",
+      "scope": "worker",
+      "status": "candidate",
+      "features": [
+        "replication-worker"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "WRK-34; f082fae ReplicationWorker.cs:56-61; mutant M22 (worker)"
+      ],
+      "created": "2026-10-26T22:40:35Z",
+      "last_seen": "2026-10-26T22:40:35Z"
+    },
+    {
+      "id": "L-055",
+      "key": "gate_fail::when code guards an action with a check then act read bound the test s assertion from the moment the guard can observe the change not from the moment the test made it or the check to act gap makes the test flaky",
+      "text": "When code guards an action with a check-then-act read, bound the test's assertion from the moment the guard can observe the change, not from the moment the test made it, or the check-to-act gap makes the test flaky",
+      "signal": "gate_fail",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "replication-worker"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "DeviceChurnTests.cs:78 flake (iteration-2 integration run 1); DeviceLoop.cs:209-235 reload-to-call gap; design.md:234 (tests)"
+      ],
+      "created": "2026-10-26T22:41:05Z",
+      "last_seen": "2026-10-26T22:41:05Z"
     }
   ]
 }

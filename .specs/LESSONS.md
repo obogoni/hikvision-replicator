@@ -294,6 +294,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: ReplicationWorker.cs:173 (worker)
 - last seen: 2026-10-26T21:45:49Z
 
+### L-054 — When a periodic supervisor gates an action on several separate reads, order the reads so each later read is a superset of what the earlier one admits, because under read committed every query sees its own snapshot
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: WRK-34; f082fae ReplicationWorker.cs:56-61; mutant M22 (worker)
+- last seen: 2026-10-26T22:40:35Z
+
+### L-055 — When code guards an action with a check-then-act read, bound the test's assertion from the moment the guard can observe the change, not from the moment the test made it, or the check-to-act gap makes the test flaky
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: replication-worker
+- evidence: DeviceChurnTests.cs:78 flake (iteration-2 integration run 1); DeviceLoop.cs:209-235 reload-to-call gap; design.md:234 (tests)
+- last seen: 2026-10-26T22:41:05Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
