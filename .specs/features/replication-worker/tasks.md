@@ -139,16 +139,16 @@ T20 → T21 → T22
 
 ---
 
-### T4: `RetrySchedule`
+### T4: `RetrySchedule` ✅
 
 **What**: `TimeSpan DelayAfter(int attempts)` = `RetryBaseDelay × 2^(attempts − 1)` capped at `RetryMaxDelay`; `bool IsExhausted(int attempts)` = `attempts >= MaxAttempts`.
 **Where**: `Infrastructure/Worker/RetrySchedule.cs`, `Tests/Infrastructure/Worker/RetryScheduleTests.cs`
 **Depends on**: T3
 **Requirement**: WRK-16, WRK-17
 **Done when**:
-- [ ] Defaults give 2, 4, 8, 16 s for attempts 1–4; the cap holds at a large attempt count without overflow
-- [ ] `IsExhausted` false at 4, true at 5 with `MaxAttempts = 5`; respects a configured value
-- [ ] Quick gate passes; ≥ 383 unit
+- [x] Defaults give 2, 4, 8, 16 s for attempts 1–4; the cap holds at a large attempt count without overflow
+- [x] `IsExhausted` false at 4, true at 5 with `MaxAttempts = 5`; respects a configured value
+- [x] Quick gate passes; ≥ 383 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(worker): compute the rejection backoff and the dead-letter threshold`
 
