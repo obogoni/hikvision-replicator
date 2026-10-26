@@ -175,6 +175,13 @@ public sealed partial class DeviceLoop(
         // Never null: a spectator is tombstoned, never deleted, and the foreign key restricts.
         var user = (await users.GetByIdAsync(work.UserId, stoppingToken))!;
 
+        // Decided before the face is read, because a tombstoned spectator has none (WRK-21).
+        if (OutcomeDecision.BeforeCall(work.Operation, user.DeletedAt is not null) is not null)
+        {
+            await recorder.SupersedeWithoutCallAsync(replications, work, stoppingToken);
+            return Cycle.Worked;
+        }
+
         if (work.Operation is not ReplicationOperation.Remove)
             await users.LoadPictureAsync(user, stoppingToken);
 

@@ -348,17 +348,17 @@ T20 → T21 → T22
 
 ---
 
-### T17: Never replay stale intent
+### T17: Never replay stale intent ✅
 
 **What**: Recorder checks `PendingReplicationForPairSpec` before re-queueing; `23505` on the pending index during the outcome save → reload and `SupersedeAfterAttempt`; tombstoned user → no call.
 **Where**: `Infrastructure/Worker/{DeviceLoop,ReplicationOutcomeRecorder}.cs`, `Domain/Specs/PendingReplicationForPairSpec.cs`, `IntegrationTests/StaleIntentTests.cs`
 **Depends on**: T16
 **Requirement**: WRK-20, WRK-21
 **Done when**:
-- [ ] Upsert during an unreachable attempt → old row `Superseded` with attempt count kept, new row delivered, never two `Pending`
-- [ ] Same for a rejected attempt
-- [ ] Remove during an in-flight `Add` whose face is gone at load → no `Add` call, row `Superseded`, `Remove` delivered
-- [ ] Full gate passes; ≥ 323 integration
+- [x] Upsert during an unreachable attempt → old row `Superseded` with attempt count kept, new row delivered, never two `Pending`
+- [x] Same for a rejected attempt
+- [x] Remove during an in-flight `Add` whose face is gone at load → no `Add` call, row `Superseded`, `Remove` delivered
+- [x] Full gate passes; ≥ 323 integration (328)
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): drop an attempt that a newer intent overtook`
 

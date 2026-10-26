@@ -1,5 +1,8 @@
 using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Domain.Specs;
 using HikvisionReplicator.Api.Shared;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -11,6 +14,7 @@ namespace HikvisionReplicator.Api.Infrastructure.Worker;
 /// this applies it to the aggregate through its own transitions and commits it.
 /// </summary>
 public sealed partial class ReplicationOutcomeRecorder(
+    IServiceScopeFactory scopeFactory,
     IOptions<ReplicationWorkerOptions> options,
     TimeProvider timeProvider,
     ILogger<ReplicationOutcomeRecorder> logger
@@ -27,6 +31,12 @@ public sealed partial class ReplicationOutcomeRecorder(
     /// the loop claimed it, tracked by <paramref name="replications"/>' unit of work.
     /// <paramref name="reason"/> is what the reader said when it did not accept, or why it said
     /// nothing; it is kept as the row's last error (REP-33).
+    /// <para>
+    /// An attempt that did not land first looks for newer intent for the pair, and ends there
+    /// rather than going back to the queue beside it (WRK-20). Newer intent that lands after the
+    /// look and before the save is caught by the pending index, and the attempt is superseded
+    /// all the same.
+    /// </para>
     /// </summary>
     public async Task RecordAsync(
         IReplicationRepository replications,
@@ -39,11 +49,91 @@ public sealed partial class ReplicationOutcomeRecorder(
         ArgumentNullException.ThrowIfNull(replications);
         ArgumentNullException.ThrowIfNull(replication);
 
+        var said = reason ?? outcome.ToString();
         var now = timeProvider.GetUtcNow().UtcDateTime;
+        var newerPendingExists =
+            outcome != AttemptOutcome.Delivered
+            && await replications.AnyAsync(
+                new PendingReplicationForPairSpec(replication.UserId, replication.DeviceId),
+                cancellationToken
+            );
+
+        Apply(replication, outcome, said, newerPendingExists, now);
+
+        try
+        {
+            await replications.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (replications.TranslateIfDuplicatePending(exception).IsT1)
+        {
+            // The newer intent committed between the look and this save, and this save tried to
+            // put the attempt back beside it. Nothing of it was written.
+            await SupersedeOvertakenAsync(replication.Id, outcome, said, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Ends work in hand without a call (WRK-21): an <c>Add</c> or <c>Update</c> for a spectator
+    /// tombstoned since it was queued. Their face is gone (USR-32) and their <c>Remove</c> is
+    /// queued behind it (REP-03), so nothing is lost and no attempt is counted.
+    /// </summary>
+    public async Task SupersedeWithoutCallAsync(
+        IReplicationRepository replications,
+        Replication replication,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(replications);
+        ArgumentNullException.ThrowIfNull(replication);
+
+        replication.SupersedeAfterAttempt(timeProvider.GetUtcNow().UtcDateTime);
+        await replications.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The pending-index race, settled: the row is read again as the database holds it — still
+    /// in hand, since this worker holds it — and superseded with this attempt's cost on it.
+    /// </summary>
+    private async Task SupersedeOvertakenAsync(
+        int replicationId,
+        AttemptOutcome outcome,
+        string said,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var replications = scope.ServiceProvider.GetRequiredService<IReplicationRepository>();
+
+        var replication = await replications.GetByIdAsync(replicationId, cancellationToken);
+        if (replication is not { Status: ReplicationStatus.InProgress })
+        {
+            LogOutcomeDiscarded(logger, replicationId, outcome);
+            return;
+        }
+
+        Apply(
+            replication,
+            outcome,
+            said,
+            newerPendingExists: true,
+            timeProvider.GetUtcNow().UtcDateTime
+        );
+        await replications.SaveChangesAsync(cancellationToken);
+    }
+
+    private void Apply(
+        Replication replication,
+        AttemptOutcome outcome,
+        string said,
+        bool newerPendingExists,
+        DateTime now
+    )
+    {
         var action = OutcomeDecision.AfterCall(
             outcome,
             replication.AttemptCount,
-            newerPendingExists: false,
+            newerPendingExists,
             _schedule,
             now
         );
@@ -53,44 +143,56 @@ public sealed partial class ReplicationOutcomeRecorder(
             // The reader holds the spectator now (WRK-03).
             case ReplicationAction.Succeed:
                 replication.Succeed(now);
-                await replications.SaveChangesAsync(cancellationToken);
                 break;
 
             // The reader never judged it: back to the queue at no cost, in the place it held
             // (WRK-11) — its creation time is untouched, so it is still the reader's head item.
             case ReplicationAction.Release:
-                replication.Release(reason ?? outcome.ToString(), now);
-                await replications.SaveChangesAsync(cancellationToken);
+                replication.Release(said, now);
                 break;
 
             // The reader refused it: the refusal is counted and kept (REP-30, REP-33), and the
             // record waits out its backoff on the row, where a restart cannot lose it (WRK-16).
             case ReplicationAction.RetryAt retry:
-                replication.Fail(reason ?? outcome.ToString(), now);
+                replication.Fail(said, now);
                 replication.Retry(now, retry.NotBefore);
-                await replications.SaveChangesAsync(cancellationToken);
                 break;
 
             // Refused for the last time: Failed, and nothing ever takes it again (WRK-17).
             case ReplicationAction.DeadLetter:
-                replication.Fail(reason ?? outcome.ToString(), now);
-                await replications.SaveChangesAsync(cancellationToken);
+                replication.Fail(said, now);
                 break;
 
-            // Superseding is recorded by the task that follows. Until then the row stays InProgress, which is what a crashed
-            // worker leaves behind too, and nothing is lost.
-            default:
-                LogOutcomeNotRecorded(logger, replication.Id, outcome);
+            // Overtaken by newer intent: it ends here, keeping what this attempt cost (WRK-20).
+            // A refusal counts and is kept, through Failed; an unanswered call counts nothing
+            // and keeps its reason, through Release — whose Pending is never saved, because
+            // Supersede ends it in the same unit of work.
+            // SPEC_DEVIATION: the unanswered case goes Release → Supersede rather than through
+            // SupersedeAfterAttempt as the design names.
+            // Reason: SupersedeAfterAttempt keeps the row's previous last error, and WRK-20
+            // requires the last error of this attempt; the saved transition is the same,
+            // InProgress → Superseded.
+            case ReplicationAction.SupersedeAfterAttempt when outcome == AttemptOutcome.Rejected:
+                replication.Fail(said, now);
+                replication.SupersedeAfterAttempt(now);
                 break;
+
+            case ReplicationAction.SupersedeAfterAttempt:
+                replication.Release(said, now);
+                replication.Supersede(now);
+                break;
+
+            default:
+                throw new InvalidOperationException($"No call ends in {action}.");
         }
     }
 
     [LoggerMessage(
-        EventId = 20,
-        Level = LogLevel.Warning,
-        Message = "Replication {ReplicationId} ended {Outcome}, which is not recorded yet."
+        EventId = 21,
+        Level = LogLevel.Information,
+        Message = "Replication {ReplicationId} ended {Outcome}, but is no longer in hand; the outcome is discarded."
     )]
-    private static partial void LogOutcomeNotRecorded(
+    private static partial void LogOutcomeDiscarded(
         ILogger logger,
         int replicationId,
         AttemptOutcome outcome

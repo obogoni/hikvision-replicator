@@ -14,7 +14,8 @@ namespace HikvisionReplicator.IntegrationTests;
 /// database with the tests that assert rows stay <c>Pending</c> would turn them red by timing.
 /// <para>
 /// One host is shared by the collection, so <see cref="ResetAsync"/> also puts the fake fleet
-/// back to healthy and the clock back to real time — no test inherits another's script.
+/// back to healthy, the clock back to real time and the save hook back to doing nothing — no
+/// test inherits another's script.
 /// </para>
 /// </summary>
 public sealed class WorkerPostgresFixture : IAsyncLifetime
@@ -60,6 +61,7 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
     {
         Clock.Thaw();
         Readers.Reset();
+        Factory.Saves.Reset();
         await using var connection = await OpenConnectionAsync();
         await _respawner.ResetAsync(connection);
     }

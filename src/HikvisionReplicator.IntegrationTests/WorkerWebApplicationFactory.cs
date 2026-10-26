@@ -29,6 +29,9 @@ public class WorkerWebApplicationFactory(
     /// <summary>The clock the application reads; see <see cref="WorkerClock"/>.</summary>
     public WorkerClock Clock { get; } = new();
 
+    /// <summary>Scripts run inside this host's own saves; see <see cref="ReplicationSaveHook"/>.</summary>
+    public ReplicationSaveHook Saves { get; } = new();
+
     /// <summary>The reader fleet this host's worker delivers to.</summary>
     public FakeDeviceClient Readers => Services.GetRequiredService<FakeDeviceClient>();
 
@@ -60,7 +63,11 @@ public class WorkerWebApplicationFactory(
         if (settings is not null)
             builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(settings));
 
-        builder.ConfigureServices(services => services.AddSingleton<TimeProvider>(Clock));
+        builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<TimeProvider>(Clock);
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Saves));
+        });
     }
 }
 
