@@ -25,6 +25,9 @@ public class TestWebApplicationFactory(string connectionString) : WebApplication
                     ["Encryption:Key"] = TestEncryptionKey,
                     // No real reader exists in a test, and the adapter has no default (WRK-01).
                     ["DeviceClient:Adapter"] = "Fake",
+                    // Off: these tests assert on queued rows a running worker would drain.
+                    // Worker behaviour runs on WorkerPostgresFixture instead.
+                    ["ReplicationWorker:Enabled"] = "false",
                 }
             )
         );

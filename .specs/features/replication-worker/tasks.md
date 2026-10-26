@@ -246,19 +246,19 @@ T20 → T21 → T22
 
 ---
 
-### T11: Walking skeleton — supervisor, device loop, first delivery
+### T11: Walking skeleton — supervisor, device loop, first delivery ✅
 
 **What**: `ReplicationWorker` (loop set synced to `RegisteredDeviceIdsSpec`), `DeviceLoop` (Live-then-Bulk claim via `NextEligibleReplicationSpec`, `Begin`, save, call, `Succeed`), recorder `Delivered` branch, hosted registration behind `ReplicationWorker:Enabled`. `TestWebApplicationFactory` sets `Enabled=false`; new `WorkerPostgresFixture` + `WorkerWebApplicationFactory` (own collection, worker on, ms intervals). **Replace REP-34's no-hosted-service assertion** with WRK-35's no-job-runner assertion (AD-043).
 **Where**: `Infrastructure/Worker/{ReplicationWorker,DeviceLoop,ReplicationOutcomeRecorder}.cs`, `Domain/Specs/NextEligibleReplicationSpec.cs`, `Program.cs`, `IntegrationTests/{WorkerPostgresFixture,WorkerWebApplicationFactory,DeliveryTests}.cs`, `IntegrationTests/StartupTests.cs` (REP-34 test)
 **Depends on**: T10
 **Requirement**: WRK-01, WRK-02, WRK-03, WRK-05, WRK-31, WRK-32, WRK-35
 **Done when**:
-- [ ] Upsert with 3 devices → fake receives one `Add` per device carrying external ref, access code and face bytes; 3 rows `Succeeded` with injected-clock timestamps
-- [ ] `Update` and `Remove` delivered with the right payloads (`Remove` = external ref only)
-- [ ] With Live and Bulk both pending on a device, Live is called first; within a lane, oldest first
-- [ ] Empty queue → no calls; no devices → worker runs, no calls
-- [ ] All 286 pre-existing integration tests still pass with the worker disabled in their factory
-- [ ] Full gate passes; ≥ 302 integration
+- [x] Upsert with 3 devices → fake receives one `Add` per device carrying external ref, access code and face bytes; 3 rows `Succeeded` with injected-clock timestamps
+- [x] `Update` and `Remove` delivered with the right payloads (`Remove` = external ref only)
+- [x] With Live and Bulk both pending on a device, Live is called first; within a lane, oldest first
+- [x] Empty queue → no calls; no devices → worker runs, no calls
+- [x] All 286 pre-existing integration tests still pass with the worker disabled in their factory
+- [x] Full gate passes; ≥ 302 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): drain the queue to every device`
 

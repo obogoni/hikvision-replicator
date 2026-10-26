@@ -1,6 +1,7 @@
 using System.Net;
 using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Infrastructure.Worker;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -17,8 +18,8 @@ namespace HikvisionReplicator.IntegrationTests;
 /// The behaviours that are decided while the application is starting, not while it is
 /// handling a request: encryption-key validation (DEV-15), conditional tracing (DEV-16),
 /// the Development-only API documentation (DEV-17), the wiring the write path fans out
-/// through (AD-042), and what the assembly deliberately does <em>not</em> contain (REP-34,
-/// AD-039).
+/// through (AD-042), and what the solution deliberately does <em>not</em> contain (WRK-35,
+/// AD-043).
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public class StartupTests(PostgresFixture fixture)
@@ -31,8 +32,8 @@ public class StartupTests(PostgresFixture fixture)
     private const string ThreeByteBase64Key = "AAAA";
 
     /// <summary>
-    /// The runners and schedulers AD-039 defers to feature 4. OD-3 is still open, so this is
-    /// the field of candidates rather than one rejected product.
+    /// The runners and schedulers AD-043 rejected when it closed OD-3 (WRK-35) — the whole field
+    /// of candidates rather than one product, so a different runner cannot slip in instead.
     /// </summary>
     private static readonly string[] JobRunners =
     [
@@ -250,28 +251,19 @@ public class StartupTests(PostgresFixture fixture)
         Assert.DoesNotContain(nameof(UserRegistered), exception.Message, StringComparison.Ordinal);
     }
 
-    // ─── REP-34 / AD-039: this feature ships nothing that runs ───────────
+    // ─── WRK-35 / AD-043: the queue is drained by our own worker, not a job runner ───
+    // Replaces REP-34's "nothing runs on its own", which bound replication-queue only while
+    // OD-3 was open (AD-039). AD-043 closes OD-3 with a purpose-built hosted worker, so the
+    // assertion that survives is the one about what must still never enter the solution.
 
     [Fact]
-    public void Application_ships_nothing_that_runs_on_its_own()
+    public void The_queue_is_drained_by_the_applications_own_hosted_worker()
     {
-        var assembly = typeof(AppDbContext).Assembly;
-
-        Assert.DoesNotContain(
-            assembly.GetTypes(),
-            type => typeof(IHostedService).IsAssignableFrom(type)
-        );
-        Assert.DoesNotContain(
-            assembly.GetTypes(),
-            type => typeof(BackgroundService).IsAssignableFrom(type)
-        );
-
-        // A hosted service could also arrive by registration alone, without a type of ours.
-        // The framework registers its own, so only this assembly's are in scope.
         using var factory = BootWith();
-        Assert.DoesNotContain(
+
+        Assert.Contains(
             factory.Services.GetServices<IHostedService>(),
-            service => service.GetType().Assembly == assembly
+            service => service is ReplicationWorker
         );
     }
 

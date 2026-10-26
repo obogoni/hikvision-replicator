@@ -70,6 +70,12 @@ builder.Services.AddSingleton<IDeviceClient>(services =>
         )
 );
 
+// The queue's drain: a supervisor keeping one serial loop per reader (AD-043). Singletons,
+// because each loop opens a fresh scope per cycle rather than holding one.
+builder.Services.AddSingleton<ReplicationOutcomeRecorder>();
+builder.Services.AddSingleton<DeviceLoop>();
+builder.Services.AddHostedService<ReplicationWorker>();
+
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 // Stateless and CPU-bound, so one instance serves every request (A-14).
 builder.Services.AddSingleton<IFaceImageNormalizer, SkiaFaceImageNormalizer>();
