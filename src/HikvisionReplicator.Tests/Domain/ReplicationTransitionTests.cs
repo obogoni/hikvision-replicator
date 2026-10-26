@@ -437,4 +437,68 @@ public class ReplicationTransitionTests
         Assert.Equal(before, Capture(work));
         Assert.Equal(RetryDueOn, work.NextAttemptAt);
     }
+
+    // ─── WRK-20 / WRK-21 (AD-044): an unfinished attempt a newer intent overtook ends there,
+    //     keeping what that attempt cost. Supersede itself stays Pending-only (REP-12).  ───
+
+    [Fact]
+    public void Work_in_hand_overtaken_by_a_newer_intent_ends_keeping_what_its_attempts_cost()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        work.Begin(RetryDueOn);
+
+        var result = work.SupersedeAfterAttempt(SettledOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Superseded, work.Status);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Equal("device said no", work.LastError);
+        Assert.Equal(SettledOn, work.UpdatedAt);
+    }
+
+    [Fact]
+    public void Failed_work_overtaken_by_a_newer_intent_ends_keeping_what_its_attempt_cost()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+
+        var result = work.SupersedeAfterAttempt(RefusedOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Superseded, work.Status);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Equal("device said no", work.LastError);
+        Assert.Equal(RefusedOn, work.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(ReplicationStatus.Pending)]
+    [InlineData(ReplicationStatus.Succeeded)]
+    [InlineData(ReplicationStatus.Superseded)]
+    public void Only_attempted_work_can_be_overtaken_after_its_attempt(ReplicationStatus status)
+    {
+        var work = InStatus(status);
+        var before = Capture(work);
+
+        var result = work.SupersedeAfterAttempt(RefusedOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(Replication.Errors.StatusField, result.AsT1.Field);
+        Assert.Equal(Replication.Errors.CannotSupersedeAfterAttempt, result.AsT1.Message);
+        Assert.Equal(before, Capture(work));
+    }
+
+    [Fact]
+    public void Work_waiting_out_a_backoff_cannot_be_overtaken_as_if_it_were_in_hand()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        var before = Capture(work);
+
+        var result = work.SupersedeAfterAttempt(SettledOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(before, Capture(work));
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
+    }
 }

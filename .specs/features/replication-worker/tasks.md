@@ -123,17 +123,17 @@ T20 → T21 → T22
 
 ---
 
-### T3: `Replication.SupersedeAfterAttempt`
+### T3: `Replication.SupersedeAfterAttempt` ✅
 
 **What**: `InProgress | Failed → Superseded`, attempt count and last error kept. `Supersede` stays `Pending`-only — the REP-12 refusal test for `Supersede` from `InProgress` is **kept unchanged**. Amend only REP-28 cases asserting `InProgress/Failed → Superseded` is impossible by any method (AD-044).
 **Where**: `Domain/Replication.cs`, `Tests/Domain/ReplicationTransitionTests.cs`
 **Depends on**: T2
 **Requirement**: WRK-20, WRK-21 (domain half)
 **Done when**:
-- [ ] From `InProgress` and from `Failed` → `Superseded`, attempts and error kept
-- [ ] From `Pending`, `Succeeded`, `Superseded` refused, fields unchanged
-- [ ] `Supersede` from `InProgress` still refused (REP-12)
-- [ ] Quick gate passes; ≥ 377 unit
+- [x] From `InProgress` and from `Failed` → `Superseded`, attempts and error kept
+- [x] From `Pending`, `Succeeded`, `Superseded` refused, fields unchanged
+- [x] `Supersede` from `InProgress` still refused (REP-12)
+- [x] Quick gate passes; ≥ 377 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(replication): supersede an attempt a newer intent overtook`
 

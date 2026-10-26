@@ -194,6 +194,25 @@ public class Replication : AggregateRoot, IAggregateRoot
     public OneOf<Success, ValidationError> Supersede(DateTime now) =>
         MoveTo(ReplicationStatus.Pending, ReplicationStatus.Superseded, Errors.CannotSupersede, now);
 
+    /// <summary>
+    /// A newer intent overtook an attempt that did not land: <c>InProgress | Failed →
+    /// Superseded</c>, terminal (AD-044, WRK-20). Returning it to <c>Pending</c> instead would
+    /// put it beside the newer one and replay stale intent. The attempt count and last error
+    /// are what that attempt cost and are kept as its record. This is deliberately a separate
+    /// method: <see cref="Supersede"/> stays <c>Pending</c>-only, so a user write still cannot
+    /// supersede work in a reader's hands (REP-12) — only the worker that holds it can.
+    /// </summary>
+    public OneOf<Success, ValidationError> SupersedeAfterAttempt(DateTime now)
+    {
+        if (Status is not (ReplicationStatus.InProgress or ReplicationStatus.Failed))
+            return new ValidationError(Errors.StatusField, Errors.CannotSupersedeAfterAttempt);
+
+        Status = ReplicationStatus.Superseded;
+        UpdatedAt = now;
+
+        return new Success();
+    }
+
     private static string Truncate(string error) =>
         error.Length > MaxLastErrorLength ? error[..MaxLastErrorLength] : error;
 
@@ -224,6 +243,8 @@ public class Replication : AggregateRoot, IAggregateRoot
         public const string CannotFail = "Only work in progress can fail.";
         public const string CannotRetry = "Only failed work can be retried.";
         public const string CannotRelease = "Only work in progress can be released.";
+        public const string CannotSupersedeAfterAttempt =
+            "Only work in progress or failed work can be superseded after an attempt.";
         public const string CannotSupersede = "Only pending work can be superseded.";
     }
 }
