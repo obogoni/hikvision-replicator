@@ -67,21 +67,37 @@ public class DeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixtu
 
     // ─── WRK-03: in hand before the call, succeeded after it, on the injected clock ───
 
+    /// <summary>
+    /// Two spectators queued at kickoff on one reader, which takes them one at a time. The clock
+    /// moves to a minute past kickoff while the first call is out, so the second is taken in hand
+    /// on that later instant: its claim must carry it, distinct from its creation and from the
+    /// real time.
+    /// </summary>
     [Fact]
     public async Task Work_is_in_progress_while_its_call_is_with_the_reader()
     {
         await GivenRegisteredDeviceAsync("10.0.1.1");
-        Readers.SetLatency(TimeSpan.FromSeconds(2));
+        Readers.SetLatency(TimeSpan.FromSeconds(1));
 
-        await UpsertSpectatorAsync("TICKET-1");
+        Clock.Freeze(Kickoff);
+        await UpsertSpectatorAsync("TICKET-1", "100001");
+        await UpsertSpectatorAsync("TICKET-2", "100002");
         await CallsUntilAsync(calls => calls.Count == 1, "the reader has been called");
+        Clock.Freeze(Kickoff.AddMinutes(1));
 
-        // The call is still on the wire — the reader answers after two seconds.
-        Assert.Equal(ReplicationStatus.InProgress, Assert.Single(await QueuedWorkAsync()).Status);
+        await CallsUntilAsync(calls => calls.Count == 2, "the reader has been called again");
+
+        // The second call is still on the wire — the reader answers after a second.
+        var inHand = Assert.Single(
+            await QueuedWorkAsync(),
+            work => work.Status == ReplicationStatus.InProgress
+        );
+        Assert.Equal(Kickoff.UtcDateTime, inHand.CreatedAt);
+        Assert.Equal(Kickoff.AddMinutes(1).UtcDateTime, inHand.UpdatedAt);
 
         await QueueUntilAsync(
-            queue => queue.Single().Status == ReplicationStatus.Succeeded,
-            "the reader's answer has been recorded"
+            queue => queue.All(work => work.Status == ReplicationStatus.Succeeded),
+            "the reader's answers have been recorded"
         );
     }
 
