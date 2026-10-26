@@ -9,6 +9,7 @@ using HikvisionReplicator.Api.Features.Users.ListUsers;
 using HikvisionReplicator.Api.Features.Users.RemoveUser;
 using HikvisionReplicator.Api.Features.Users.UpsertUser;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Infrastructure.Worker;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -38,6 +39,17 @@ builder.Services.AddSingleton<IValidateOptions<FaceImageOptions>, FaceImageOptio
 builder
     .Services.AddOptions<FaceImageOptions>()
     .Bind(builder.Configuration.GetSection(FaceImageOptions.SectionName))
+    .ValidateOnStart();
+
+// A worker setting it cannot run on — a zero poll interval hot-loops, a lease no longer than
+// the call timeout reclaims live calls — aborts startup naming the setting (WRK-30).
+builder.Services.AddSingleton<
+    IValidateOptions<ReplicationWorkerOptions>,
+    ReplicationWorkerOptionsValidator
+>();
+builder
+    .Services.AddOptions<ReplicationWorkerOptions>()
+    .Bind(builder.Configuration.GetSection(ReplicationWorkerOptions.SectionName))
     .ValidateOnStart();
 
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();

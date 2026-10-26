@@ -98,6 +98,18 @@ public class StartupTests(PostgresFixture fixture)
         Assert.Contains(EncryptionOptionsValidator.WrongLengthKeyMessage, exception.Message);
     }
 
+    // ─── WRK-30: a worker setting it cannot run on stops the application from starting ─
+
+    [Fact]
+    public void Application_does_not_start_with_a_worker_setting_it_cannot_run_on()
+    {
+        using var factory = BootWith(settings: ("ReplicationWorker:MaxAttempts", "0"));
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("ReplicationWorker:MaxAttempts", exception.Message, StringComparison.Ordinal);
+    }
+
     // ─── DEV-16: tracing exists only when an export endpoint is configured ─
 
     [Fact]

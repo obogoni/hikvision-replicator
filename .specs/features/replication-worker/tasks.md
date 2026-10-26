@@ -170,7 +170,7 @@ T20 → T21 → T22
 
 ---
 
-### T6: `ReplicationWorkerOptions` + validator + startup binding
+### T6: `ReplicationWorkerOptions` + validator + startup binding ✅
 
 **What**: Options class with the design's defaults, `IValidateOptions` validator, bound with `ValidateOnStart` in `Program.cs`.
 **Where**: `Infrastructure/Worker/ReplicationWorkerOptions.cs`, `Program.cs`, `Tests/Infrastructure/Worker/ReplicationWorkerOptionsValidatorTests.cs`, `IntegrationTests/StartupTests.cs`
@@ -178,9 +178,9 @@ T20 → T21 → T22
 **Reuses**: `FaceImageOptions` + validator pattern
 **Requirement**: WRK-30
 **Done when**:
-- [ ] Unit: each non-positive span, `MaxAttempts < 1`, `PauseAfterConsecutiveUnreachable < 1`, `Lease <= DeviceCallTimeout`, max-below-base for both backoffs fails with the setting's name; defaults pass
-- [ ] Integration: one invalid setting aborts host startup with that name in the message
-- [ ] Full gate passes; ≥ 401 unit · ≥ 287 integration
+- [x] Unit: each non-positive span, `MaxAttempts < 1`, `PauseAfterConsecutiveUnreachable < 1`, `Lease <= DeviceCallTimeout`, max-below-base for both backoffs fails with the setting's name; defaults pass
+- [x] Integration: one invalid setting aborts host startup with that name in the message
+- [x] Full gate passes; ≥ 401 unit · ≥ 287 integration
 
 **Tests**: unit + integration · **Gate**: full · **Commit**: `feat(worker): validate the worker's settings at startup`
 
