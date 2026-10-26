@@ -265,6 +265,100 @@ public class BackfillDeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTes
     }
 
     /// <summary>
+    /// Refuses the first <paramref name="times"/> saves that expand a backfill, and notes what
+    /// the reader had been sent by the time a later one goes through. It arranges and observes;
+    /// it never asserts.
+    /// </summary>
+    private sealed class ExpansionsRefused(int times, Func<int> readerCalls)
+        : SaveChangesInterceptor
+    {
+        private int _expansions;
+
+        public int Refused { get; private set; }
+
+        /// <summary>The calls the reader had received when its debt was finally expanded.</summary>
+        public int? CallsWhenExpanded { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default
+        )
+        {
+            ArgumentNullException.ThrowIfNull(eventData);
+            var expanding =
+                eventData.Context is { } context
+                && context
+                    .ChangeTracker.Entries<BackfillIntent>()
+                    .Any(entry =>
+                        entry.State == EntityState.Modified
+                        && entry.Entity.Status == BackfillStatus.Expanded
+                    );
+
+            if (expanding)
+            {
+                if (Interlocked.Increment(ref _expansions) <= times)
+                {
+                    Refused++;
+                    throw new InvalidOperationException("The expansion is refused.");
+                }
+
+                CallsWhenExpanded = readerCalls();
+            }
+
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <summary>
+    /// The same worst landing, with the supervisor's gate held shut on purpose: the expansion
+    /// fails, so the debt is still owed on the next tick while the spectator's live row waits.
+    /// The reader must get no loop — and so no call — until a later tick expands its debt; then
+    /// the live row is its one enrolment. The host polls every half second, so a loop started
+    /// on a failing tick would have delivered long before the retry.
+    /// <para>
+    /// Refused twice, not once: a tick reads the catalogue before the debts, so an arrangement
+    /// committed between the two is first expanded on a tick whose catalogue does not hold the
+    /// reader yet. The second refusal is on a tick that does, so the gate is always what is
+    /// tested.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_reader_whose_expansion_failed_is_not_served_until_its_debt_is_expanded()
+    {
+        FakeDeviceClient? fleet = null;
+        var hook = new ExpansionsRefused(2, () => fleet!.Calls.Count);
+        await using var host = await Fixture.StartIsolatedHostAsync(
+            new Dictionary<string, string?> { ["ReplicationWorker:PollInterval"] = "00:00:00.500" },
+            builder =>
+                builder.ConfigureServices(services =>
+                    services.ConfigureDbContext<AppDbContext>(options =>
+                        options.AddInterceptors(hook)
+                    )
+                )
+        );
+        fleet = host.Readers;
+
+        var reader = await ArrangeReaderOwedLiveWorkAsync(host);
+
+        await Eventually.UntilAsync(
+            () => DebtStatusAsync(host, reader),
+            status => status == BackfillStatus.Expanded,
+            "the reader's debt has been expanded on a later tick"
+        );
+        var queue = await Eventually.UntilAsync(
+            () => QueuedWorkAsync(host),
+            queue => queue.All(work => work.Status == ReplicationStatus.Succeeded),
+            "the live enrolment has been delivered"
+        );
+
+        Assert.Equal(2, hook.Refused);
+        Assert.Equal(0, hook.CallsWhenExpanded);
+        Assert.Equal(ReplicationLane.Live, Assert.Single(queue).Lane);
+        Assert.Single(host.Readers.Calls, call => call.ExternalRef == "TICKET-1");
+    }
+
+    /// <summary>
     /// Each round registers a reader and a spectator at the same moment, so the spectator's
     /// live fan-out and the reader's backfill expansion land in either order. Whichever way
     /// they fall, every (spectator, reader) pair is owed — and receives — one enrolment.
