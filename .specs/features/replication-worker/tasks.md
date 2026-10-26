@@ -280,17 +280,17 @@ T20 → T21 → T22
 
 ---
 
-### T13: Devices joining, leaving and changing while the worker runs
+### T13: Devices joining, leaving and changing while the worker runs ✅
 
 **What**: Loop start/stop within a poll interval; device reloaded right before each call (no call starts after a delete is observed); new address/credentials used on the next call.
 **Where**: `Infrastructure/Worker/{ReplicationWorker,DeviceLoop}.cs`, `IntegrationTests/DeviceChurnTests.cs`
 **Depends on**: T12
 **Requirement**: WRK-10, WRK-25, WRK-33
 **Done when**:
-- [ ] Device registered after start → its work delivered with no restart
-- [ ] Device deleted → no further call to it after the delete is observed (design's WRK-25 interpretation)
-- [ ] Device's address updated → next call's `DeviceEndpoint` carries the new address and decrypted password
-- [ ] Full gate passes; ≥ 308 integration
+- [x] Device registered after start → its work delivered with no restart
+- [x] Device deleted → no further call to it after the delete is observed (design's WRK-25 interpretation)
+- [x] Device's address updated → next call's `DeviceEndpoint` carries the new address and decrypted password
+- [x] Full gate passes; ≥ 308 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): follow the device catalogue without a restart`
 

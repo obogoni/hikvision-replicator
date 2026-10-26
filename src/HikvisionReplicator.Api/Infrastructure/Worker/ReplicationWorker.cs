@@ -26,7 +26,10 @@ public sealed partial class ReplicationWorker(
     ILogger<ReplicationWorker> logger
 ) : BackgroundService
 {
-    private readonly Dictionary<int, Task> _loops = [];
+    private readonly Dictionary<int, (CancellationTokenSource Stop, Task Running)> _loops = [];
+
+    /// <summary>Loops told to stop and not yet seen to finish, awaited at shutdown.</summary>
+    private readonly List<(CancellationTokenSource Stop, Task Running)> _stopping = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -69,28 +72,54 @@ public sealed partial class ReplicationWorker(
         }
         finally
         {
-            // Every loop observes the same stopping token, so this waits for each to finish
-            // the cycle it is in.
-            await Task.WhenAll(_loops.Values);
+            // Every loop's token is linked to the stopping token, so this waits for each to
+            // finish the cycle it is in.
+            var every = _loops.Values.Concat(_stopping).ToList();
+            await Task.WhenAll(every.Select(loop => loop.Running));
+            foreach (var loop in every)
+                loop.Stop.Dispose();
         }
     }
 
-    /// <summary>Starts a loop for every reader that has none (WRK-10).</summary>
+    /// <summary>
+    /// Starts a loop for every reader that has none and stops the loop of every reader that has
+    /// left the catalogue, so a change takes effect within one poll interval without a restart
+    /// (WRK-10). A stopped loop starts no further call (WRK-25).
+    /// </summary>
     private async Task SyncLoopsAsync(CancellationToken stoppingToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var readers = await scope
-            .ServiceProvider.GetRequiredService<IDeviceRepository>()
-            .ListAsync(new RegisteredDeviceIdsSpec(), stoppingToken);
+        var readers = (
+            await scope
+                .ServiceProvider.GetRequiredService<IDeviceRepository>()
+                .ListAsync(new RegisteredDeviceIdsSpec(), stoppingToken)
+        ).ToHashSet();
 
-        foreach (var deviceId in readers)
+        // Told to stop, not waited for: a removed reader's loop may be inside a call, and
+        // the tick must not hold every other reader's catalogue change behind it.
+        // SPEC_DEVIATION: a call in flight to a removed reader is cancelled with its loop,
+        // where the design lets it complete and discards the outcome (WRK-24).
+        // Reason: the reader is decommissioned and its rows went with it (REP-16), so there is
+        // no outcome left to record — finishing the call would only hold the loop open.
+        foreach (var (deviceId, loop) in _loops.Where(loop => !readers.Contains(loop.Key)).ToList())
         {
-            if (_loops.ContainsKey(deviceId))
-                continue;
+            await loop.Stop.CancelAsync();
+            _stopping.Add(loop);
+            _loops.Remove(deviceId);
+        }
 
-            _loops[deviceId] = Task.Run(
-                () => deviceLoop.RunAsync(deviceId, stoppingToken),
-                CancellationToken.None
+        foreach (var finished in _stopping.Where(loop => loop.Running.IsCompleted).ToList())
+        {
+            finished.Stop.Dispose();
+            _stopping.Remove(finished);
+        }
+
+        foreach (var deviceId in readers.Where(deviceId => !_loops.ContainsKey(deviceId)))
+        {
+            var stop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            _loops[deviceId] = (
+                stop,
+                Task.Run(() => deviceLoop.RunAsync(deviceId, stop.Token), CancellationToken.None)
             );
         }
     }

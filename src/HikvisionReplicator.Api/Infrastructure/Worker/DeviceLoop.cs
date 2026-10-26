@@ -40,10 +40,10 @@ public sealed partial class DeviceLoop(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            bool tookWork;
+            Cycle cycle;
             try
             {
-                tookWork = await TakeNextAsync(deviceId, settings, stoppingToken);
+                cycle = await TakeNextAsync(deviceId, settings, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -52,10 +52,14 @@ public sealed partial class DeviceLoop(
             catch (Exception exception)
             {
                 LogCycleFailed(logger, deviceId, exception);
-                tookWork = false;
+                cycle = Cycle.Idle;
             }
 
-            if (tookWork)
+            // The reader left the catalogue between the claim and the call (WRK-25).
+            if (cycle == Cycle.ReaderGone)
+                return;
+
+            if (cycle == Cycle.Worked)
                 continue;
 
             try
@@ -69,8 +73,20 @@ public sealed partial class DeviceLoop(
         }
     }
 
-    /// <summary>Claims, delivers and records one piece of work. <c>false</c> when there was none.</summary>
-    private async Task<bool> TakeNextAsync(
+    private enum Cycle
+    {
+        /// <summary>Nothing to take, or the reader is held elsewhere: wait a poll.</summary>
+        Idle,
+
+        /// <summary>Work was taken, or the queue moved under the claim: look again at once.</summary>
+        Worked,
+
+        /// <summary>The reader is no longer in the catalogue: stop.</summary>
+        ReaderGone,
+    }
+
+    /// <summary>Claims, delivers and records one piece of work.</summary>
+    private async Task<Cycle> TakeNextAsync(
         int deviceId,
         ReplicationWorkerOptions settings,
         CancellationToken stoppingToken
@@ -94,7 +110,7 @@ public sealed partial class DeviceLoop(
             );
 
         if (work is null)
-            return false;
+            return Cycle.Idle;
 
         // In hand before the reader hears of it (WRK-03). The save is the claim, and the
         // database arbitrates it (WRK-06).
@@ -108,20 +124,23 @@ public sealed partial class DeviceLoop(
             // Another instance has an operation in this reader's hands. Not a fault: wait a
             // poll and look again, and the newer work for a pair stays queued until the older
             // one is done with (WRK-08).
-            return false;
+            return Cycle.Idle;
         }
         catch (DbUpdateConcurrencyException)
         {
             // The row moved between the read and the claim — another instance took it, or a
             // newer intent superseded it. Look again at once; the queue has changed.
-            return true;
+            return Cycle.Worked;
         }
 
+        // Read now, right before the call, rather than once per loop: the address and
+        // credentials an operator just corrected are the ones used (WRK-33), and a reader
+        // deleted since the claim is never called (WRK-25).
         var device = await services
             .GetRequiredService<IDeviceRepository>()
             .GetByIdAsync(deviceId, stoppingToken);
         if (device is null)
-            return false;
+            return Cycle.ReaderGone;
 
         var users = services.GetRequiredService<IUserRepository>();
 
@@ -142,7 +161,7 @@ public sealed partial class DeviceLoop(
         var outcome = await CallAsync(work, user, endpoint, settings, stoppingToken);
 
         await recorder.RecordAsync(replications, work, outcome, stoppingToken);
-        return true;
+        return Cycle.Worked;
     }
 
     /// <summary>
