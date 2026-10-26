@@ -410,16 +410,16 @@ T20 → T21 → T22
 
 ---
 
-### T21: Live-sync SLO under a running backfill
+### T21: Live-sync SLO under a running backfill ✅
 
 **What**: WRK-09's test.
 **Where**: `IntegrationTests/LiveSyncSloTests.cs`
 **Depends on**: T20
 **Requirement**: WRK-09
 **Done when**:
-- [ ] 20 fake devices at 50 ms, ≥ 100 `Bulk` pending each, then an upsert → `Succeeded` on all 20 within 5 s, **and** `Bulk` rows still `Pending` on every device at that moment
-- [ ] Passes 5 consecutive local runs
-- [ ] Full gate passes; ≥ 334 integration
+- [x] 20 fake devices at 50 ms, ≥ 100 `Bulk` pending each, then an upsert → `Succeeded` on all 20 within 5 s, **and** `Bulk` rows still `Pending` on every device at that moment — backlog from real backfill expansion of 200 spectators registered through the API before the readers
+- [x] Passes 5 consecutive local runs (walk-up on all 20 readers after 248 / 203 / 220 / 266 / 218 ms; least Bulk pending at upsert 139–147, at delivery 133–142)
+- [x] Full gate passes; ≥ 334 integration (337)
 
 **Tests**: integration · **Gate**: full · **Commit**: `test(worker): prove a live upsert overtakes a running backfill`
 
