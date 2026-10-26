@@ -154,17 +154,17 @@ T20 → T21 → T22
 
 ---
 
-### T5: `DevicePause`
+### T5: `DevicePause` ✅
 
 **What**: Consecutive-failure breaker per design: trips at `PauseAfterConsecutiveUnreachable`, probe at `ProbeInitialDelay × 2^failedProbes` capped at `ProbeMaxDelay`, any answer resets and reports `Resumed`.
 **Where**: `Infrastructure/Worker/DevicePause.cs`, `Tests/Infrastructure/Worker/DevicePauseTests.cs`
 **Depends on**: T4
 **Requirement**: WRK-12, WRK-13, WRK-15
 **Done when**:
-- [ ] One `Unreachable` does not pause; two consecutive do, returning `Paused`; an answer between them resets the count
-- [ ] While paused, `CanAttempt` false before `ProbeDueAt`, true at it; failed probes give 5, 10, 20, 40, 60, 60 s
-- [ ] `Rejected` and `Delivered` both resume and return `Resumed` exactly once
-- [ ] Quick gate passes; ≥ 391 unit
+- [x] One `Unreachable` does not pause; two consecutive do, returning `Paused`; an answer between them resets the count
+- [x] While paused, `CanAttempt` false before `ProbeDueAt`, true at it; failed probes give 5, 10, 20, 40, 60, 60 s
+- [x] `Rejected` and `Delivered` both resume and return `Resumed` exactly once
+- [x] Quick gate passes; ≥ 391 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(worker): pause a reader after consecutive unreachable calls`
 
