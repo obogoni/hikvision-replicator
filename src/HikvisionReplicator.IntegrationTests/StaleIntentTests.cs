@@ -22,24 +22,34 @@ public class StaleIntentTests(WorkerPostgresFixture fixture) : WorkerApiTests(fi
 
     private ReplicationSaveHook Saves => Fixture.Factory.Saves;
 
-    private async Task<Replication> WorkForAsync(string externalRef, ReplicationOperation operation)
+    private async Task<Replication> WorkForAsync(string externalRef, ReplicationOperation operation) =>
+        (await QueuedWorkForAsync(externalRef, operation))
+        ?? throw new InvalidOperationException($"{externalRef} has no {operation} queued.");
+
+    /// <summary><c>null</c> until the work is queued — a removal made by a hook lands later.</summary>
+    private async Task<Replication?> QueuedWorkForAsync(
+        string externalRef,
+        ReplicationOperation operation
+    )
     {
         var user = await StoredUserAsync(externalRef);
-        return (await QueuedWorkAsync()).Single(work =>
+        return (await QueuedWorkAsync()).SingleOrDefault(work =>
             work.UserId == user.Id && work.Operation == operation
         );
     }
 
-    private Task<Replication> WorkUntilAsync(
+    private async Task<Replication> WorkUntilAsync(
         string externalRef,
         ReplicationOperation operation,
         ReplicationStatus status
     ) =>
-        Eventually.UntilAsync(
-            () => WorkForAsync(externalRef, operation),
-            work => work.Status == status,
-            $"{externalRef}'s {operation} is {status}"
-        );
+        (
+            await Eventually.UntilAsync(
+                () => QueuedWorkForAsync(externalRef, operation),
+                work => work?.Status == status,
+                $"{externalRef}'s {operation} is {status}"
+            )
+        )!;
 
     // ─── WRK-20: overtaken while the reader did not answer ───
 
