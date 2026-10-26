@@ -78,6 +78,10 @@ public class UserRepository(AppDbContext dbContext, IReplicationRepository repli
         if (userKey is not null)
             return userKey;
 
+        // The fan-out superseded a pending row the worker claimed in between (AD-044).
+        if (IReplicationRepository.LostRaceForQueuedWork(exception))
+            return IReplicationRepository.DuplicatePendingWork;
+
         // The queue's own answer, or nothing. Its Success arm means "not my index — let it
         // propagate", which is what keeps a genuine fault a 500 rather than a conflict the
         // caller can do nothing about.

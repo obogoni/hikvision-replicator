@@ -216,16 +216,16 @@ T20 → T21 → T22
 
 ---
 
-### T9: Translate a lost row-version race on the user and device write paths
+### T9: Translate a lost row-version race on the user and device write paths ✅
 
 **What**: `UserRepository`/`DeviceRepository` translate `DbUpdateConcurrencyException` whose entries are `Replication` to `ConflictError(DuplicatePendingWork)`; any other concurrency exception propagates.
 **Where**: `Infrastructure/UserRepository.cs`, `Infrastructure/DeviceRepository.cs`, `Shared/IReplicationRepository.cs`, `IntegrationTests/UserPersistenceContractTests.cs`
 **Depends on**: T8
 **Requirement**: WRK-06 (race closure, AD-044)
 **Done when**:
-- [ ] Contract test: a pending row changed behind a tracked context makes the user save return the conflict, deterministically, with the literal message pinned once
-- [ ] A concurrency exception on a non-replication entity is **not** translated
-- [ ] Full gate passes; ≥ 293 integration
+- [x] Contract test: a pending row changed behind a tracked context makes the user save return the conflict, deterministically, with the literal message pinned once
+- [x] A concurrency exception on a non-replication entity is **not** translated
+- [x] Full gate passes; ≥ 293 integration
 
 **Tests**: integration (contract) · **Gate**: full · **Commit**: `fix(replication): turn a claim racing a user write into a conflict`
 
