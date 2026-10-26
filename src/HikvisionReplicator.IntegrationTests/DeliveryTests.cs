@@ -342,7 +342,9 @@ public class DeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixtu
             blocked = blockedReader.Id;
 
             var older = AddFor(spectator, blockedReader, ReplicationLane.Live, Earlier);
-            older.Begin(Earlier);
+            // Taken in hand now: another instance mid-call holds a live lease. Taken at
+            // Earlier, it would read as work a crashed worker abandoned (WRK-22).
+            older.Begin(DateTime.UtcNow);
             context.Replications.AddRange(
                 older,
                 Replication.Create(
