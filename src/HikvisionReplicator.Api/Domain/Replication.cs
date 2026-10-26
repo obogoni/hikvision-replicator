@@ -43,6 +43,14 @@ public class Replication : AggregateRoot, IAggregateRoot
     /// </summary>
     public DateTime? NextAttemptAt { get; private set; }
 
+    /// <summary>
+    /// The row version (AD-044). Every writer of this table — the fan-out superseding pending
+    /// work and the worker claiming it — saves against the version it read, so a claim
+    /// committed between another writer's read and its save is refused rather than overwritten.
+    /// Set by the database, never by the aggregate.
+    /// </summary>
+    public uint Version { get; private set; }
+
     private Replication() { } // for EF Core
 
     private Replication(

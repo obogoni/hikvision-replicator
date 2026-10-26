@@ -202,15 +202,15 @@ T20 → T21 → T22
 
 ---
 
-### T8: Schema — `NextAttemptAt`, row version, two partial indexes
+### T8: Schema — `NextAttemptAt`, row version, two partial indexes ✅
 
 **What**: Map `NextAttemptAt`, `Version` (`xmin`, `IsRowVersion()`), `IX_replications_device_in_progress` (`UNIQUE (DeviceId) WHERE Status='InProgress'`), `IX_replications_device_pending` (`(DeviceId, Lane, CreatedAt) WHERE Status='Pending'`); migration `AddReplicationWorker` shipped in the same task.
 **Where**: `Infrastructure/ReplicationConfiguration.cs`, `Infrastructure/Migrations/*_AddReplicationWorker.cs`, `IntegrationTests/ReplicationQueueContractTests.cs`
 **Depends on**: T7
 **Requirement**: WRK-06, WRK-16 (persistence half)
 **Done when**:
-- [ ] Contract tests (doc comment names the blind spot): both indexes' definitions read from `pg_indexes`; a second `InProgress` row for one device is refused with `23505` on the named index; two `InProgress` rows on different devices are allowed
-- [ ] Full gate passes; ≥ 412 unit · ≥ 290 integration
+- [x] Contract tests (doc comment names the blind spot): both indexes' definitions read from `pg_indexes`; a second `InProgress` row for one device is refused with `23505` on the named index; two `InProgress` rows on different devices are allowed
+- [x] Full gate passes; ≥ 412 unit · ≥ 290 integration
 
 **Tests**: integration (contract) · **Gate**: full · **Commit**: `feat(replication): enforce one in-flight operation per device`
 
