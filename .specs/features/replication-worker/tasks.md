@@ -329,19 +329,20 @@ T20 → T21 → T22
 
 ---
 
-### T16: Rejected items — backoff and dead letter
+### T16: Rejected items — backoff and dead letter ✅
 
 **What**: Recorder `RetryAt`/`DeadLetter` branches; unexpected adapter exception → treated as `Rejected`.
 **Where**: `Infrastructure/Worker/{DeviceLoop,ReplicationOutcomeRecorder}.cs`, `IntegrationTests/RejectionTests.cs`
 **Depends on**: T15
 **Requirement**: WRK-16, WRK-17, WRK-18, WRK-19
 **Done when**:
-- [ ] One rejection → `Pending`, attempt 1, error stored, not called again before the delay
-- [ ] Always rejected → after `MaxAttempts` the row stays `Failed` and is never called again; other users on that device still delivered
-- [ ] Newer intent after a dead letter → delivered; dead letter unchanged
-- [ ] Superseded during backoff → newer delivered without waiting
-- [ ] Adapter throws → counted as a rejection, ends as a dead letter, never pauses the device
-- [ ] Full gate passes; ≥ 320 integration
+- [x] One rejection → `Pending`, attempt 1, error stored, not called again before the delay
+- [x] Always rejected → after `MaxAttempts` the row stays `Failed` and is never called again; other users on that device still delivered
+- [x] Newer intent after a dead letter → delivered; dead letter unchanged
+- [x] Superseded during backoff → newer delivered without waiting
+- [x] Adapter throws → counted as a rejection, ends as a dead letter, never pauses the device
+- [x] (carried from T15) A `Rejected` answer does not pause
+- [x] Full gate passes; ≥ 320 integration (324)
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): retry a rejected record, then set it aside`
 

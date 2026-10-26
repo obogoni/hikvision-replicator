@@ -250,6 +250,14 @@ public sealed partial class DeviceLoop(
                 $"Device {endpoint.DeviceId} did not answer within {settings.DeviceCallTimeout}."
             );
         }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // An adapter that throws is a bug, not an outage. As a refusal it costs the record
+            // an attempt and ends as a dead letter an operator can see; as an outage it would
+            // pause the reader for ever and hide the bug (design § Error Handling).
+            LogAdapterFailed(logger, endpoint.DeviceId, work.Id, exception);
+            return (AttemptOutcome.Rejected, $"The device client failed: {exception.Message}");
+        }
     }
 
     /// <summary>
@@ -281,4 +289,16 @@ public sealed partial class DeviceLoop(
         Message = "A delivery cycle for device {DeviceId} failed; the loop continues."
     )]
     private static partial void LogCycleFailed(ILogger logger, int deviceId, Exception exception);
+
+    [LoggerMessage(
+        EventId = 11,
+        Level = LogLevel.Error,
+        Message = "The device client threw while delivering replication {ReplicationId} to device {DeviceId}; counted as a rejection."
+    )]
+    private static partial void LogAdapterFailed(
+        ILogger logger,
+        int deviceId,
+        int replicationId,
+        Exception exception
+    );
 }

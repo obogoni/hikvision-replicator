@@ -63,7 +63,21 @@ public sealed partial class ReplicationOutcomeRecorder(
                 await replications.SaveChangesAsync(cancellationToken);
                 break;
 
-            // Retry and dead letter are recorded by the failure-handling tasks that follow. Until then the row stays InProgress, which is what a crashed
+            // The reader refused it: the refusal is counted and kept (REP-30, REP-33), and the
+            // record waits out its backoff on the row, where a restart cannot lose it (WRK-16).
+            case ReplicationAction.RetryAt retry:
+                replication.Fail(reason ?? outcome.ToString(), now);
+                replication.Retry(now, retry.NotBefore);
+                await replications.SaveChangesAsync(cancellationToken);
+                break;
+
+            // Refused for the last time: Failed, and nothing ever takes it again (WRK-17).
+            case ReplicationAction.DeadLetter:
+                replication.Fail(reason ?? outcome.ToString(), now);
+                await replications.SaveChangesAsync(cancellationToken);
+                break;
+
+            // Superseding is recorded by the task that follows. Until then the row stays InProgress, which is what a crashed
             // worker leaves behind too, and nothing is lost.
             default:
                 LogOutcomeNotRecorded(logger, replication.Id, outcome);
