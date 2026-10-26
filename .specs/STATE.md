@@ -449,20 +449,28 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Status**: active
 
 ### AD-043
-- **Decision**: **OD-3 is resolved: the queue is drained by a purpose-built hosted worker inside the API, claiming directly from the `replications` table. No job runner (Hangfire, Quartz or similar) enters the solution.** Polly is admitted for one job only — a circuit breaker per device that pauses a reader reporting itself unreachable. Durable item retry and dead-lettering live in the table, never in Polly.
-- **Reason**: the queue already is a table with its own state machine, attempt count, lane and supersession (feature 3). Hangfire would add a second job store whose states and retry counter duplicate the aggregate's, give no in-queue ordering guarantee, and resolve PostgreSQL queue priority alphabetically (AD-039) — so per-device ordering and live-first priority would live in our query under either choice, leaving Hangfire as a scheduler with extra state. Polly's breaker fits the device half exactly (trip on unreachable only, half-open probe), but its retry is in-memory and per call, and an item's backoff must survive restarts and span minutes.
-- **Trade-off**: we write and own claiming (`FOR UPDATE SKIP LOCKED` plus a per-device in-progress constraint), lease-based crash recovery, backoff scheduling and graceful shutdown, and there is no job dashboard — Grafana and feature 8 are the operator view. Adds a Polly package reference.
-- **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-worker` and every later background process. **Supersedes REP-34** of `replication-queue` (no hosted service in the assembly), which bound only while OD-3 was open. Feature 6 `device-health` builds on the per-device breaker rather than adding a second one.
+- **Decision**: **OD-3 is resolved: the queue is drained by a purpose-built hosted worker inside the API, claiming directly from the `replications` table. No job runner (Hangfire, Quartz or similar) and no resilience library enters the solution.** The per-device pause is a small consecutive-failure breaker of our own (`DevicePause`); durable item retry and dead-lettering live in the table.
+- **Reason**: the queue already is a table with its own state machine, attempt count, lane and supersession (feature 3). Hangfire would add a second job store whose states and retry counter duplicate the aggregate's, give no in-queue ordering guarantee, and resolve PostgreSQL queue priority alphabetically (AD-039). Polly was considered for the pause and rejected after checking its v8 docs: the v8 circuit breaker is **ratio-only** (`FailureRatio` over `SamplingDuration`, `MinimumThroughput` ≥ 2; the v7 consecutive-count breaker is gone). A serial device loop needs "the last two calls were unreachable", and no window size serves both a 10 s timeout (needs > 20 s to hold two calls) and a fast connection refusal (hot-loops for the whole window). Polly's retry is in-memory per call and cannot hold a backoff across restarts.
+- **Trade-off**: we write and own claiming, lease-based crash recovery, backoff scheduling, graceful shutdown and the breaker, and there is no job dashboard — Grafana and feature 8 are the operator view.
+- **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-worker` and every later background process. **Supersedes REP-34** of `replication-queue`. Feature 6 `device-health` builds on `DevicePause` rather than adding a second breaker; feature 5 may still use `Microsoft.Extensions.Http.Resilience` for HTTP-level timeouts, which is a different job.
+- **Date**: 2026-10-26
+- **Status**: active
+
+### AD-044
+- **Decision**: **The `Replication` transition table is extended, and every writer of `replications` is protected by a row-version token.** Added: `InProgress → Pending` (`Release` — no attempt counted), `Failed → Pending` with a not-before time (`Retry(now, notBefore)`, `NextAttemptAt`), and `InProgress | Failed → Superseded` (`SupersedeAfterAttempt`). `Supersede` itself stays `Pending`-only. `Replication.Version` maps PostgreSQL `xmin` with `IsRowVersion()`; a `DbUpdateConcurrencyException` on a replication during a user or device write is translated to the same `ConflictError` as `DuplicatePendingWork`.
+- **Reason**: an offline reader must not cost an item an attempt (WRK-11), and an unfinished attempt overtaken by a newer intent must not return to `Pending` beside it (WRK-20) — neither is expressible in REP-27. The token closes a race the worker introduces: the fan-out loads `Pending` rows and saves them `Superseded` unchecked, so a claim committed between its read and its save would be overwritten mid-call, freeing the per-device in-progress index and allowing a second concurrent call.
+- **Trade-off**: amends REP-27/REP-28 of a verified feature, so the unit cases asserting those transitions are refused change with it. A user write that races a claim on the same row now gets a 409 the integrator re-sends, exactly as REP-13 already behaves.
+- **Scope**: `Domain/Replication.cs`, `Infrastructure/ReplicationConfiguration.cs`, `Infrastructure/UserRepository.cs`, `Infrastructure/DeviceRepository.cs`. Amends `replication-queue` REP-27, REP-28.
 - **Date**: 2026-10-26
 - **Status**: active
 
 ## Handoff
 
 - **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2.
-- **Phase / Task**: Specify done and confirmed (WRK-01…WRK-35, context.md). **Design starting.**
-- **Completed**: `replication-queue` squash-merged to `main` as `173f8c1` (#17). OD-3 resolved by AD-043 — own hosted worker, no job runner, Polly per-device breaker only.
+- **Phase / Task**: Specify confirmed. **Design drafted** (`design.md`), awaiting approval; then Tasks.
+- **Completed**: `replication-queue` squash-merged to `main` as `173f8c1` (#17). OD-3 resolved by AD-043 — own hosted worker, no job runner, own `DevicePause` (Polly rejected: v8 is ratio-only). AD-044 extends the transition table and adds an `xmin` token.
 - **In-progress** (file:line): none.
-- **Next step**: write `design.md` — verify the Polly v8 circuit-breaker API against current docs first; design the `IDeviceClient` port + fake, the claim query, the per-device in-progress index, the release / `NextAttemptAt` additions to `Replication`.
+- **Next step**: get design approval, then write `tasks.md`.
 - **Blockers**: none.
 - **Uncommitted files**: none tracked. `.agents/`, `.claude/`, `.design/` untracked and undecided.
 - **Branch**: `feat/replication-worker`, based on `main` at `173f8c1`.
