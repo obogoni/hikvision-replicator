@@ -107,17 +107,17 @@ T20 → T21 → T22
 
 ---
 
-### T2: `Replication.Release` — back to the queue with no attempt counted
+### T2: `Replication.Release` — back to the queue with no attempt counted ✅
 
 **What**: `Release(string reason, DateTime now)`: `InProgress → Pending`, attempt count unchanged, `LastError = reason` (truncated, REP-33), `NextAttemptAt = null`. **Amend** the REP-27/REP-28 cases that assert `InProgress → Pending` is refused (AD-044), citing AD-044 in the test.
 **Where**: `Domain/Replication.cs`, `Tests/Domain/ReplicationTransitionTests.cs`
 **Depends on**: T1
 **Requirement**: WRK-11, WRK-22, WRK-23 (domain half)
 **Done when**:
-- [ ] Release from `InProgress` → `Pending`, attempts unchanged, reason stored and truncated at 1,000
-- [ ] Release from every other status refused, every field unchanged
-- [ ] Only the AD-044-named cases changed; diff shows no other test edited
-- [ ] Quick gate passes; ≥ 372 unit
+- [x] Release from `InProgress` → `Pending`, attempts unchanged, reason stored and truncated at 1,000
+- [x] Release from every other status refused, every field unchanged
+- [x] Only the AD-044-named cases changed; diff shows no other test edited
+- [x] Quick gate passes; ≥ 372 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(replication): release an attempt that never reached the device`
 

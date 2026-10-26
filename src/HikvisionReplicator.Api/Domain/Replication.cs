@@ -129,7 +129,7 @@ public class Replication : AggregateRoot, IAggregateRoot
 
         Status = ReplicationStatus.Failed;
         AttemptCount++;
-        LastError = error.Length > MaxLastErrorLength ? error[..MaxLastErrorLength] : error;
+        LastError = Truncate(error);
         UpdatedAt = now;
 
         return new Success();
@@ -163,11 +163,39 @@ public class Replication : AggregateRoot, IAggregateRoot
     }
 
     /// <summary>
+    /// Back into the queue with nothing counted against it: <c>InProgress → Pending</c>
+    /// (AD-044). For an attempt that never reached a device willing to judge the record — the
+    /// reader was unreachable, the call timed out, the lease expired or the worker stopped —
+    /// none of which is the record's fault (WRK-11, WRK-22, WRK-23). The reason is kept,
+    /// bounded like any device string (REP-33), and the work is eligible again at once.
+    /// </summary>
+    public OneOf<Success, ValidationError> Release(string reason, DateTime now)
+    {
+        var result = MoveTo(
+            ReplicationStatus.InProgress,
+            ReplicationStatus.Pending,
+            Errors.CannotRelease,
+            now
+        );
+
+        if (result.IsT0)
+        {
+            LastError = Truncate(reason);
+            NextAttemptAt = null;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// A newer intent replaced this one: <c>Pending → Superseded</c>, terminal. In-flight
     /// work is never superseded — it is left to reach its own terminal status (REP-12).
     /// </summary>
     public OneOf<Success, ValidationError> Supersede(DateTime now) =>
         MoveTo(ReplicationStatus.Pending, ReplicationStatus.Superseded, Errors.CannotSupersede, now);
+
+    private static string Truncate(string error) =>
+        error.Length > MaxLastErrorLength ? error[..MaxLastErrorLength] : error;
 
     // The guard returns before any assignment, so a refused transition leaves the aggregate
     // exactly as it was (REP-28). Succeeded and Superseded are the `from` of nothing, which
@@ -195,6 +223,7 @@ public class Replication : AggregateRoot, IAggregateRoot
         public const string CannotSucceed = "Only work in progress can succeed.";
         public const string CannotFail = "Only work in progress can fail.";
         public const string CannotRetry = "Only failed work can be retried.";
+        public const string CannotRelease = "Only work in progress can be released.";
         public const string CannotSupersede = "Only pending work can be superseded.";
     }
 }

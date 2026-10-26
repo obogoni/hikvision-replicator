@@ -52,7 +52,8 @@ public class ReplicationTransitionTests
         return work;
     }
 
-    // ─── REP-27 / REP-32: the five legal transitions, each timestamped from the clock ───
+    // ─── REP-27 / REP-32: the five legal transitions, each timestamped from the clock.
+    //     AD-044 adds three more, each with its own section below.                      ───
 
     [Fact]
     public void Pending_work_can_be_taken_in_hand()
@@ -177,6 +178,8 @@ public class ReplicationTransitionTests
     [InlineData(ReplicationStatus.InProgress)]
     [InlineData(ReplicationStatus.Succeeded)]
     [InlineData(ReplicationStatus.Superseded)]
+    // AD-044 makes InProgress → Pending legal, but only through Release, which counts no
+    // attempt. Retry still refuses it: Retry is the way back for an attempt that was counted.
     public void Only_failed_work_can_go_back_into_the_queue(ReplicationStatus status)
     {
         var work = InStatus(status);
@@ -355,5 +358,83 @@ public class ReplicationTransitionTests
         Assert.Equal(ReplicationStatus.Pending, work.Status);
         Assert.Null(work.NextAttemptAt);
         Assert.Equal(1, work.AttemptCount);
+    }
+
+    // ─── WRK-11 / WRK-22 / WRK-23 (AD-044): an attempt that never reached a device willing
+    //     to judge the record goes back without costing anything                        ───
+
+    [Fact]
+    public void Work_in_hand_goes_back_into_the_queue_without_costing_an_attempt()
+    {
+        var work = InStatus(ReplicationStatus.InProgress);
+
+        var result = work.Release("reader unreachable", SettledOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(0, work.AttemptCount);
+        Assert.Equal("reader unreachable", work.LastError);
+        Assert.Null(work.NextAttemptAt);
+        Assert.Equal(SettledOn, work.UpdatedAt);
+    }
+
+    [Fact]
+    public void Released_work_keeps_the_attempts_earlier_rejections_cost()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        work.Begin(RetryDueOn);
+
+        work.Release("reader unreachable", RetryDueOn);
+
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void An_overlong_release_reason_is_stored_truncated_and_the_release_still_lands()
+    {
+        var work = InStatus(ReplicationStatus.InProgress);
+        var reason = new string('x', 1001);
+
+        var result = work.Release(reason, SettledOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(reason[..1000], work.LastError);
+    }
+
+    [Theory]
+    [InlineData(ReplicationStatus.Pending)]
+    [InlineData(ReplicationStatus.Succeeded)]
+    [InlineData(ReplicationStatus.Failed)]
+    [InlineData(ReplicationStatus.Superseded)]
+    public void Only_work_in_hand_can_be_released(ReplicationStatus status)
+    {
+        var work = InStatus(status);
+        var before = Capture(work);
+
+        var result = work.Release("reader unreachable", RefusedOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(Replication.Errors.StatusField, result.AsT1.Field);
+        Assert.Equal(Replication.Errors.CannotRelease, result.AsT1.Message);
+        Assert.Equal(before, Capture(work));
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void Work_waiting_out_a_backoff_cannot_be_released()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        var before = Capture(work);
+
+        var result = work.Release("reader unreachable", SettledOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(before, Capture(work));
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
     }
 }
