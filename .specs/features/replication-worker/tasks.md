@@ -264,17 +264,17 @@ T20 → T21 → T22
 
 ---
 
-### T12: One in flight per device; devices independent
+### T12: One in flight per device; devices independent ✅
 
 **What**: Device-index `23505` on claim → back off one poll interval; a slow device never delays another.
 **Where**: `Infrastructure/Worker/DeviceLoop.cs`, `IntegrationTests/DeliveryTests.cs`
 **Depends on**: T11
 **Requirement**: WRK-06, WRK-07, WRK-08
 **Done when**:
-- [ ] Two worker hosts on one database, one device, queued work → fake high-water mark for the device is 1 and every row is delivered exactly once
-- [ ] One device at 2 s latency, another at 10 ms → the fast device drains its backlog before the slow one finishes one call
-- [ ] An `InProgress` row and a newer `Pending` for one pair → newer delivered only after the older is terminal
-- [ ] Full gate passes; ≥ 305 integration
+- [x] Two worker hosts on one database, one device, queued work → fake high-water mark for the device is 1 and every row is delivered exactly once
+- [x] One device at 2 s latency, another at 10 ms → the fast device drains its backlog before the slow one finishes one call
+- [x] An `InProgress` row and a newer `Pending` for one pair → newer delivered only after the older is terminal
+- [x] Full gate passes; ≥ 305 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): never run two operations against one reader`
 

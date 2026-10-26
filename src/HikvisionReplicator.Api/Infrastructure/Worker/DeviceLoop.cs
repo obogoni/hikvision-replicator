@@ -1,9 +1,11 @@
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Domain.Specs;
 using HikvisionReplicator.Api.Shared;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace HikvisionReplicator.Api.Infrastructure.Worker;
 
@@ -94,9 +96,26 @@ public sealed partial class DeviceLoop(
         if (work is null)
             return false;
 
-        // In hand before the reader hears of it (WRK-03).
+        // In hand before the reader hears of it (WRK-03). The save is the claim, and the
+        // database arbitrates it (WRK-06).
         work.Begin(now);
-        await replications.SaveChangesAsync(stoppingToken);
+        try
+        {
+            await replications.SaveChangesAsync(stoppingToken);
+        }
+        catch (DbUpdateException exception) when (IsReaderHeldElsewhere(exception))
+        {
+            // Another instance has an operation in this reader's hands. Not a fault: wait a
+            // poll and look again, and the newer work for a pair stays queued until the older
+            // one is done with (WRK-08).
+            return false;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The row moved between the read and the claim — another instance took it, or a
+            // newer intent superseded it. Look again at once; the queue has changed.
+            return true;
+        }
 
         var device = await services
             .GetRequiredService<IDeviceRepository>()
@@ -173,6 +192,18 @@ public sealed partial class DeviceLoop(
             return AttemptOutcome.Unreachable;
         }
     }
+
+    /// <summary>
+    /// The per-reader exclusivity index refusing a second claim, recognised by its name. A
+    /// <c>23505</c> on any other index is a fault and is not matched.
+    /// </summary>
+    private static bool IsReaderHeldElsewhere(DbUpdateException exception) =>
+        exception.InnerException
+            is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: ReplicationConfiguration.DeviceInProgressIndexName,
+        };
 
     /// <summary>What an <c>Add</c> or <c>Update</c> carries: the reference, the PIN and the face (WRK-02).</summary>
     private static DeviceEnrolment EnrolmentOf(User user) =>

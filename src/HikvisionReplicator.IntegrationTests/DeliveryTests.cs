@@ -226,6 +226,167 @@ public class DeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixtu
         );
     }
 
+    // ─── WRK-06: one operation per reader, however many workers run ───
+
+    [Fact]
+    public async Task Two_workers_on_one_database_never_call_a_reader_twice_at_once()
+    {
+        // A second application on the same database, delivering to the same fleet, so the
+        // fleet sees every call either instance makes.
+        using var secondHost = Fixture.Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services => services.AddSingleton(Readers))
+        );
+        using (secondHost.CreateClient()) { }
+
+        Readers.SetLatency(TimeSpan.FromMilliseconds(50));
+
+        var reader = 0;
+        await ArrangeAsync(async context =>
+        {
+            var device = NewReader("10.0.1.1");
+            var spectators = Enumerable
+                .Range(0, 20)
+                .Select(index => NewSpectator($"TICKET-{index}", $"{100_000 + index}"))
+                .ToArray();
+            context.Add(device);
+            context.AddRange(spectators);
+            await context.SaveChangesAsync();
+            reader = device.Id;
+
+            context.Replications.AddRange(
+                spectators.Select(spectator =>
+                    AddFor(spectator, device, ReplicationLane.Live, Earlier)
+                )
+            );
+            await context.SaveChangesAsync();
+        });
+
+        await QueueUntilAsync(
+            queue => queue.All(work => work.Status == ReplicationStatus.Succeeded),
+            "every row has been delivered"
+        );
+
+        Assert.Equal(1, Readers.MaxConcurrentCalls(reader));
+        Assert.Equal(20, Readers.Calls.Count);
+        Assert.Equal(20, Readers.Calls.Select(call => call.ExternalRef).Distinct().Count());
+    }
+
+    // ─── WRK-07: a slow reader holds up nobody else ───
+
+    [Fact]
+    public async Task A_fast_reader_drains_its_backlog_while_a_slow_reader_is_still_on_its_first_call()
+    {
+        var slow = 0;
+        var fast = 0;
+        await ArrangeAsync(async context =>
+        {
+            var slowReader = NewReader("10.0.1.1");
+            var fastReader = NewReader("10.0.1.2");
+            var spectators = Enumerable
+                .Range(0, 5)
+                .Select(index => NewSpectator($"TICKET-{index}", $"{100_000 + index}"))
+                .ToArray();
+            context.AddRange(slowReader, fastReader);
+            context.AddRange(spectators);
+            await context.SaveChangesAsync();
+            (slow, fast) = (slowReader.Id, fastReader.Id);
+
+            foreach (var spectator in spectators)
+            {
+                context.Replications.AddRange(
+                    AddFor(spectator, slowReader, ReplicationLane.Live, Earlier),
+                    AddFor(spectator, fastReader, ReplicationLane.Live, Earlier)
+                );
+            }
+            await context.SaveChangesAsync();
+
+            Readers.SetLatency(slowReader.Id, TimeSpan.FromSeconds(2));
+            Readers.SetLatency(fastReader.Id, TimeSpan.FromMilliseconds(10));
+        });
+
+        var queue = await QueueUntilAsync(
+            queue =>
+                queue
+                    .Where(work => work.DeviceId == fast)
+                    .All(work => work.Status == ReplicationStatus.Succeeded),
+            "the fast reader's backlog has drained",
+            within: TimeSpan.FromSeconds(2)
+        );
+
+        Assert.DoesNotContain(
+            queue,
+            work => work.DeviceId == slow && work.Status == ReplicationStatus.Succeeded
+        );
+        Assert.Single(Readers.Calls, call => call.DeviceId == slow);
+    }
+
+    // ─── WRK-08: newer intent waits for the older one in a reader's hands ───
+
+    /// <summary>
+    /// The older row is in progress by hand — the shape another instance mid-call leaves — so
+    /// nothing in this host will finish it until the test does. A second reader with work of
+    /// its own shows the worker running all the while.
+    /// </summary>
+    [Fact]
+    public async Task Newer_work_for_a_pair_waits_until_the_older_work_in_hand_is_finished()
+    {
+        var blocked = 0;
+        var olderId = 0;
+        await ArrangeAsync(async context =>
+        {
+            var blockedReader = NewReader("10.0.1.1");
+            var otherReader = NewReader("10.0.1.2");
+            var spectator = NewSpectator("TICKET-1", "100001");
+            context.AddRange(blockedReader, otherReader, spectator);
+            await context.SaveChangesAsync();
+            blocked = blockedReader.Id;
+
+            var older = AddFor(spectator, blockedReader, ReplicationLane.Live, Earlier);
+            older.Begin(Earlier);
+            context.Replications.AddRange(
+                older,
+                Replication.Create(
+                    spectator.Id,
+                    blockedReader.Id,
+                    ReplicationOperation.Update,
+                    ReplicationLane.Live,
+                    Earlier.AddMinutes(1)
+                ),
+                AddFor(spectator, otherReader, ReplicationLane.Live, Earlier)
+            );
+            await context.SaveChangesAsync();
+            olderId = older.Id;
+        });
+
+        await QueueUntilAsync(
+            queue =>
+                queue.Any(work =>
+                    work.DeviceId != blocked && work.Status == ReplicationStatus.Succeeded
+                ),
+            "the other reader's work has been delivered"
+        );
+        await Task.Delay(WorkerWebApplicationFactory.PollInterval * 10);
+
+        Assert.DoesNotContain(Readers.Calls, call => call.DeviceId == blocked);
+
+        // The other instance finishes its call.
+        var finishedAt = Clock.GetUtcNow();
+        await using (var context = Fixture.CreateDbContext())
+        {
+            var older = await context.Replications.FindAsync(olderId);
+            older!.Succeed(finishedAt.UtcDateTime);
+            await context.SaveChangesAsync();
+        }
+
+        var calls = await CallsUntilAsync(
+            calls => calls.Any(call => call.DeviceId == blocked),
+            "the newer work has been delivered"
+        );
+        var newer = Assert.Single(calls, call => call.DeviceId == blocked);
+        Assert.Equal(ReplicationOperation.Update, newer.Operation);
+        Assert.True(newer.At >= finishedAt);
+    }
+
     // ─── WRK-31 / WRK-32: nothing to do means no call at all ───
 
     /// <summary>
