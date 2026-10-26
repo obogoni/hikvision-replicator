@@ -33,17 +33,36 @@ public sealed partial class DeviceLoop(
     /// Drains one reader until <paramref name="stoppingToken"/> is cancelled. Waits one idle
     /// poll interval whenever it finds nothing to take (WRK-31). A cycle that throws is logged
     /// and waited out the same way, so one bad row never ends a reader's loop (WRK-07).
+    /// <para>
+    /// The reader's <see cref="DevicePause"/> lives here, in the loop's memory and for the
+    /// loop's lifetime (AD-043): while it is paused nothing is taken for the reader until its
+    /// probe is due, and the probe is simply the next cycle — the reader's head item (WRK-12,
+    /// WRK-13).
+    /// </para>
     /// </summary>
     public async Task RunAsync(int deviceId, CancellationToken stoppingToken)
     {
         var settings = options.Value;
+        var pause = new DevicePause(
+            settings.PauseAfterConsecutiveUnreachable,
+            settings.ProbeInitialDelay,
+            settings.ProbeMaxDelay
+        );
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            if (!pause.CanAttempt(now))
+            {
+                if (!await WaitAsync(pause.ProbeDueAt!.Value - now, stoppingToken))
+                    return;
+                continue;
+            }
+
             Cycle cycle;
             try
             {
-                cycle = await TakeNextAsync(deviceId, settings, stoppingToken);
+                cycle = await TakeNextAsync(deviceId, settings, pause, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -62,14 +81,22 @@ public sealed partial class DeviceLoop(
             if (cycle == Cycle.Worked)
                 continue;
 
-            try
-            {
-                await Task.Delay(settings.PollInterval, timeProvider, stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
+            if (!await WaitAsync(settings.PollInterval, stoppingToken))
                 return;
-            }
+        }
+    }
+
+    /// <summary>Waits on the injected clock; <c>false</c> when the loop is being stopped.</summary>
+    private async Task<bool> WaitAsync(TimeSpan delay, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(delay, timeProvider, stoppingToken);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 
@@ -89,6 +116,7 @@ public sealed partial class DeviceLoop(
     private async Task<Cycle> TakeNextAsync(
         int deviceId,
         ReplicationWorkerOptions settings,
+        DevicePause pause,
         CancellationToken stoppingToken
     )
     {
@@ -158,18 +186,27 @@ public sealed partial class DeviceLoop(
             encryption.Decrypt(device.EncryptedPassword)
         );
 
-        var outcome = await CallAsync(work, user, endpoint, settings, stoppingToken);
+        var (outcome, reason) = await CallAsync(work, user, endpoint, settings, stoppingToken);
 
-        await recorder.RecordAsync(replications, work, outcome, stoppingToken);
+        await recorder.RecordAsync(replications, work, outcome, reason, stoppingToken);
+
+        // Only a call the reader never answered counts toward a pause; an answer of either
+        // kind proves it is up and ends one (WRK-12, WRK-15).
+        if (outcome == AttemptOutcome.Unreachable)
+            pause.RecordUnreachable(timeProvider.GetUtcNow().UtcDateTime);
+        else
+            pause.RecordAnswered();
+
         return Cycle.Worked;
     }
 
     /// <summary>
     /// One call to the reader, bounded by <see cref="ReplicationWorkerOptions.DeviceCallTimeout"/>.
     /// A call still unanswered at the deadline is cancelled and counts as unreachable (WRK-11);
-    /// a cancellation that came from the host stopping is the host's, and propagates.
+    /// a cancellation that came from the host stopping is the host's, and propagates. The
+    /// reason is what the reader said, or why it said nothing.
     /// </summary>
-    private async Task<AttemptOutcome> CallAsync(
+    private async Task<(AttemptOutcome Outcome, string? Reason)> CallAsync(
         Replication work,
         User user,
         DeviceEndpoint endpoint,
@@ -200,15 +237,18 @@ public sealed partial class DeviceLoop(
                 _ => await deviceClient.RemoveAsync(endpoint, user.ExternalRef.Value, call.Token),
             };
 
-            return answer.Match(
-                delivered => AttemptOutcome.Delivered,
-                rejected => AttemptOutcome.Rejected,
-                unreachable => AttemptOutcome.Unreachable
+            return answer.Match<(AttemptOutcome, string?)>(
+                delivered => (AttemptOutcome.Delivered, null),
+                rejected => (AttemptOutcome.Rejected, rejected.Reason),
+                unreachable => (AttemptOutcome.Unreachable, unreachable.Reason)
             );
         }
         catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
         {
-            return AttemptOutcome.Unreachable;
+            return (
+                AttemptOutcome.Unreachable,
+                $"Device {endpoint.DeviceId} did not answer within {settings.DeviceCallTimeout}."
+            );
         }
     }
 

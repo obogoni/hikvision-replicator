@@ -1,4 +1,6 @@
+using HikvisionReplicator.Api.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,13 +16,24 @@ namespace HikvisionReplicator.IntegrationTests;
 /// demands and as WRK-22 needs so a slow call is never reclaimed mid-flight.
 /// </para>
 /// </summary>
-public class WorkerWebApplicationFactory(string connectionString)
-    : TestWebApplicationFactory(connectionString)
+public class WorkerWebApplicationFactory(
+    string connectionString,
+    IReadOnlyDictionary<string, string?>? settings = null
+) : TestWebApplicationFactory(connectionString)
 {
     public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(20);
 
+    /// <summary>The database this host's worker drains.</summary>
+    public string ConnectionString { get; } = connectionString;
+
     /// <summary>The clock the application reads; see <see cref="WorkerClock"/>.</summary>
     public WorkerClock Clock { get; } = new();
+
+    /// <summary>The reader fleet this host's worker delivers to.</summary>
+    public FakeDeviceClient Readers => Services.GetRequiredService<FakeDeviceClient>();
+
+    public AppDbContext CreateDbContext() =>
+        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(ConnectionString).Options);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -42,6 +55,10 @@ public class WorkerWebApplicationFactory(string connectionString)
                 }
             )
         );
+
+        // A test's own settings, last, so they win over the harness defaults above.
+        if (settings is not null)
+            builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(settings));
 
         builder.ConfigureServices(services => services.AddSingleton<TimeProvider>(Clock));
     }

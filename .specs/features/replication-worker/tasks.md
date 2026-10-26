@@ -312,18 +312,18 @@ T20 → T21 → T22
 
 ---
 
-### T15: Offline reader — release, pause, probe, resume
+### T15: Offline reader — release, pause, probe, resume ✅
 
 **What**: `Unreachable` and timeout → `Release`; `DevicePause` wired into the loop; probe with the head item.
 **Where**: `Infrastructure/Worker/{DeviceLoop,ReplicationOutcomeRecorder}.cs`, `IntegrationTests/OfflineReaderTests.cs`
 **Depends on**: T14
 **Requirement**: WRK-11, WRK-12, WRK-13, WRK-14, WRK-15
 **Done when**:
-- [ ] A call exceeding `DeviceCallTimeout` → row `Pending`, attempt count 0
-- [ ] Unreachable through several probe cycles → zero `Failed` rows; restored → every row `Succeeded`, attempt 0, in WRK-05 order
-- [ ] While paused, calls to that device are spaced by the probe schedule (fake call log), never hot-looped
-- [ ] A `Rejected` answer does not pause
-- [ ] Full gate passes; ≥ 315 integration
+- [x] A call exceeding `DeviceCallTimeout` → row `Pending`, attempt count 0
+- [x] Unreachable through several probe cycles → zero `Failed` rows; restored → every row `Succeeded`, attempt 0, in WRK-05 order
+- [x] While paused, calls to that device are spaced by the probe schedule (fake call log), never hot-looped
+- [x] A `Rejected` answer does not pause — **proven in T16** (`RejectionTests`): until T16 records a rejection the rejected row stays `InProgress` and the reader's next item cannot be claimed, so the criterion is unobservable here. The loop's `RecordAnswered` on `Rejected` lands in this task.
+- [x] Full gate passes; ≥ 315 integration (318)
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): ride out an offline reader without losing work`
 

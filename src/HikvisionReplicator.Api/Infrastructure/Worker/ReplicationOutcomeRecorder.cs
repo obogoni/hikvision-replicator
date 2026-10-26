@@ -25,11 +25,14 @@ public sealed partial class ReplicationOutcomeRecorder(
     /// <summary>
     /// Records the outcome of the attempt on <paramref name="replication"/>, which is the row as
     /// the loop claimed it, tracked by <paramref name="replications"/>' unit of work.
+    /// <paramref name="reason"/> is what the reader said when it did not accept, or why it said
+    /// nothing; it is kept as the row's last error (REP-33).
     /// </summary>
     public async Task RecordAsync(
         IReplicationRepository replications,
         Replication replication,
         AttemptOutcome outcome,
+        string? reason,
         CancellationToken cancellationToken
     )
     {
@@ -53,8 +56,14 @@ public sealed partial class ReplicationOutcomeRecorder(
                 await replications.SaveChangesAsync(cancellationToken);
                 break;
 
-            // Release, retry and dead letter are recorded by the failure-handling tasks that
-            // follow this skeleton. Until then the row stays InProgress, which is what a crashed
+            // The reader never judged it: back to the queue at no cost, in the place it held
+            // (WRK-11) — its creation time is untouched, so it is still the reader's head item.
+            case ReplicationAction.Release:
+                replication.Release(reason ?? outcome.ToString(), now);
+                await replications.SaveChangesAsync(cancellationToken);
+                break;
+
+            // Retry and dead letter are recorded by the failure-handling tasks that follow. Until then the row stays InProgress, which is what a crashed
             // worker leaves behind too, and nothing is lost.
             default:
                 LogOutcomeNotRecorded(logger, replication.Id, outcome);

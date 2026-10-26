@@ -24,6 +24,7 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
     ).Build();
 
     private Respawner _respawner = null!;
+    private int _isolatedHosts;
 
     public string ConnectionString => _container.GetConnectionString();
 
@@ -61,6 +62,37 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
         Readers.Reset();
         await using var connection = await OpenConnectionAsync();
         await _respawner.ResetAsync(connection);
+    }
+
+    /// <summary>
+    /// A worker host of its own, on a database of its own in the same container, running on
+    /// <paramref name="settings"/> layered over the harness's. For what the shared host cannot
+    /// give a test: a setting only that test needs, or a host the test may stop. Its database
+    /// is fresh, so no other worker drains it and no reset is owed. The caller disposes it.
+    /// </summary>
+    public async Task<WorkerWebApplicationFactory> StartIsolatedHostAsync(
+        IReadOnlyDictionary<string, string?> settings
+    )
+    {
+        var database = $"worker_isolated_{Interlocked.Increment(ref _isolatedHosts)}";
+        await using (var connection = await OpenConnectionAsync())
+        {
+            await using var create = new NpgsqlCommand(
+                $"CREATE DATABASE \"{database}\"",
+                connection
+            );
+            await create.ExecuteNonQueryAsync();
+        }
+
+        var host = new WorkerWebApplicationFactory(
+            new NpgsqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString,
+            settings
+        );
+
+        // Starting the host migrates its database and starts its worker.
+        using (host.CreateClient()) { }
+
+        return host;
     }
 
     private async Task<NpgsqlConnection> OpenConnectionAsync()

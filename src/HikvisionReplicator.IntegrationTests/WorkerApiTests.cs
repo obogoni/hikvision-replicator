@@ -40,10 +40,13 @@ public abstract class WorkerApiTests(WorkerPostgresFixture fixture) : IAsyncLife
     protected static string UserRoute(string externalRef) =>
         $"/api/users/{Uri.EscapeDataString(externalRef)}";
 
-    /// <summary>Registers a reader through its own route and returns its id.</summary>
-    protected async Task<int> GivenRegisteredDeviceAsync(string ipAddress)
+    /// <summary>
+    /// Registers a reader through its own route and returns its id — on the shared host, or on
+    /// the one <paramref name="via"/> talks to.
+    /// </summary>
+    protected async Task<int> GivenRegisteredDeviceAsync(string ipAddress, HttpClient? via = null)
     {
-        var response = await Client.PostAsJsonAsync(
+        var response = await (via ?? Client).PostAsJsonAsync(
             "/api/devices",
             new
             {
@@ -62,10 +65,11 @@ public abstract class WorkerApiTests(WorkerPostgresFixture fixture) : IAsyncLife
 
     protected async Task UpsertSpectatorAsync(
         string externalRef,
-        string accessCode = DefaultAccessCode
+        string accessCode = DefaultAccessCode,
+        HttpClient? via = null
     )
     {
-        var response = await Client.PutAsJsonAsync(
+        var response = await (via ?? Client).PutAsJsonAsync(
             UserRoute(externalRef),
             new
             {
@@ -94,6 +98,14 @@ public abstract class WorkerApiTests(WorkerPostgresFixture fixture) : IAsyncLife
     protected async Task<List<Replication>> QueuedWorkAsync()
     {
         await using var context = Fixture.CreateDbContext();
+        return await context.Replications.OrderBy(work => work.Id).ToListAsync();
+    }
+
+    /// <summary>The queue of an isolated host's own database.</summary>
+    protected static async Task<List<Replication>> QueuedWorkAsync(WorkerWebApplicationFactory host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        await using var context = host.CreateDbContext();
         return await context.Replications.OrderBy(work => work.Id).ToListAsync();
     }
 
