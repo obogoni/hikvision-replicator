@@ -53,6 +53,7 @@ exact scenario it was written for.
 | Multiple worker instances | Supported: per-device exclusivity is a database invariant; each instance keeps its own pause state | Running two API replicas must not double-deliver or break ordering | n — agent default |
 | An unfinished item overtaken by a newer intent | Ends `Superseded`, keeping the attempt count and last error of its last attempt | REP-12 lets a newer `Pending` exist beside it; returning it to `Pending` would break `IX_replications_pending` and replay stale intent | n — agent default |
 | Add/Update for a user tombstoned during delivery | No device call; the row ends `Superseded` | REP-03 guarantees a `Remove` is pending for the pair, and USR-32 has destroyed the face | n — agent default |
+| A final rejection while a newer intent is already `Pending` for the pair | Ends `Superseded`, not dead-lettered (WRK-20 takes precedence over WRK-17) | The newer intent replaces what the device refused; a dead letter would flag work nobody still wants | y |
 | `REP-34` (no hosted service in the assembly) | **Superseded by this feature** | It bound `replication-queue` while OD-3 was open (AD-039); AD-043 closes it | n — agent default |
 
 **Open questions:** none — all resolved or logged above.
