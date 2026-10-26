@@ -186,17 +186,17 @@ T20 → T21 → T22
 
 ---
 
-### T7: `OutcomeDecision`
+### T7: `OutcomeDecision` ✅
 
 **What**: Pure function: (outcome, attempt count, `newerPendingExists`, `userTombstoned`, operation, schedule, now) → one action: `Succeed` · `Release` · `RetryAt(t)` · `DeadLetter` · `SupersedeAfterAttempt` · `SupersedeWithoutCall`.
 **Where**: `Infrastructure/Worker/OutcomeDecision.cs`, `Tests/Infrastructure/Worker/OutcomeDecisionTests.cs`
 **Depends on**: T6
 **Requirement**: WRK-11, WRK-16, WRK-17, WRK-20, WRK-21
 **Done when**:
-- [ ] Every row of the design's recorder rules has a test, including newer-pending overriding `Release` and `RetryAt` but **not** `Succeed`
-- [ ] Tombstoned user with `Add`/`Update` → `SupersedeWithoutCall`; with `Remove` → proceeds
-- [ ] Rejected at attempt 4 → `RetryAt`; at 5 → `DeadLetter`
-- [ ] Quick gate passes; ≥ 412 unit
+- [x] Every row of the design's recorder rules has a test, including newer-pending overriding `Release` and `RetryAt` but **not** `Succeed`
+- [x] Tombstoned user with `Add`/`Update` → `SupersedeWithoutCall`; with `Remove` → proceeds
+- [x] Rejected at attempt 4 → `RetryAt`; at 5 → `DeadLetter`
+- [x] Quick gate passes; ≥ 412 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(worker): decide what an attempt's outcome does to its replication`
 
