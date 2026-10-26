@@ -394,17 +394,17 @@ T20 → T21 → T22
 
 ---
 
-### T20: Worker instruments
+### T20: Worker instruments ✅
 
 **What**: `replication.delivery.duration`, `replication.attempts`, `replication.dead_lettered`, `replication.device.pause` on the existing meter; dead-letter and pause logs.
 **Where**: `Infrastructure/ReplicationMetrics.cs`, `Infrastructure/Worker/*`, `IntegrationTests/WorkerObservabilityTests.cs`
 **Depends on**: T19
 **Requirement**: WRK-26, WRK-27, WRK-28, WRK-29
 **Done when**:
-- [ ] Each instrument recorded with the right tags in its scenario, observed through the registered provider (L-037), filtered to this test's own traffic
-- [ ] Delivery duration equals success time − creation time (injected clock)
-- [ ] Dead-letter log carries replication id, user id, device id, attempt count, last error
-- [ ] Full gate passes; ≥ 333 integration
+- [x] Each instrument recorded with the right tags in its scenario, observed through the registered provider (L-037), filtered to this test's own traffic — each test on an isolated host; the worker collection now runs with parallelization disabled (the provider subscribes to the meter by name process-wide, and a host disposed mid-test in a parallel collection took the merged stream with it)
+- [x] Delivery duration equals success time − creation time (injected clock)
+- [x] Dead-letter log carries replication id, user id, device id, attempt count, last error
+- [x] Full gate passes; ≥ 333 integration (336)
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): instrument delivery, rejection and pauses`
 

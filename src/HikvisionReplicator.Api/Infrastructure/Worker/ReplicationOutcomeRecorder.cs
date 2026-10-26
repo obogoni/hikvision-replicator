@@ -15,6 +15,7 @@ namespace HikvisionReplicator.Api.Infrastructure.Worker;
 /// </summary>
 public sealed partial class ReplicationOutcomeRecorder(
     IServiceScopeFactory scopeFactory,
+    ReplicationMetrics metrics,
     IOptions<ReplicationWorkerOptions> options,
     TimeProvider timeProvider,
     ILogger<ReplicationOutcomeRecorder> logger
@@ -42,6 +43,10 @@ public sealed partial class ReplicationOutcomeRecorder(
     {
         ArgumentNullException.ThrowIfNull(replications);
         ArgumentNullException.ThrowIfNull(replication);
+
+        // Counted here and only here: a release on shutdown or after an expired lease ends no
+        // attempt the reader saw (WRK-27).
+        metrics.AttemptEnded(outcome);
 
         return SettleAsync(
             replications,
@@ -136,11 +141,12 @@ public sealed partial class ReplicationOutcomeRecorder(
                 cancellationToken
             );
 
-        Apply(replication, outcome, said, newerPendingExists, now);
+        var action = Apply(replication, outcome, said, newerPendingExists, now);
 
         try
         {
             await replications.SaveChangesAsync(cancellationToken);
+            Published(replication, action, now);
         }
         catch (DbUpdateException exception)
             when (replications.TranslateIfDuplicatePending(exception).IsT1)
@@ -224,7 +230,33 @@ public sealed partial class ReplicationOutcomeRecorder(
         }
     }
 
-    private void Apply(
+    /// <summary>
+    /// What an operator is told once a state is committed (WRK-26, WRK-28) — never before, so a
+    /// discarded outcome is not reported as having happened.
+    /// </summary>
+    private void Published(Replication replication, ReplicationAction action, DateTime now)
+    {
+        switch (action)
+        {
+            case ReplicationAction.Succeed:
+                metrics.Delivered(replication.Lane, replication.Operation, now - replication.CreatedAt);
+                break;
+
+            case ReplicationAction.DeadLetter:
+                metrics.DeadLettered();
+                LogDeadLettered(
+                    logger,
+                    replication.Id,
+                    replication.UserId,
+                    replication.DeviceId,
+                    replication.AttemptCount,
+                    replication.LastError
+                );
+                break;
+        }
+    }
+
+    private ReplicationAction Apply(
         Replication replication,
         AttemptOutcome outcome,
         string said,
@@ -287,7 +319,23 @@ public sealed partial class ReplicationOutcomeRecorder(
             default:
                 throw new InvalidOperationException($"No call ends in {action}.");
         }
+
+        return action;
     }
+
+    [LoggerMessage(
+        EventId = 23,
+        Level = LogLevel.Warning,
+        Message = "Replication {ReplicationId} for user {UserId} on device {DeviceId} was dead-lettered after {AttemptCount} attempts: {LastError}"
+    )]
+    private static partial void LogDeadLettered(
+        ILogger logger,
+        int replicationId,
+        int userId,
+        int deviceId,
+        int attemptCount,
+        string? lastError
+    );
 
     [LoggerMessage(
         EventId = 21,

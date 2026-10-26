@@ -19,7 +19,8 @@ namespace HikvisionReplicator.IntegrationTests;
 /// </summary>
 public class WorkerWebApplicationFactory(
     string connectionString,
-    IReadOnlyDictionary<string, string?>? settings = null
+    IReadOnlyDictionary<string, string?>? settings = null,
+    Action<IWebHostBuilder>? configure = null
 ) : TestWebApplicationFactory(connectionString)
 {
     public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(20);
@@ -77,6 +78,8 @@ public class WorkerWebApplicationFactory(
             services.AddSingleton<TimeProvider>(Clock);
             services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Saves));
         });
+
+        configure?.Invoke(builder);
     }
 }
 

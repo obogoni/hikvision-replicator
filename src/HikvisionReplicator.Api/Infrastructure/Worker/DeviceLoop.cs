@@ -24,6 +24,7 @@ public sealed partial class DeviceLoop(
     IDeviceClient deviceClient,
     IEncryptionService encryption,
     ReplicationOutcomeRecorder recorder,
+    ReplicationMetrics metrics,
     IOptions<ReplicationWorkerOptions> options,
     TimeProvider timeProvider,
     ILogger<DeviceLoop> logger
@@ -244,10 +245,20 @@ public sealed partial class DeviceLoop(
 
         // Only a call the reader never answered counts toward a pause; an answer of either
         // kind proves it is up and ends one (WRK-12, WRK-15).
-        if (outcome == AttemptOutcome.Unreachable)
-            pause.RecordUnreachable(timeProvider.GetUtcNow().UtcDateTime);
-        else
-            pause.RecordAnswered();
+        var transition =
+            outcome == AttemptOutcome.Unreachable
+                ? pause.RecordUnreachable(timeProvider.GetUtcNow().UtcDateTime)
+                : pause.RecordAnswered();
+
+        // WRK-29: a reader going quiet or coming back is announced once, as it happens.
+        if (transition is { } changed)
+        {
+            metrics.DevicePause(changed);
+            if (changed == PauseTransition.Paused)
+                LogPaused(logger, deviceId, pause.ProbeDueAt!.Value);
+            else
+                LogResumed(logger, deviceId);
+        }
 
         return Cycle.Worked;
     }
@@ -341,6 +352,20 @@ public sealed partial class DeviceLoop(
         Message = "A delivery cycle for device {DeviceId} failed; the loop continues."
     )]
     private static partial void LogCycleFailed(ILogger logger, int deviceId, Exception exception);
+
+    [LoggerMessage(
+        EventId = 12,
+        Level = LogLevel.Warning,
+        Message = "Device {DeviceId} paused: it stopped answering. Next probe at {ProbeDueAt:O}."
+    )]
+    private static partial void LogPaused(ILogger logger, int deviceId, DateTime probeDueAt);
+
+    [LoggerMessage(
+        EventId = 13,
+        Level = LogLevel.Information,
+        Message = "Device {DeviceId} resumed: it answered again."
+    )]
+    private static partial void LogResumed(ILogger logger, int deviceId);
 
     [LoggerMessage(
         EventId = 11,

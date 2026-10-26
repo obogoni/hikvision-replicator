@@ -1,4 +1,5 @@
 using HikvisionReplicator.Api.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -68,12 +69,14 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
 
     /// <summary>
     /// A worker host of its own, on a database of its own in the same container, running on
-    /// <paramref name="settings"/> layered over the harness's. For what the shared host cannot
+    /// <paramref name="settings"/> layered over the harness's, and anything else
+    /// <paramref name="configure"/> does to its builder. For what the shared host cannot
     /// give a test: a setting only that test needs, or a host the test may stop. Its database
     /// is fresh, so no other worker drains it and no reset is owed. The caller disposes it.
     /// </summary>
     public async Task<WorkerWebApplicationFactory> StartIsolatedHostAsync(
-        IReadOnlyDictionary<string, string?> settings
+        IReadOnlyDictionary<string, string?> settings,
+        Action<IWebHostBuilder>? configure = null
     )
     {
         var database = $"worker_isolated_{Interlocked.Increment(ref _isolatedHosts)}";
@@ -88,7 +91,8 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
 
         var host = new WorkerWebApplicationFactory(
             new NpgsqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString,
-            settings
+            settings,
+            configure
         );
 
         // Starting the host migrates its database and starts its worker.
@@ -114,7 +118,15 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
     }
 }
 
-[CollectionDefinition(Name)]
+/// <summary>
+/// <b>Runs on its own, after every parallel collection.</b> Two things here depend on nothing
+/// else running in the process: assertions on time (WRK-09 holds a five-second bound, WRK-13 a
+/// probe schedule), which a CPU shared with the rest of the suite turns into scheduling luck;
+/// and the deployment's metrics provider, which subscribes to its meter <em>by name</em> across
+/// the whole process — every test host has one of that name, and a host disposed in another
+/// collection mid-test takes the merged stream with it.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
 public class WorkerCollectionDefinition : ICollectionFixture<WorkerPostgresFixture>
 {
     public const string Name = "worker";
