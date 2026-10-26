@@ -2,7 +2,7 @@
 
 **Spec**: `.specs/features/replication-worker/spec.md`
 **Context**: `.specs/features/replication-worker/context.md`
-**Status**: Draft
+**Status**: Approved — implemented and validated (PASS, iteration 3)
 
 ---
 
@@ -125,7 +125,7 @@ graph TD
   1. If `!pause.CanAttempt(now)`: delay until `ProbeDueAt`.
   2. New scope. `NextEligibleReplicationSpec(deviceId, Live, now)`, else `(…, Bulk, now)` (WRK-05). None → delay `PollInterval` (WRK-31).
   3. `Begin(now)`, save. `23505` on the device index → another instance holds it → delay. `DbUpdateConcurrencyException` (row moved under us) → next cycle.
-  4. Load device (`null` → deleted, WRK-25: stop). For `Add`/`Update` load user with `Picture`; tombstoned → `SupersedeAfterAttempt`, save, next (WRK-21).
+  4. Load user; tombstoned with `Add`/`Update` → superseded without a call, save, next (WRK-21). Otherwise load `Picture`, then **reload the device last** (`null` → deleted, WRK-25: stop) so the window before the call is as small as it can be (`6d93588`).
   5. Call with a linked CTS of `DeviceCallTimeout`. Timeout → `Unreachable`. Unexpected exception → `Rejected` (Risks).
   6. `ReplicationOutcomeRecorder.RecordAsync`, then `pause.Record…`, metrics.
 - **Shutdown** (WRK-23): `stoppingToken` cancels the call; the recorder releases with `CancellationToken.None` under a short bounded save.

@@ -466,18 +466,30 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ## Handoff
 
-- **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2.
-- **Phase / Task**: Specify and Design approved. **tasks.md drafted** (T1–T22, 3 batches), awaiting approval; then Execute.
-- **Completed**: `replication-queue` squash-merged to `main` as `173f8c1` (#17). OD-3 resolved by AD-043 — own hosted worker, no job runner, own `DevicePause` (Polly rejected: v8 is ratio-only). AD-044 extends the transition table and adds an `xmin` token.
-- **In-progress** (file:line): none.
-- **Next step**: approve tasks.md, then Execute batch A (Phase 1, T1–T7).
+- **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2 — **complete and verified**, PR into `main` pending.
+- **Phase / Task**: T1–T22 done, plus fix commits. Verifier **PASS** at iteration 3 of 3 (`validation.md`).
+- **Completed**: spec · context · design · tasks · validation. Executed as three batch sub-agents (T1–T7, T8–T14, T15–T22), then Verifier → 4 test fixes + 1 production fix → re-verify → 1 flake fix → re-verify. Author ≠ verifier held (AD-028).
+- **Test totals**: **465 unit · 340 integration**, green; 5 consecutive full integration runs green. 17 warnings (baseline). Entering: 364 · 286.
+- **Verifier**: 35/35 WRK criteria evidenced. Sensor across three iterations: every listed fault killed; survivors classified equivalent (M9a newer-pending check backed by the pending index; M24 `ReaderGone` exit backed by the cascade).
+- **Production defect found by verification**: `f082fae` — the supervisor read backfill debts before the catalogue, so a reader registered between the two reads got a loop with no debt and a spectator was delivered twice (WRK-34). Fixed by reading the catalogue first.
+- **Decisions**: AD-043 (OD-3 closed — own hosted worker, no job runner, own `DevicePause`; Polly rejected, v8 is ratio-only). AD-044 (transition table extended; `xmin` row version on `replications` and `backfill_intents`).
+- **Next step**: open the PR into `main`, squash-merge, then feature 5 `isapi-device-client` (real adapter behind `IDeviceClient`; must also verify A-13 on hardware).
 - **Blockers**: none.
 - **Uncommitted files**: none tracked. `.agents/`, `.claude/`, `.design/` untracked and undecided.
 - **Branch**: `feat/replication-worker`, based on `main` at `173f8c1`.
 
+### What `replication-worker` established that later features inherit
+
+- **The worker is off in `TestWebApplicationFactory`, on only in `WorkerPostgresFixture`** (own container, collection not parallelised — meter listeners are process-wide). A new background process follows the same split.
+- **Per-device exclusivity is a database invariant** (`IX_replications_device_in_progress`); a claim that loses is a `23505`, not an error.
+- **A supervisor tick that does several reads orders them so the later read covers what the earlier admits** (L-054).
+- **Two failure classes at the port**: `Unreachable` pauses the reader and counts nothing; `Rejected` counts toward a dead letter. Feature 5 must map ISAPI errors onto exactly these; feature 6 builds on `DevicePause`.
+- **Spec gap carried forward**: per-replication capacity blocking (deferred by `replication-queue`) has no criterion; a full reader will surface as rejections → dead letters once feature 5 exists.
+
 ### Still outstanding
 
-1. **`scripts/lessons.py list` mutates the store** (auto-prune on read). Only L-007 is confirmed; revert `.specs/LESSONS.md` / `lessons.json` after any read until the window is widened or lessons are promoted.
-2. **`CA1711` on `IDomainEventHandler`** — unsuppressed warning awaiting a decision.
-3. **Semantic-image-quality gap** still missing from `ROADMAP.md` § Known Gaps.
-4. **A-13** — 40–200 KB band and 640×480 floor must be verified on real hardware in `isapi-device-client`.
+1. **`scripts/lessons.py` mutates the store on `list` *and* `add`** (auto-prune past `window_days = 45`). The Verifier had to restore 36 candidates (L-008…L-043) twice. Fix the script (or widen the window / promote recurring lessons) before the next lesson write. Candidates now run to L-055; only L-007 is confirmed.
+2. **`docs/test-patterns.md` omits `ReplicationQueueContractTests` from the contract-class list** although AD-040 names it.
+3. **`CA1711` on `IDomainEventHandler`** — unsuppressed warning awaiting a decision.
+4. **Semantic-image-quality gap** still missing from `ROADMAP.md` § Known Gaps.
+5. **A-13** — 40–200 KB band and 640×480 floor must be verified on real hardware in `isapi-device-client`.
