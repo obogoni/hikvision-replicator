@@ -12,7 +12,7 @@ Verifier, discrimination sensor).
 ---
 
 **Design**: `.specs/features/replication-worker/design.md`
-**Status**: Draft
+**Status**: All tasks complete (T1–T22). 465 unit · 337 integration, all green. Awaiting Verifier.
 
 ---
 
@@ -425,14 +425,14 @@ T20 → T21 → T22
 
 ---
 
-### T22: Docs
+### T22: Docs ✅
 
 **What**: `docs/test-patterns.md` class table (new worker classes, fixture rule); `replication-queue/spec.md` amendment notes on REP-27, REP-28, REP-34; `ROADMAP.md` § Known Gaps — core-capability row narrowed to "no real adapter".
 **Where**: `docs/test-patterns.md`, `.specs/features/replication-queue/spec.md`, `.specs/ROADMAP.md`
 **Depends on**: T21
 **Requirement**: — (AD-044, AD-043 bookkeeping)
 **Done when**:
-- [ ] Build gate passes (`--no-incremental`), warnings ≤ 17
+- [x] Build gate passes (`--no-incremental`), warnings ≤ 17
 **Tests**: none · **Gate**: build · **Commit**: `docs: record the worker's test classes and the amended queue criteria`
 
 ---

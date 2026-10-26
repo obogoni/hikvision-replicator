@@ -173,10 +173,38 @@ each file stays readable, and the test explorer shows one class. Split on **what
 registry held before the call** — never on a cross-cutting axis like "validation", which
 produces a test whose home nobody can predict.
 
+**The replication worker has no route of its own**, so its classes are named for the
+situation the worker is in — what the queue, the fleet or the catalogue is doing to it. They
+share `WorkerApiTests` as their base, the way the use-case classes share `UserApiTests` and
+`DeviceApiTests`:
+
+| Situation | Class |
+|---|---|
+| Queued work reaching every reader — payloads, order, one call per reader (WRK-01…WRK-08, WRK-31, WRK-32) | `DeliveryTests` (12) |
+| A new reader's backfill expanded and delivered (WRK-04, WRK-34) | `BackfillDeliveryTests` (4) |
+| Readers joining, leaving and changing under a running worker (WRK-10, WRK-24, WRK-25, WRK-33) | `DeviceChurnTests` (5) |
+| A reader off the network — release, pause, probe (WRK-11…WRK-14) | `OfflineReaderTests` (3) |
+| A reader refusing a record — backoff, dead letter (WRK-15…WRK-19) | `RejectionTests` (6) |
+| An attempt overtaken by newer intent (WRK-20, WRK-21) | `StaleIntentTests` (4) |
+| A worker that crashed or was stopped mid-call (WRK-22, WRK-23) | `WorkerRecoveryTests` (3) |
+| The live-sync SLO under a running backfill (WRK-09) | `LiveSyncSloTests` (1) |
+
+### The worker runs in one place only
+
+`TestWebApplicationFactory` sets `ReplicationWorker:Enabled=false`, because every class on
+`PostgresFixture` asserts rows a running worker would drain. **Worker behaviour is tested only on
+`WorkerPostgresFixture`**: its own container, the worker on, intervals in milliseconds, the fake
+fleet as `Readers`, a `WorkerClock` that can be frozen, a `Saves` hook for races no request lands
+on demand, and a `Logs` sink. Its collection runs with **parallelization disabled**, after every
+other collection: its assertions on time would otherwise be assertions on a shared CPU, and the
+deployment's metrics provider subscribes to its meter by name across the whole process. A test
+needing a setting of its own, or a host it may stop, takes `StartIsolatedHostAsync` — a host on
+a database of its own, which no other worker drains.
+
 **Cross-cutting classes are named for their concern, not a use case**, and that is how you
 tell them apart at a glance: `UserExternalRefTests` (key escaping across every user route),
 `CredentialLeakageTests`, `TracingTests`, `UserObservabilityTests`, `StartupTests`,
-`ErrorHandlingTests`, `UserRequestSizeTests`, `HarnessTests`, and the two
-`PersistenceContract` classes — the below-HTTP exception above.
+`ErrorHandlingTests`, `UserRequestSizeTests`, `HarnessTests`, `ReplicationObservabilityTests`,
+`WorkerObservabilityTests`, and the `Contract` classes — the below-HTTP exception above.
 
 Class names carry no level suffix — the project does.

@@ -226,8 +226,18 @@ domain rules whether or not anything drains yet.
 2. **REP-27** — WHEN a transition is requested THEN the aggregate SHALL permit exactly:
    `Pending → InProgress`, `InProgress → Succeeded`, `InProgress → Failed`, `Failed → Pending`,
    `Pending → Superseded`.
+   > **Amended by AD-044** (`replication-worker`, 2026-10-26). The permitted set now also
+   > includes `InProgress → Pending` (`Release` — an attempt that never reached a reader willing to
+   > judge it, no attempt counted; WRK-11, WRK-22, WRK-23), `Failed → Pending` with a not-before
+   > time (`Retry(now, notBefore)` — a rejection's backoff, held on the row; WRK-16) and
+   > `InProgress | Failed → Superseded` (`SupersedeAfterAttempt` — an attempt overtaken by newer
+   > intent; WRK-20, WRK-21). `Supersede` itself stays `Pending`-only, so REP-12 is still enforced
+   > by the aggregate. The unit cases that asserted these transitions refused changed with the
+   > amendment, citing AD-044.
 3. **REP-28** — WHEN any transition outside REP-27 is requested THEN the aggregate SHALL refuse it
    with a validation error and SHALL leave every field unchanged.
+   > **Amended by AD-044**: "outside REP-27" means outside REP-27 *as amended* above. The rule
+   > itself — a refused transition leaves every field unchanged — is unchanged.
 4. **REP-29** — WHEN a replication reaches `Succeeded` or `Superseded` THEN every further transition
    SHALL be refused — both are terminal.
 5. **REP-30** — WHEN an attempt is recorded as failed THEN the attempt count SHALL increase by
@@ -242,6 +252,11 @@ domain rules whether or not anything drains yet.
 9. **REP-34** — WHEN the API assembly is inspected THEN it SHALL contain no `IHostedService`, no
    `BackgroundService`, no scheduler and no job-runner package reference (AD-039), and every
    acceptance criterion above SHALL be reachable by direct invocation.
+   > **Superseded by AD-043 and WRK-35** (`replication-worker`, 2026-10-26). REP-34 bound this
+   > feature while OD-3 was open; AD-043 closed it with a hosted worker inside the API, so the
+   > assembly now contains a `BackgroundService` by design. What survives is WRK-35's half — no
+   > job-runner package in the solution — and its test replaced REP-34's no-hosted-service
+   > assertion. The criteria above are still reachable by direct invocation.
 
 **Independent Test**: Drive the aggregate through every legal transition and every illegal one by
 direct invocation, with no host running.

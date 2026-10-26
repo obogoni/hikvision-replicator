@@ -65,11 +65,11 @@ unnormalized IP storage, and the unconditional `UpdatedAt` advance. What remains
 
 | Gap | Standing | Closes with |
 |---|---|---|
-| **The product's core capability does not exist yet.** Nothing replicates a user to a device: no user catalogue, no replication queue, no worker, no ISAPI client. | By design — Phases 1–3 exist to build exactly this. | features 2–5 |
+| **No real device adapter yet.** Users, the queue and the worker that drains it exist (features 2–4), but the only `IDeviceClient` is the in-memory fake, and startup refuses any other adapter name — so nothing reaches a physical reader. | By design — the ISAPI adapter is Phase 3. | feature 5 `isapi-device-client` |
 | **No auth, no rate limiting.** Every endpoint is anonymous, including the ones that accept and store device credentials. Accepted for now (assumption A-6 of `device-registry`) with a hard deployment constraint: **this must not reach a routable network before `api-auth` ships.** | Accepted risk, bounded by the deployment constraint. | feature 9 `api-auth` |
 | **AES-256-CBC carries no integrity check.** `EncryptionService` provides confidentiality only; a tampered ciphertext surfaces as a decrypt failure rather than as detected tampering. | Open — sequencing matters, see `OD-7`. | `OD-7`, before first deploy |
 | **The device catalogue is unpaginated.** `GET /api/devices` returns a bare array, which pins the empty case to `[]`. DEV-26 ships as a paged shape behind query parameters or a `v2` route — never by mutating this response. | Specified and deliberately unbuilt (P3). | not scheduled |
-| **Face capacity is declared but not enforced.** `Device.FaceCapacity` is modelled and validated; the guard that refuses a replication which would overfill a device is the **required** AD-021 mitigation, not an optional extra. Silent enrolment failure at a turnstile is this system's worst failure mode. | Mandatory. | feature 3 `replication-queue` |
+| ~~**Face capacity is declared but not enforced.**~~ **Closed by feature 3 `replication-queue`**: the fleet-admission guard refuses a reader that cannot hold the active roster (REP-21…REP-23), and a spectator who takes the roster past a reader's ceiling is accepted with that reader named in a warning and a counter (REP-24, REP-25, REP-37). A drain against a reader that is actually full surfaces as that reader's refusal and, after the retries, a dead letter (WRK-16, WRK-17) once a real adapter reports it. | Closed. | feature 3 `replication-queue` |
 
 ---
 
