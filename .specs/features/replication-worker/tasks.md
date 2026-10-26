@@ -231,16 +231,16 @@ T20 → T21 → T22
 
 ---
 
-### T10: `IDeviceClient` port + `FakeDeviceClient` + adapter gating
+### T10: `IDeviceClient` port + `FakeDeviceClient` + adapter gating ✅
 
 **What**: Port, outcome records, `DeviceEndpoint`/`DeviceEnrolment`; fake with the design's scripting surface and a per-device concurrency high-water mark; registered only when `DeviceClient:Adapter=Fake`, else startup fails. `TestWebApplicationFactory` and `appsettings.Development.json` set `Fake`.
 **Where**: `Shared/IDeviceClient.cs`, `Shared/DeviceCallOutcomes.cs`, `Infrastructure/FakeDeviceClient.cs`, `Program.cs`, `appsettings.Development.json`, `IntegrationTests/TestWebApplicationFactory.cs`, `Tests/Infrastructure/FakeDeviceClientTests.cs`, `IntegrationTests/StartupTests.cs`
 **Depends on**: T9
 **Requirement**: WRK-01, WRK-02 (port half)
 **Done when**:
-- [ ] Unit: latency honoured and cancellable; `SetUnreachable` and `RejectWhen` produce their outcomes; call log ordered; high-water mark counts overlapping calls
-- [ ] Integration: missing or unknown `DeviceClient:Adapter` fails startup naming the setting
-- [ ] Full gate passes; ≥ 418 unit · ≥ 295 integration
+- [x] Unit: latency honoured and cancellable; `SetUnreachable` and `RejectWhen` produce their outcomes; call log ordered; high-water mark counts overlapping calls
+- [x] Integration: missing or unknown `DeviceClient:Adapter` fails startup naming the setting
+- [x] Full gate passes; ≥ 418 unit · ≥ 295 integration
 
 **Tests**: unit + integration · **Gate**: full · **Commit**: `feat(worker): add the device port and a fake reader fleet`
 

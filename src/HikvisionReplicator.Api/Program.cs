@@ -52,6 +52,24 @@ builder
     .Bind(builder.Configuration.GetSection(ReplicationWorkerOptions.SectionName))
     .ValidateOnStart();
 
+// The adapter is named explicitly and nothing is a default: the only one that exists is a fake
+// that always answers, and shipping it silently would report spectators enrolled on readers
+// that never heard of them. An unknown or missing adapter stops startup naming the setting.
+builder.Services.AddSingleton<IValidateOptions<DeviceClientOptions>, DeviceClientOptionsValidator>();
+builder
+    .Services.AddOptions<DeviceClientOptions>()
+    .Bind(builder.Configuration.GetSection(DeviceClientOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<FakeDeviceClient>();
+builder.Services.AddSingleton<IDeviceClient>(services =>
+    services.GetRequiredService<IOptions<DeviceClientOptions>>().Value.Adapter
+    == DeviceClientOptions.FakeAdapter
+        ? services.GetRequiredService<FakeDeviceClient>()
+        : throw new InvalidOperationException(
+            $"{DeviceClientOptionsValidator.AdapterPath} names no adapter this build provides."
+        )
+);
+
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 // Stateless and CPU-bound, so one instance serves every request (A-14).
 builder.Services.AddSingleton<IFaceImageNormalizer, SkiaFaceImageNormalizer>();

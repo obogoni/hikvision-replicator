@@ -110,6 +110,29 @@ public class StartupTests(PostgresFixture fixture)
         Assert.Contains("ReplicationWorker:MaxAttempts", exception.Message, StringComparison.Ordinal);
     }
 
+    // ─── WRK-01: the device adapter is chosen explicitly, never defaulted ─
+
+    [Fact]
+    public void Application_does_not_start_without_a_device_adapter()
+    {
+        using var factory = BootWith(settings: ("DeviceClient:Adapter", null));
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("DeviceClient:Adapter", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Application_does_not_start_with_a_device_adapter_it_does_not_have()
+    {
+        using var factory = BootWith(settings: ("DeviceClient:Adapter", "Isapi"));
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("DeviceClient:Adapter", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Isapi", exception.Message, StringComparison.Ordinal);
+    }
+
     // ─── DEV-16: tracing exists only when an export endpoint is configured ─
 
     [Fact]
