@@ -53,8 +53,12 @@ public sealed partial class ReplicationWorker(
             {
                 try
                 {
+                    // The catalogue is read before the debts: a reader registered after this
+                    // read waits for the next tick, and one registered before it has its debt
+                    // committed with it, so the debt read below cannot miss it (WRK-34).
+                    var readers = await RegisteredReadersAsync(stoppingToken);
                     var owed = await ExpandBackfillsAsync(stoppingToken);
-                    await SyncLoopsAsync(owed, stoppingToken);
+                    await SyncLoopsAsync(readers, owed, stoppingToken);
                     await SweepExpiredLeasesAsync(settings, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -148,6 +152,17 @@ public sealed partial class ReplicationWorker(
             .TranslateIfDuplicatePending(exception)
             .IsT1;
 
+    /// <summary>The readers in the catalogue, as the tick found them.</summary>
+    private async Task<HashSet<int>> RegisteredReadersAsync(CancellationToken stoppingToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        return (
+            await scope
+                .ServiceProvider.GetRequiredService<IDeviceRepository>()
+                .ListAsync(new RegisteredDeviceIdsSpec(), stoppingToken)
+        ).ToHashSet();
+    }
+
     /// <summary>
     /// Starts a loop for every reader that has none and stops the loop of every reader that has
     /// left the catalogue, so a change takes effect within one poll interval without a restart
@@ -159,15 +174,12 @@ public sealed partial class ReplicationWorker(
     /// same spectator a second time on the bulk lane (WRK-34).
     /// </para>
     /// </summary>
-    private async Task SyncLoopsAsync(HashSet<int> owed, CancellationToken stoppingToken)
+    private async Task SyncLoopsAsync(
+        HashSet<int> readers,
+        HashSet<int> owed,
+        CancellationToken stoppingToken
+    )
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var readers = (
-            await scope
-                .ServiceProvider.GetRequiredService<IDeviceRepository>()
-                .ListAsync(new RegisteredDeviceIdsSpec(), stoppingToken)
-        ).ToHashSet();
-
         // Told to stop, not waited for: a removed reader's loop may be inside a call, and
         // the tick must not hold every other reader's catalogue change behind it.
         // SPEC_DEVIATION: a call in flight to a removed reader is cancelled with its loop,
