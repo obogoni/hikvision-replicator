@@ -110,8 +110,11 @@ public class WorkerObservabilityTests(WorkerPostgresFixture fixture) : WorkerApi
     // ─── WRK-26: creation to success, by lane and operation ───
 
     /// <summary>
-    /// Queued at kickoff, delivered with the clock reading seven seconds later: the histogram
-    /// must hold exactly seven seconds, against the lane and operation the row carried.
+    /// Two spectators queued at kickoff on one reader, which takes them one at a time. The first
+    /// is answered three seconds later, which is also when the second is taken in hand; the
+    /// second is answered seven seconds after kickoff. Measured from queueing, that is 3 s and
+    /// 7 s — ten in all. Measured from the claim it would be 3 s and 4 s, so the second row's
+    /// wait in the queue is what pins the interval's start to its creation.
     /// </summary>
     [Fact]
     public async Task A_delivery_records_the_seconds_from_queueing_to_success_by_lane_and_operation()
@@ -122,28 +125,39 @@ public class WorkerObservabilityTests(WorkerPostgresFixture fixture) : WorkerApi
         host.Readers.SetLatency(reader, TimeSpan.FromMilliseconds(500));
 
         host.Clock.Freeze(Kickoff);
-        await UpsertSpectatorAsync("TICKET-1", via: client);
+        await UpsertSpectatorAsync("TICKET-1", "100001", via: client);
+        await UpsertSpectatorAsync("TICKET-2", "100002", via: client);
+
         await Eventually.UntilAsync(
             () => Task.FromResult(host.Readers.Calls),
             calls => calls.Count == 1,
-            "the call is with the reader"
+            "the first call is with the reader"
+        );
+        host.Clock.Freeze(Kickoff.AddSeconds(3));
+
+        // The reader is held by the first call, so the second is claimed only once it is
+        // answered — on the instant three seconds after kickoff.
+        await Eventually.UntilAsync(
+            () => Task.FromResult(host.Readers.Calls),
+            calls => calls.Count == 2,
+            "the second call is with the reader"
         );
         host.Clock.Freeze(Kickoff.AddSeconds(7));
 
         var durations = await ExportedUntilAsync(
             ReplicationMetrics.DeliveryDurationMetricName,
-            points => points.Count > 0,
-            "the delivery has been measured"
+            points => points.Sum(point => point.GetHistogramCount()) == 2,
+            "both deliveries have been measured"
         );
 
         var duration = Assert.Single(durations);
         Assert.Equal("Live", Tag(duration, ReplicationMetrics.LaneTag));
         Assert.Equal("Add", Tag(duration, ReplicationMetrics.OperationTag));
-        Assert.Equal(1, duration.GetHistogramCount());
-        Assert.Equal(7.0, duration.GetHistogramSum());
+        Assert.Equal(2, duration.GetHistogramCount());
+        Assert.Equal(3.0 + 7.0, duration.GetHistogramSum());
 
         var attempts = Exported(ReplicationMetrics.AttemptsMetricName);
-        Assert.Equal(1, CountOf(attempts, ReplicationMetrics.OutcomeTag, "succeeded"));
+        Assert.Equal(2, CountOf(attempts, ReplicationMetrics.OutcomeTag, "succeeded"));
     }
 
     // ─── WRK-27 / WRK-28: refused, then set aside ───
