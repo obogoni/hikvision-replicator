@@ -204,15 +204,6 @@ public sealed partial class DeviceLoop(
         CancellationToken stoppingToken
     )
     {
-        // Read now, right before the call, rather than once per loop: the address and
-        // credentials an operator just corrected are the ones used (WRK-33), and a reader
-        // deleted since the claim is never called (WRK-25).
-        var device = await services
-            .GetRequiredService<IDeviceRepository>()
-            .GetByIdAsync(deviceId, stoppingToken);
-        if (device is null)
-            return Cycle.ReaderGone;
-
         var users = services.GetRequiredService<IUserRepository>();
 
         // Never null: a spectator is tombstoned, never deleted, and the foreign key restricts.
@@ -227,6 +218,16 @@ public sealed partial class DeviceLoop(
 
         if (work.Operation is not ReplicationOperation.Remove)
             await users.LoadPictureAsync(user, stoppingToken);
+
+        // Read last, right before the call, rather than once per loop or at the claim: the
+        // address and credentials an operator just corrected are the ones used (WRK-33), and
+        // the window in which a reader deleted since the claim can still be called shrinks to
+        // the call itself (WRK-25). The spectator and the face are read first for that reason.
+        var device = await services
+            .GetRequiredService<IDeviceRepository>()
+            .GetByIdAsync(deviceId, stoppingToken);
+        if (device is null)
+            return Cycle.ReaderGone;
 
         var endpoint = new DeviceEndpoint(
             device.Id,
