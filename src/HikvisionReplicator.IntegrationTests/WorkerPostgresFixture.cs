@@ -19,12 +19,11 @@ namespace HikvisionReplicator.IntegrationTests;
 /// </summary>
 public sealed class WorkerPostgresFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
-        .Build();
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(
+        "postgres:17-alpine"
+    ).Build();
 
     private Respawner _respawner = null!;
-    private NpgsqlConnection _connection = null!;
 
     public string ConnectionString => _container.GetConnectionString();
 
@@ -44,10 +43,9 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
         // Starting the host migrates the database and starts the worker.
         using (var _ = Factory.CreateClient()) { }
 
-        _connection = new NpgsqlConnection(ConnectionString);
-        await _connection.OpenAsync();
+        await using var connection = await OpenConnectionAsync();
         _respawner = await Respawner.CreateAsync(
-            _connection,
+            connection,
             new RespawnerOptions
             {
                 DbAdapter = DbAdapter.Postgres,
@@ -61,7 +59,15 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
     {
         Clock.Thaw();
         Readers.Reset();
-        await _respawner.ResetAsync(_connection);
+        await using var connection = await OpenConnectionAsync();
+        await _respawner.ResetAsync(connection);
+    }
+
+    private async Task<NpgsqlConnection> OpenConnectionAsync()
+    {
+        var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        return connection;
     }
 
     public AppDbContext CreateDbContext() =>
@@ -69,15 +75,13 @@ public sealed class WorkerPostgresFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_connection is not null)
-            await _connection.DisposeAsync();
         Factory?.Dispose();
         await _container.DisposeAsync();
     }
 }
 
 [CollectionDefinition(Name)]
-public class WorkerCollection : ICollectionFixture<WorkerPostgresFixture>
+public class WorkerCollectionDefinition : ICollectionFixture<WorkerPostgresFixture>
 {
     public const string Name = "worker";
 }

@@ -13,7 +13,7 @@ namespace HikvisionReplicator.IntegrationTests;
 /// calls the fake fleet received.
 /// </para>
 /// </summary>
-[Collection(WorkerCollection.Name)]
+[Collection(WorkerCollectionDefinition.Name)]
 public class DeviceChurnTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixture)
 {
     // ─── WRK-10: joining ───

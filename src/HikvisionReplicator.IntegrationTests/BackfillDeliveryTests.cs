@@ -14,7 +14,7 @@ namespace HikvisionReplicator.IntegrationTests;
 /// is read from the queue and from the calls the fake reader received.
 /// </para>
 /// </summary>
-[Collection(WorkerCollection.Name)]
+[Collection(WorkerCollectionDefinition.Name)]
 public class BackfillDeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixture)
 {
     private async Task<BackfillStatus> DebtStatusAsync(int deviceId)

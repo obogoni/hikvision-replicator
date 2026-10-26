@@ -18,7 +18,7 @@ namespace HikvisionReplicator.IntegrationTests;
 /// none lets a test pick a creation time.
 /// </para>
 /// </summary>
-[Collection(WorkerCollection.Name)]
+[Collection(WorkerCollectionDefinition.Name)]
 public class DeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixture)
 {
     private static readonly DateTimeOffset Kickoff = new(2026, 10, 26, 18, 45, 0, TimeSpan.Zero);
