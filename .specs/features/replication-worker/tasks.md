@@ -364,17 +364,17 @@ T20 → T21 → T22
 
 ---
 
-### T18: Crash recovery and shutdown
+### T18: Crash recovery and shutdown ✅
 
 **What**: Lease sweep (`ExpiredLeasesSpec`) in the supervisor; shutdown cancels calls and releases.
 **Where**: `Infrastructure/Worker/{ReplicationWorker,DeviceLoop}.cs`, `Domain/Specs/ExpiredLeasesSpec.cs`, `IntegrationTests/WorkerRecoveryTests.cs`
 **Depends on**: T17
 **Requirement**: WRK-22, WRK-23
 **Done when**:
-- [ ] An `InProgress` row older than the lease (arranged by hand) → `Pending`, attempts unchanged, then delivered; one younger than the lease untouched
-- [ ] Expired row with a newer pending intent → `Superseded`
-- [ ] Host stopped mid-call → row `Pending`, attempt 0
-- [ ] Full gate passes; ≥ 327 integration
+- [x] An `InProgress` row older than the lease (arranged by hand) → `Pending`, attempts unchanged, then delivered; one younger than the lease untouched
+- [x] Expired row with a newer pending intent → `Superseded`
+- [x] Host stopped mid-call → row `Pending`, attempt 0
+- [x] Full gate passes; ≥ 327 integration (331)
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): recover work a crashed worker left in flight`
 

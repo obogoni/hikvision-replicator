@@ -29,6 +29,9 @@ public sealed partial class DeviceLoop(
     ILogger<DeviceLoop> logger
 )
 {
+    /// <summary>How long recording an outcome may take once the loop is no longer waiting on it.</summary>
+    private static readonly TimeSpan SettleBound = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// Drains one reader until <paramref name="stoppingToken"/> is cancelled. Waits one idle
     /// poll interval whenever it finds nothing to take (WRK-31). A cycle that throws is logged
@@ -161,6 +164,45 @@ public sealed partial class DeviceLoop(
             return Cycle.Worked;
         }
 
+        try
+        {
+            return await DeliverAsync(
+                deviceId,
+                work,
+                services,
+                replications,
+                settings,
+                pause,
+                stoppingToken
+            );
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // The loop was stopped with the work in hand — the host shutting down, or the reader
+            // leaving the catalogue. The reader never answered, so it goes back as an unanswered
+            // call does, with nothing counted (WRK-23). Saved on a bounded token of its own: the
+            // stopping token is already spent, and a shutdown must not wait on it for ever.
+            using var settle = new CancellationTokenSource(SettleBound, timeProvider);
+            await recorder.ReleaseInterruptedAsync(
+                work.Id,
+                $"Delivery to device {deviceId} was stopped before the device answered.",
+                settle.Token
+            );
+            return Cycle.Worked;
+        }
+    }
+
+    /// <summary>Everything between the claim and the recorded outcome.</summary>
+    private async Task<Cycle> DeliverAsync(
+        int deviceId,
+        Replication work,
+        IServiceProvider services,
+        IReplicationRepository replications,
+        ReplicationWorkerOptions settings,
+        DevicePause pause,
+        CancellationToken stoppingToken
+    )
+    {
         // Read now, right before the call, rather than once per loop: the address and
         // credentials an operator just corrected are the ones used (WRK-33), and a reader
         // deleted since the claim is never called (WRK-25).
@@ -195,7 +237,10 @@ public sealed partial class DeviceLoop(
 
         var (outcome, reason) = await CallAsync(work, user, endpoint, settings, stoppingToken);
 
-        await recorder.RecordAsync(replications, work, outcome, reason, stoppingToken);
+        // The call is over, so its outcome is recorded even if the loop is stopping now: on a
+        // bounded token of its own rather than the stopping one.
+        using (var settle = new CancellationTokenSource(SettleBound, timeProvider))
+            await recorder.RecordAsync(replications, work, outcome, reason, settle.Token);
 
         // Only a call the reader never answered counts toward a pause; an answer of either
         // kind proves it is up and ends one (WRK-12, WRK-15).
@@ -210,7 +255,7 @@ public sealed partial class DeviceLoop(
     /// <summary>
     /// One call to the reader, bounded by <see cref="ReplicationWorkerOptions.DeviceCallTimeout"/>.
     /// A call still unanswered at the deadline is cancelled and counts as unreachable (WRK-11);
-    /// a cancellation that came from the host stopping is the host's, and propagates. The
+    /// a cancellation that came from the loop stopping propagates, to be released (WRK-23). The
     /// reason is what the reader said, or why it said nothing.
     /// </summary>
     private async Task<(AttemptOutcome Outcome, string? Reason)> CallAsync(

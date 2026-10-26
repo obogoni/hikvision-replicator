@@ -10,8 +10,9 @@ using Microsoft.Extensions.Options;
 namespace HikvisionReplicator.Api.Infrastructure.Worker;
 
 /// <summary>
-/// The supervisor (design § ReplicationWorker): expands every outstanding backfill and keeps one
-/// <see cref="DeviceLoop"/> running per reader in the catalogue. A purpose-built hosted worker inside the API rather than a job
+/// The supervisor (design § ReplicationWorker): expands every outstanding backfill, keeps one
+/// <see cref="DeviceLoop"/> running per reader in the catalogue, and reclaims work a crashed
+/// worker left in hand. A purpose-built hosted worker inside the API rather than a job
 /// runner — the queue already is a table with its own states, lane and supersession (AD-043).
 /// <para>
 /// Each reader gets its own loop so a slow or offline reader never holds up another (WRK-07),
@@ -23,6 +24,7 @@ namespace HikvisionReplicator.Api.Infrastructure.Worker;
 public sealed partial class ReplicationWorker(
     IServiceScopeFactory scopeFactory,
     DeviceLoop deviceLoop,
+    ReplicationOutcomeRecorder recorder,
     IOptions<ReplicationWorkerOptions> options,
     TimeProvider timeProvider,
     ILogger<ReplicationWorker> logger
@@ -53,6 +55,7 @@ public sealed partial class ReplicationWorker(
                 {
                     var owed = await ExpandBackfillsAsync(stoppingToken);
                     await SyncLoopsAsync(owed, stoppingToken);
+                    await SweepExpiredLeasesAsync(settings, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -197,6 +200,52 @@ public sealed partial class ReplicationWorker(
             );
         }
     }
+
+    /// <summary>
+    /// Puts back work a crashed worker left in hand for longer than the lease, so its reader can
+    /// take work again (WRK-22) — released with nothing counted, or superseded if newer intent
+    /// overtook it (WRK-20). The lease far exceeds the call timeout, so no live call is ever
+    /// reclaimed; a row this sweep and another instance's recorder both reach is settled once by
+    /// its row version, and the loser is discarded.
+    /// </summary>
+    private async Task SweepExpiredLeasesAsync(
+        ReplicationWorkerOptions settings,
+        CancellationToken stoppingToken
+    )
+    {
+        var cutoff = timeProvider.GetUtcNow().UtcDateTime - settings.Lease;
+
+        List<int> expired;
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            expired = await scope
+                .ServiceProvider.GetRequiredService<IReplicationRepository>()
+                .ListAsync(new ExpiredLeasesSpec(cutoff), stoppingToken);
+        }
+
+        foreach (var replicationId in expired)
+        {
+            try
+            {
+                await recorder.ReleaseExpiredAsync(replicationId, cutoff, stoppingToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Settled elsewhere between the read and the save; nothing is owed.
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                LogSweepFailed(logger, replicationId, exception);
+            }
+        }
+    }
+
+    [LoggerMessage(
+        EventId = 32,
+        Level = LogLevel.Error,
+        Message = "Releasing replication {ReplicationId} from its expired lease failed; the next tick will retry."
+    )]
+    private static partial void LogSweepFailed(ILogger logger, int replicationId, Exception exception);
 
     [LoggerMessage(
         EventId = 31,

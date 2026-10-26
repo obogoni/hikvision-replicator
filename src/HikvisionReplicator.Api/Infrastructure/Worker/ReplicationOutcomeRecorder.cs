@@ -31,14 +31,8 @@ public sealed partial class ReplicationOutcomeRecorder(
     /// the loop claimed it, tracked by <paramref name="replications"/>' unit of work.
     /// <paramref name="reason"/> is what the reader said when it did not accept, or why it said
     /// nothing; it is kept as the row's last error (REP-33).
-    /// <para>
-    /// An attempt that did not land first looks for newer intent for the pair, and ends there
-    /// rather than going back to the queue beside it (WRK-20). Newer intent that lands after the
-    /// look and before the save is caught by the pending index, and the attempt is superseded
-    /// all the same.
-    /// </para>
     /// </summary>
-    public async Task RecordAsync(
+    public Task RecordAsync(
         IReplicationRepository replications,
         Replication replication,
         AttemptOutcome outcome,
@@ -49,7 +43,91 @@ public sealed partial class ReplicationOutcomeRecorder(
         ArgumentNullException.ThrowIfNull(replications);
         ArgumentNullException.ThrowIfNull(replication);
 
-        var said = reason ?? outcome.ToString();
+        return SettleAsync(
+            replications,
+            replication,
+            outcome,
+            reason ?? outcome.ToString(),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Puts back work whose call was cut off before the reader answered — the worker stopping
+    /// (WRK-23) or the reader's loop being stopped — exactly as an unanswered call is put back
+    /// (WRK-11). Read afresh in a unit of work of its own, because the one that claimed it may
+    /// have been mid-query when it was cancelled.
+    /// </summary>
+    public Task ReleaseInterruptedAsync(
+        int replicationId,
+        string reason,
+        CancellationToken cancellationToken
+    ) =>
+        SettleInHandAsync(
+            replicationId,
+            reason,
+            replication => replication.Status == ReplicationStatus.InProgress,
+            cancellationToken
+        );
+
+    /// <summary>
+    /// Puts back work a crashed worker left in hand past its lease (WRK-22), with nothing
+    /// counted. Re-checked on the fresh read: a row released and claimed again since the sweep
+    /// listed it carries a new lease, and is left alone.
+    /// </summary>
+    public Task ReleaseExpiredAsync(
+        int replicationId,
+        DateTime cutoff,
+        CancellationToken cancellationToken
+    ) =>
+        SettleInHandAsync(
+            replicationId,
+            "The worker holding this work stopped answering for it; its lease expired.",
+            replication =>
+                replication is { Status: ReplicationStatus.InProgress } && replication.UpdatedAt < cutoff,
+            cancellationToken
+        );
+
+    private async Task SettleInHandAsync(
+        int replicationId,
+        string reason,
+        Func<Replication, bool> stillOwed,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var replications = scope.ServiceProvider.GetRequiredService<IReplicationRepository>();
+
+        var replication = await replications.GetByIdAsync(replicationId, cancellationToken);
+        if (replication is null || !stillOwed(replication))
+        {
+            LogOutcomeDiscarded(logger, replicationId, AttemptOutcome.Unreachable);
+            return;
+        }
+
+        await SettleAsync(
+            replications,
+            replication,
+            AttemptOutcome.Unreachable,
+            reason,
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// An attempt that did not land first looks for newer intent for the pair, and ends there
+    /// rather than going back to the queue beside it (WRK-20). Newer intent that lands after the
+    /// look and before the save is caught by the pending index, and the attempt is superseded
+    /// all the same.
+    /// </summary>
+    private async Task SettleAsync(
+        IReplicationRepository replications,
+        Replication replication,
+        AttemptOutcome outcome,
+        string said,
+        CancellationToken cancellationToken
+    )
+    {
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var newerPendingExists =
             outcome != AttemptOutcome.Delivered
