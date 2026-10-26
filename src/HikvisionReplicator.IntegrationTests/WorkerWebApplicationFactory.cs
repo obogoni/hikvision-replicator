@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HikvisionReplicator.IntegrationTests;
 
@@ -31,6 +32,12 @@ public class WorkerWebApplicationFactory(
 
     /// <summary>Scripts run inside this host's own saves; see <see cref="ReplicationSaveHook"/>.</summary>
     public ReplicationSaveHook Saves { get; } = new();
+
+    /// <summary>
+    /// Every line this host logs. Shared by every test on the host and never cleared, so a test
+    /// picks out its own lines by what only its traffic carries — a reader or replication id.
+    /// </summary>
+    public InMemoryLogSink Logs { get; } = new();
 
     /// <summary>The reader fleet this host's worker delivers to.</summary>
     public FakeDeviceClient Readers => Services.GetRequiredService<FakeDeviceClient>();
@@ -62,6 +69,8 @@ public class WorkerWebApplicationFactory(
         // A test's own settings, last, so they win over the harness defaults above.
         if (settings is not null)
             builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(settings));
+
+        builder.ConfigureLogging(logging => logging.AddProvider(Logs));
 
         builder.ConfigureServices(services =>
         {

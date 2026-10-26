@@ -149,6 +149,13 @@ public sealed partial class ReplicationOutcomeRecorder(
             // put the attempt back beside it. Nothing of it was written.
             await SupersedeOvertakenAsync(replication.Id, outcome, said, cancellationToken);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The save affected no row: the reader was deleted mid-call and its work went with
+            // it (REP-16), or another instance settled the row first. Either way there is no
+            // outcome left to record, and nothing about it is a fault (WRK-24).
+            LogOutcomeDiscarded(logger, replication.Id, outcome);
+        }
     }
 
     /// <summary>
@@ -166,7 +173,16 @@ public sealed partial class ReplicationOutcomeRecorder(
         ArgumentNullException.ThrowIfNull(replication);
 
         replication.SupersedeAfterAttempt(timeProvider.GetUtcNow().UtcDateTime);
-        await replications.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await replications.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The reader was deleted since the claim (WRK-24).
+            LogSupersedeDiscarded(logger, replication.Id);
+        }
     }
 
     /// <summary>
@@ -197,7 +213,15 @@ public sealed partial class ReplicationOutcomeRecorder(
             newerPendingExists: true,
             timeProvider.GetUtcNow().UtcDateTime
         );
-        await replications.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await replications.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            LogOutcomeDiscarded(logger, replicationId, outcome);
+        }
     }
 
     private void Apply(
@@ -275,4 +299,11 @@ public sealed partial class ReplicationOutcomeRecorder(
         int replicationId,
         AttemptOutcome outcome
     );
+
+    [LoggerMessage(
+        EventId = 22,
+        Level = LogLevel.Information,
+        Message = "Replication {ReplicationId} was to be set aside without a call, but is no longer in hand; nothing is recorded."
+    )]
+    private static partial void LogSupersedeDiscarded(ILogger logger, int replicationId);
 }

@@ -1,13 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using HikvisionReplicator.Api.Domain;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace HikvisionReplicator.IntegrationTests;
 
 /// <summary>
-/// The catalogue changing under a running worker (WRK-10, WRK-25, WRK-33): a reader that joins
-/// is served without a restart, a reader that leaves is called no more, and a reader whose
-/// address or password an operator corrects is reached at the new one on the very next call.
+/// The catalogue changing under a running worker (WRK-10, WRK-24, WRK-25, WRK-33): a reader that
+/// joins is served without a restart, a reader that leaves is called no more — and whatever was
+/// in flight to it is let go without disturbing anyone else — and a reader whose address or
+/// password an operator corrects is reached at the new one on the very next call.
 /// <para>
 /// Every change is made through the device routes, as an operator makes it, and observed on the
 /// calls the fake fleet received.
@@ -75,6 +79,114 @@ public class DeviceChurnTests(WorkerPostgresFixture fixture) : WorkerApiTests(fi
             Readers.Calls,
             call => call.DeviceId == reader && call.At > deletedAt
         );
+    }
+
+    // ─── WRK-24: deleted with a call out ───
+
+    private const string WorkerCategory = "HikvisionReplicator.Api.Infrastructure.Worker.";
+
+    /// <summary>
+    /// What the worker logged as a fault about one reader. The worker's lines name the reader,
+    /// and the host's sink is shared by every test, so the reader's id is what makes the
+    /// lines this test's own.
+    /// </summary>
+    private List<string> WorkerErrorsAbout(int reader)
+    {
+        var aboutReader = new Regex($@"\bdevice {reader}\b", RegexOptions.IgnoreCase);
+        return
+        [
+            .. Fixture.Factory.Logs.Lines.Where(line =>
+                line.StartsWith(WorkerCategory, StringComparison.Ordinal)
+                && line.Contains("[Error]", StringComparison.Ordinal)
+                && aboutReader.IsMatch(line)
+            ),
+        ];
+    }
+
+    private async Task GivenDeliveredAsync(string externalRef, int reader)
+    {
+        var spectator = await StoredUserAsync(externalRef);
+        await QueueUntilAsync(
+            queue =>
+                queue.Any(work =>
+                    work.DeviceId == reader
+                    && work.UserId == spectator.Id
+                    && work.Status == ReplicationStatus.Succeeded
+                ),
+            $"{externalRef} has been delivered to reader {reader}"
+        );
+    }
+
+    [Fact]
+    public async Task A_reader_deleted_with_a_call_out_leaves_the_worker_delivering_to_the_others()
+    {
+        var deleted = await GivenRegisteredDeviceAsync("10.0.2.1");
+        var other = await GivenRegisteredDeviceAsync("10.0.2.2");
+        Readers.SetLatency(deleted, TimeSpan.FromSeconds(2));
+        await UpsertSpectatorAsync("TICKET-1", "100001");
+        await CallsUntilAsync(
+            calls => calls.Any(call => call.DeviceId == deleted),
+            "the call to the doomed reader is out"
+        );
+
+        var removal = await Client.DeleteAsync($"/api/devices/{deleted}");
+        Assert.Equal(HttpStatusCode.NoContent, removal.StatusCode);
+
+        await UpsertSpectatorAsync("TICKET-2", "100002");
+        await GivenDeliveredAsync("TICKET-2", other);
+
+        Assert.Empty(WorkerErrorsAbout(deleted));
+        var worker = Fixture
+            .Factory.Services.GetServices<IHostedService>()
+            .OfType<Api.Infrastructure.Worker.ReplicationWorker>()
+            .Single();
+        Assert.False(worker.ExecuteTask!.IsCompleted);
+    }
+
+    /// <summary>
+    /// The reader answers, and is deleted in the instant before its answer is saved — from
+    /// inside that save, so the row is gone by the time the save reaches the database every
+    /// run. The save then affects no row, and the outcome has nowhere to go: it is let go and
+    /// noted, and nothing about it is a fault.
+    /// </summary>
+    [Fact]
+    public async Task The_answer_of_a_reader_deleted_before_it_was_saved_is_discarded_without_a_fault()
+    {
+        var deleted = await GivenRegisteredDeviceAsync("10.0.2.1");
+        var other = await GivenRegisteredDeviceAsync("10.0.2.2");
+        var discarded = 0;
+        Fixture.Factory.Saves.BeforeCommit(async move =>
+        {
+            if (
+                move is { From: ReplicationStatus.InProgress, To: ReplicationStatus.Succeeded }
+                && move.DeviceId == deleted
+                && Interlocked.CompareExchange(ref discarded, move.Id, 0) == 0
+            )
+            {
+                var removal = await Client.DeleteAsync($"/api/devices/{deleted}");
+                Assert.Equal(HttpStatusCode.NoContent, removal.StatusCode);
+            }
+        });
+
+        await UpsertSpectatorAsync("TICKET-1", "100001");
+
+        await Eventually.UntilAsync(
+            () => Task.FromResult(Fixture.Factory.Logs.Lines),
+            lines =>
+                discarded != 0
+                && lines.Any(line =>
+                    line.StartsWith(WorkerCategory, StringComparison.Ordinal)
+                    && line.Contains($"Replication {discarded} ended Delivered", StringComparison.Ordinal)
+                    && line.Contains("discarded", StringComparison.Ordinal)
+                ),
+            "the outcome has been let go"
+        );
+
+        await UpsertSpectatorAsync("TICKET-2", "100002");
+        await GivenDeliveredAsync("TICKET-2", other);
+
+        Assert.Empty(WorkerErrorsAbout(deleted));
+        Assert.DoesNotContain(await QueuedWorkAsync(), work => work.DeviceId == deleted);
     }
 
     // ─── WRK-33: changing ───

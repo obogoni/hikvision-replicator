@@ -380,15 +380,15 @@ T20 → T21 → T22
 
 ---
 
-### T19: Device deleted mid-call
+### T19: Device deleted mid-call ✅
 
 **What**: A save that affects no row → discard, log, continue; other loops unaffected.
 **Where**: `Infrastructure/Worker/ReplicationOutcomeRecorder.cs`, `IntegrationTests/DeviceChurnTests.cs`
 **Depends on**: T18
 **Requirement**: WRK-24
 **Done when**:
-- [ ] Device deleted while its call is in flight → no exception escapes, the worker keeps delivering to other devices
-- [ ] Full gate passes; ≥ 328 integration
+- [x] Device deleted while its call is in flight → no exception escapes, the worker keeps delivering to other devices — both ways it can land: the call cut off with its loop (batch B cancels a removed reader's loop; the release finds the row gone), and the answer saved after the delete (a save affecting no row, discarded)
+- [x] Full gate passes; ≥ 328 integration (333)
 
 **Tests**: integration · **Gate**: full · **Commit**: `fix(worker): discard the outcome of a call to a deleted reader`
 
