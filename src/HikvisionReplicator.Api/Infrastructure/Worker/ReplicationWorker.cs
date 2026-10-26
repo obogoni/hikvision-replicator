@@ -1,5 +1,7 @@
+using Ardalis.Specification.EntityFrameworkCore;
 using HikvisionReplicator.Api.Domain.Specs;
 using HikvisionReplicator.Api.Shared;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,8 +10,8 @@ using Microsoft.Extensions.Options;
 namespace HikvisionReplicator.Api.Infrastructure.Worker;
 
 /// <summary>
-/// The supervisor (design § ReplicationWorker): keeps one <see cref="DeviceLoop"/> running per
-/// reader in the catalogue. A purpose-built hosted worker inside the API rather than a job
+/// The supervisor (design § ReplicationWorker): expands every outstanding backfill and keeps one
+/// <see cref="DeviceLoop"/> running per reader in the catalogue. A purpose-built hosted worker inside the API rather than a job
 /// runner — the queue already is a table with its own states, lane and supersession (AD-043).
 /// <para>
 /// Each reader gets its own loop so a slow or offline reader never holds up another (WRK-07),
@@ -49,7 +51,8 @@ public sealed partial class ReplicationWorker(
             {
                 try
                 {
-                    await SyncLoopsAsync(stoppingToken);
+                    var owed = await ExpandBackfillsAsync(stoppingToken);
+                    await SyncLoopsAsync(owed, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -82,11 +85,78 @@ public sealed partial class ReplicationWorker(
     }
 
     /// <summary>
+    /// Turns every outstanding backfill debt into the reader's Bulk work, one reader and one
+    /// save at a time (WRK-04, AD-041). Returns the readers whose debt is still outstanding
+    /// afterwards.
+    /// <para>
+    /// A save refused because the queue moved under it is not a fault: another instance settled
+    /// the same debt first, or a live upsert queued the same spectator in between (WRK-34).
+    /// Nothing of the refused save is committed, and the next tick reads the queue afresh.
+    /// </para>
+    /// </summary>
+    private async Task<HashSet<int>> ExpandBackfillsAsync(CancellationToken stoppingToken)
+    {
+        HashSet<int> owed;
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            owed = (
+                await scope
+                    .ServiceProvider.GetRequiredService<AppDbContext>()
+                    .BackfillIntents.WithSpecification(new PendingBackfillDeviceIdsSpec())
+                    .ToListAsync(stoppingToken)
+            ).ToHashSet();
+        }
+
+        foreach (var deviceId in owed.ToList())
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var services = scope.ServiceProvider;
+
+            try
+            {
+                await services
+                    .GetRequiredService<ReplicationFanOut>()
+                    .ExpandBackfillAsync(
+                        deviceId,
+                        timeProvider.GetUtcNow().UtcDateTime,
+                        stoppingToken
+                    );
+                await services.GetRequiredService<AppDbContext>().SaveChangesAsync(stoppingToken);
+                owed.Remove(deviceId);
+            }
+            catch (DbUpdateException exception) when (QueueMovedUnder(services, exception))
+            {
+                // Settled elsewhere, or raced by a live write; read again next tick.
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // One reader's failing debt must not hold up every other reader's (WRK-07).
+                LogBackfillFailed(logger, deviceId, exception);
+            }
+        }
+
+        return owed;
+    }
+
+    private static bool QueueMovedUnder(IServiceProvider services, DbUpdateException exception) =>
+        exception is DbUpdateConcurrencyException
+        || services
+            .GetRequiredService<IReplicationRepository>()
+            .TranslateIfDuplicatePending(exception)
+            .IsT1;
+
+    /// <summary>
     /// Starts a loop for every reader that has none and stops the loop of every reader that has
     /// left the catalogue, so a change takes effect within one poll interval without a restart
     /// (WRK-10). A stopped loop starts no further call (WRK-25).
+    /// <para>
+    /// <b>A reader still owed its backfill gets no loop yet.</b> The expansion skips every
+    /// spectator with live work already pending for the reader (REP-19); a loop that delivered
+    /// that live work first would take it out of Pending, and the expansion would queue the
+    /// same spectator a second time on the bulk lane (WRK-34).
+    /// </para>
     /// </summary>
-    private async Task SyncLoopsAsync(CancellationToken stoppingToken)
+    private async Task SyncLoopsAsync(HashSet<int> owed, CancellationToken stoppingToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var readers = (
@@ -114,7 +184,11 @@ public sealed partial class ReplicationWorker(
             _stopping.Remove(finished);
         }
 
-        foreach (var deviceId in readers.Where(deviceId => !_loops.ContainsKey(deviceId)))
+        foreach (
+            var deviceId in readers.Where(deviceId =>
+                !_loops.ContainsKey(deviceId) && !owed.Contains(deviceId)
+            )
+        )
         {
             var stop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
             _loops[deviceId] = (
@@ -123,6 +197,13 @@ public sealed partial class ReplicationWorker(
             );
         }
     }
+
+    [LoggerMessage(
+        EventId = 31,
+        Level = LogLevel.Error,
+        Message = "Expanding the backfill owed to device {DeviceId} failed; the next tick will retry."
+    )]
+    private static partial void LogBackfillFailed(ILogger logger, int deviceId, Exception exception);
 
     [LoggerMessage(
         EventId = 30,

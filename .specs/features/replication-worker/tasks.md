@@ -296,17 +296,17 @@ T20 → T21 → T22
 
 ---
 
-### T14: Backfill expansion
+### T14: Backfill expansion ✅
 
 **What**: Supervisor expands each pending backfill intent (`PendingBackfillDeviceIdsSpec`, `ExpandBackfillAsync`, one save per device) every tick.
 **Where**: `Infrastructure/Worker/ReplicationWorker.cs`, `Domain/Specs/PendingBackfillDeviceIdsSpec.cs`, `IntegrationTests/BackfillDeliveryTests.cs`
 **Depends on**: T13
 **Requirement**: WRK-04, WRK-34
 **Done when**:
-- [ ] Users exist, device registered → every active user delivered as `Bulk` `Add`; tombstoned users skipped; intent `Expanded`
-- [ ] Two worker hosts → the intent is expanded once, each spectator delivered once
-- [ ] User created during registration → delivered exactly once
-- [ ] Full gate passes; ≥ 311 integration
+- [x] Users exist, device registered → every active user delivered as `Bulk` `Add`; tombstoned users skipped; intent `Expanded`
+- [x] Two worker hosts → the intent is expanded once, each spectator delivered once
+- [x] User created during registration → delivered exactly once
+- [x] Full gate passes; ≥ 311 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): expand a new reader's backfill`
 

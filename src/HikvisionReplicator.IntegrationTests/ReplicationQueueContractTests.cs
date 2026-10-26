@@ -899,6 +899,49 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
     }
 
     /// <summary>
+    /// That a debt settled by one worker cannot be settled again by another that read it as
+    /// outstanding first — even once the first worker's rows have left <c>Pending</c>.
+    /// <para>
+    /// HTTP cannot distinguish it: there is no route, and the interleaving — the second
+    /// expansion read before the first committed, saved after the first's rows were delivered
+    /// — is reachable only by two worker instances winning a scheduling race. Once those rows
+    /// are <c>Succeeded</c> the pending index no longer refuses their duplicates; only the
+    /// debt's row version does, so it is staged here, in that order, every time.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_debt_already_settled_elsewhere_cannot_be_settled_again()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(3);
+
+        using var late = fixture.Factory.Services.CreateScope();
+        await late
+            .ServiceProvider.GetRequiredService<ReplicationFanOut>()
+            .ExpandBackfillAsync(deviceId, Now, CancellationToken.None);
+
+        await ExpandAsync(deviceId);
+        await using (var worker = fixture.CreateDbContext())
+        {
+            foreach (var work in await worker.Replications.ToListAsync())
+            {
+                work.Begin(Now);
+                work.Succeed(Now);
+            }
+            await worker.SaveChangesAsync();
+        }
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            late.ServiceProvider.GetRequiredService<AppDbContext>().SaveChangesAsync()
+        );
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(3, queued.Count);
+        Assert.All(queued, work => Assert.Equal(ReplicationStatus.Succeeded, work.Status));
+    }
+
+    /// <summary>
     /// That the expansion stages into its caller's transaction and commits nothing itself.
     /// <para>
     /// HTTP cannot distinguish it — there is no route — and neither can a test that saves
