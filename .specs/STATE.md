@@ -311,7 +311,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: Phase 2 starts with no default, so `replication-worker` must resolve OD-3 as part of its own design instead of inheriting an answer, and that design work is now on the critical path of the product's core capability. Accepted: AD-014 makes propagation throughput the primary quality attribute, and the superseded "default" was picked for an implementation that no longer exists, storing state in a database that is no longer used. An inherited answer that was never validated against the derived load (`50,000 × D` operations) is not a saving.
 - **Scope**: `.specs/STATE.md` (supersedes AD-010; annotates AD-013's stack clause as historical), `.specs/ROADMAP.md` OD-3. Binds `replication-queue` and `replication-worker`.
 - **Date**: 2026-08-17
-- **Status**: active
+- **Status**: superseded by AD-043 — OD-3 is resolved; the "none is in the solution" half still holds, now as a decision rather than an open question
 
 ### AD-031
 - **Decision**: **`CLAUDE.md` is a hub, not a manual.** It carries only what applies to *every* session and cannot be re-derived from the code; all reference material lives in named topic spokes under `docs/`, linked from the hub. The routing rule for any new content is three-way:
@@ -421,7 +421,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Trade-off**: the decision sits on the critical path of the product's core capability one feature later than it could — the cost AD-030 already accepted — and feature 3 may not lean on a runner's retry, backoff or scheduling primitives in its own tests, which means some of that machinery is exercised only once feature 4 lands.
 - **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-queue` (runner-agnostic constraint) and `replication-worker` (owns the resolution).
 - **Date**: 2026-10-02
-- **Status**: active
+- **Status**: superseded by AD-043 — the deferral ended with feature 4; `replication-queue`'s runner-agnostic shape stands as built
 
 ### AD-040
 - **Decision**: **AD-036's below-HTTP exception is extended to a third contract class**, `ReplicationQueueContractTests`. The rule itself is unchanged — a test may go below HTTP only if it names, in its own doc comment, an observable HTTP cannot distinguish — and the new class carries the same obligation per test. The list of classes in AD-036 is a snapshot of what qualified then, not a cap on what may qualify.
@@ -448,38 +448,28 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 - **Date**: 2026-10-03
 - **Status**: active
 
+### AD-043
+- **Decision**: **OD-3 is resolved: the queue is drained by a purpose-built hosted worker inside the API, claiming directly from the `replications` table. No job runner (Hangfire, Quartz or similar) enters the solution.** Polly is admitted for one job only — a circuit breaker per device that pauses a reader reporting itself unreachable. Durable item retry and dead-lettering live in the table, never in Polly.
+- **Reason**: the queue already is a table with its own state machine, attempt count, lane and supersession (feature 3). Hangfire would add a second job store whose states and retry counter duplicate the aggregate's, give no in-queue ordering guarantee, and resolve PostgreSQL queue priority alphabetically (AD-039) — so per-device ordering and live-first priority would live in our query under either choice, leaving Hangfire as a scheduler with extra state. Polly's breaker fits the device half exactly (trip on unreachable only, half-open probe), but its retry is in-memory and per call, and an item's backoff must survive restarts and span minutes.
+- **Trade-off**: we write and own claiming (`FOR UPDATE SKIP LOCKED` plus a per-device in-progress constraint), lease-based crash recovery, backoff scheduling and graceful shutdown, and there is no job dashboard — Grafana and feature 8 are the operator view. Adds a Polly package reference.
+- **Scope**: `.specs/ROADMAP.md` OD-3. Binds `replication-worker` and every later background process. **Supersedes REP-34** of `replication-queue` (no hosted service in the assembly), which bound only while OD-3 was open. Feature 6 `device-health` builds on the per-device breaker rather than adding a second one.
+- **Date**: 2026-10-26
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: `replication-queue` (`.specs/features/replication-queue/`) — **complete and verified**, awaiting review on a PR off `main` at `f2e3a9e`.
-- **Phase / Task**: all 5 phases, T1–T25 plus T6b, done. Execute finished; the Verifier returned **PASS**.
-- **Completed**: spec.md · context.md · design.md · tasks.md · validation.md. 36 commits on `feat/replication-queue` — 26 code commits, one per task, nothing batched. Executed as four sequential batch sub-agents (T1–T6, T6b+T7–T12, T13–T21, T22–T25), then a fresh Verifier. **Author ≠ verifier held** (AD-028).
+- **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2.
+- **Phase / Task**: Specify done and confirmed (WRK-01…WRK-35, context.md). **Design starting.**
+- **Completed**: `replication-queue` squash-merged to `main` as `173f8c1` (#17). OD-3 resolved by AD-043 — own hosted worker, no job runner, Polly per-device breaker only.
 - **In-progress** (file:line): none.
-- **Test totals**: **364 unit · 286 integration**, both green. Entering the feature: 282 · 193.
-- **Verifier result**: 47/47 criteria matched their spec-defined outcome, **0 spec-precision gaps**. Discrimination sensor at P0 depth: **17 mutations, 17 killed, 0 survived** — including dispatch moved after `base.SaveChangesAsync`, `UserChanged` raised outside the `changed` branch, the pending-index filter dropped, the two FK delete behaviours inverted, and the admission boundary flipped.
-- **Next step**: review and squash-merge the PR, then `replication-worker` (feature 4), which **owns OD-3** — the job-runner decision AD-039 deferred to it.
+- **Next step**: write `design.md` — verify the Polly v8 circuit-breaker API against current docs first; design the `IDeviceClient` port + fake, the claim query, the per-device in-progress index, the release / `NextAttemptAt` additions to `Replication`.
 - **Blockers**: none.
-- **Uncommitted files**: none tracked. `.agents/` and `.claude/` remain untracked and undecided.
-- **Branch**: `feat/replication-queue`, based on `main` at `f2e3a9e`.
+- **Uncommitted files**: none tracked. `.agents/`, `.claude/`, `.design/` untracked and undecided.
+- **Branch**: `feat/replication-worker`, based on `main` at `173f8c1`.
 
-### What `replication-queue` established that later features inherit
+### Still outstanding
 
-- **The write path fans out through domain events** (AD-042). Aggregates raise from the branch that already decided what happened; `AppDbContext.SaveChangesAsync` dispatches **before** `base` and clears events **only after it returns**. An after-commit dispatch would stage into a second save and silently void atomicity — the Verifier killed exactly that mutation with 35 tests.
-- **The queue stages, it never saves** (AD-041). `ReplicationFanOut` adds entities to the change tracker the calling slice already owns. Feature 4 inherits this: a worker writing a result alongside a transition stages both and saves once.
-- **`IX_replications_pending`** — `UNIQUE (UserId, DeviceId) WHERE Status = 'Pending'` — is the one-pending-per-pair invariant, enforced by the database, never by a read-then-write check. `UserRepository` consults the queue's translation, because the save that commits the fan-out is `SaveIfKeysFreeAsync` and an untranslated `23505` there surfaces as a **500**.
-- **The capacity guard is fleet admission, not per-replication.** Its basis is the active user count, so it fires at device registration and at a capacity reduction — the two moments that can change the answer. A drain that would overfill still fails in feature 4.
-- **Backfill is lazy**: registration records one intent; `ExpandBackfillAsync` is invocable directly and is what feature 4 will schedule. Nothing in this feature runs it.
-- **Counters fire at staging time**, before the commit, so a write that then loses the index race is counted for work it did not leave behind. The tables are the authority; the metrics are rate signals.
-
-### Findings worth carrying forward
-
-- **A registration event cannot carry an id.** `UserRegistered` and `DeviceRegistered` are raised inside the static factory, where the database-generated key is still `0`. The design said "carrying only the aggregate id" and was wrong; events carry the aggregate, and `Replication`/`BackfillIntent` carry navigations so EF fixes the key up at save (T6b). Found by a batch worker before any mapping existed to hide it.
-- **A task that says "X still compiles unchanged" after adding abstract members to its interface is unsatisfiable.** Twice: T1 (`User`/`Device`) and T15 (a startup guard that must fail when an event has no handler, while no handler type exists). Both were resolved by shipping the enabling type in the earlier task, not by weakening the criterion.
-- **EF Core 10 refuses `Migrate()` while the model carries changes no migration covers.** Mapping an aggregate without shipping its migration in the same task turns every integration test red at fixture startup. Migrations belong with their mapping task.
-- **`FaceCapacity` is persisted through a value converter, so `capacity < roster` does not translate to SQL.** The comparison runs in memory over AD-038's ≤20 readers.
-- **`scripts/lessons.py list` mutates the store.** `_auto_prune` runs on read, so a status check silently drops candidates past `window_days = 45`. It cost two agents this session: six lessons were pruned and committed early on, and the Verifier's read pruned a further 36 before it reverted them. **Only L-007 is confirmed**, so the rest are decaying out of a 45-day window on every read — either promote what has recurred or widen the window, or the store empties itself.
-- **`CA1711` on `IDomainEventHandler`** is a new, unsuppressed warning (17 total, 0 errors). The name comes from the design; the repo already carries the same rule unsuppressed for `PostgresCollection`. Left visible for a decision rather than hidden in `.editorconfig`.
-
-### Still outstanding from `user-registry`
-
-1. **The semantic-image-quality gap is still missing from `ROADMAP.md` § Known Gaps.** The face pipeline proves an image is mechanically acceptable, never that it is a usable face. One table row.
-2. **A-13 carries a standing Phase 3 obligation.** The 40–200 KB band and 640×480 floor come from DS-K1T606 documentation, not the official ISAPI envelope. `isapi-device-client` must verify both against real hardware.
+1. **`scripts/lessons.py list` mutates the store** (auto-prune on read). Only L-007 is confirmed; revert `.specs/LESSONS.md` / `lessons.json` after any read until the window is widened or lessons are promoted.
+2. **`CA1711` on `IDomainEventHandler`** — unsuppressed warning awaiting a decision.
+3. **Semantic-image-quality gap** still missing from `ROADMAP.md` § Known Gaps.
+4. **A-13** — 40–200 KB band and 640×480 floor must be verified on real hardware in `isapi-device-client`.
