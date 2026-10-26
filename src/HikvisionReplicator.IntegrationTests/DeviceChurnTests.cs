@@ -31,12 +31,18 @@ public class DeviceChurnTests(WorkerPostgresFixture fixture) : WorkerApiTests(fi
         var joined = await GivenRegisteredDeviceAsync("10.0.2.2");
         await UpsertSpectatorAsync("TICKET-2", "100002");
 
+        // The joined reader is also owed the spectator registered before it, by its backfill,
+        // so the call that proves it is served is picked out by reference.
         var calls = await CallsUntilAsync(
-            calls => calls.Any(call => call.DeviceId == joined),
+            calls => calls.Any(call => call.DeviceId == joined && call.ExternalRef == "TICKET-2"),
             "the reader that joined has been called",
             within: TimeSpan.FromSeconds(2)
         );
-        Assert.Equal("TICKET-2", Assert.Single(calls, call => call.DeviceId == joined).ExternalRef);
+        Assert.Equal(
+            ReplicationOperation.Add,
+            Assert.Single(calls, call => call.DeviceId == joined && call.ExternalRef == "TICKET-2")
+                .Operation
+        );
     }
 
     // ─── WRK-10 / WRK-25: leaving ───
