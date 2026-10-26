@@ -52,6 +52,13 @@ public class ReplicationConfiguration : IEntityTypeConfiguration<Replication>
         builder.Property(replication => replication.CreatedAt).IsRequired();
         builder.Property(replication => replication.UpdatedAt).IsRequired();
 
+        // SPEC_DEVIATION: NextAttemptAt is ignored rather than mapped.
+        // Reason: the domain property landed in replication-worker T1, but its column and the
+        // AddReplicationWorker migration are T8's. Mapped by convention in between, the model
+        // has pending changes and Migrate() refuses to start the host. T8 replaces this line
+        // with the mapping, in the same commit as the migration.
+        builder.Ignore(replication => replication.NextAttemptAt);
+
         builder
             .Property(replication => replication.LastError)
             .HasMaxLength(Replication.MaxLastErrorLength);
