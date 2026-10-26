@@ -7,12 +7,22 @@
 `spec.md` and the diff, evidence-or-zero. Task checkboxes and commit messages were not taken as
 evidence.
 
-**Verdict (iteration 2, current): FAIL ❌.** All four iteration-1 gaps are closed: M15, M16,
+**Verdict (iteration 3, current): PASS ✅.** Iteration 2's one remaining gap (Fix 5) is closed by
+`6d93588`. The relaxed assertion in `A_deleted_reader_is_called_no_more` matches design.md:234
+exactly and lost no discrimination: the old strict form did not kill the relevant mutant either.
+The production reorder keeps WRK-21 and WRK-33. The gate is green on three consecutive full
+integration runs. No gaps remain. See § Iteration 3.
+
+<details><summary>Iteration 2 verdict (superseded)</summary>
+
+**Verdict: FAIL ❌.** All four iteration-1 gaps are closed: M15, M16,
 M20 and M21 are now killed. The production fix `f082fae` is sound, and its regression mutant M22
 is killed 5 of 5 runs. One gap remains, and it is minor and test-only. The gate is not reliably
 green: `DeviceChurnTests.A_deleted_reader_is_called_no_more` failed in 1 of 3 full integration
 runs. The test asserts more than design.md:234 promises, and the reload-to-call gap in
 `DeviceLoop` lets a call start just after a delete commits. See § Iteration 2.
+
+</details>
 
 **Correction to iteration 1.** Iteration 1 said "No production defect was found." That was
 wrong. The supervisor had a WRK-34 race: it read the debts, then the catalogue. A reader
@@ -30,6 +40,80 @@ feature is marked done. All four gaps are minor and test-only. No production def
 *(corrected above)*.
 
 </details>
+
+---
+
+## Iteration 3 — re-verification of Fix 5 (2026-10-26)
+
+**Scope**: `0cab553..6d93588`, one commit. It reorders the device reload in
+`Api/Infrastructure/Worker/DeviceLoop.cs` and relaxes one assertion in
+`IntegrationTests/DeviceChurnTests.cs`. Paths are relative to `src/`. Every claim below was re-run.
+The commit message was not taken as evidence.
+
+### 3.1 The relaxed assertion against WRK-25 and design § Risks
+
+- **What the contract promises.** WRK-25 says no further call after a delete. design.md:234 records
+  that this cannot be absolute: no call **starts once the delete is observed**, since the device
+  is reloaded right before the call. A call already on the wire completes, and its outcome is
+  discarded (WRK-24).
+- **What the test can observe.** The fake stamps a call when it **starts**
+  (`Api/Infrastructure/FakeDeviceClient.cs:174-179`, `timeProvider.GetUtcNow()` before the latency
+  wait). So a call that was on the wire at the delete is never counted. The only call that can
+  start after `deletedAt` is the item the loop already holds, whose reload
+  (`DeviceLoop.cs:226-230`) ran just before the delete committed. One loop is serial, so it holds
+  at most one item. The cascade (`Api/Infrastructure/ReplicationConfiguration.cs:126`) leaves
+  nothing for a later claim. The supervisor also stops the loop (`ReplicationWorker.cs:169-180`).
+- **Judgement: exact, not weaker.** `<= 1` (`DeviceChurnTests.cs:85`) is the precise size of the
+  window the design accepts. A second call can only mean the loop took new work after the delete,
+  and that is what the assertion message names. The old `DoesNotContain` asserted more than the
+  design promises. That was iteration 2's finding, and it was the source of the 1-in-3 flake.
+
+### 3.2 The production reorder
+
+| Concern | Evidence | Status |
+| --- | --- | --- |
+| WRK-21: tombstone decided before the face is read | `DeviceLoop.cs:213` (`BeforeCall`) still precedes `:220` (`LoadPictureAsync`) | ✅ |
+| WRK-33: address and credentials read for this call | Reload at `:226-228`, after the user and picture loads, before `CallAsync` at `:240`. `A_reader_whose_address_and_password_changed_is_reached_at_the_new_ones` (`DeviceChurnTests.cs:201-226`) passes and kills M23 below | ✅ |
+| WRK-25: reload sits right before the call | Nothing between `:230` and `:240` but building the endpoint and decrypting | ✅ Window narrowed, as design.md:234 asks |
+| New path: tombstoned spectator on a reader deleted since the claim | It now reaches `SupersedeWithoutCallAsync` before the reload. That save then hits a cascade-deleted row, and `ReplicationOutcomeRecorder.cs:187` catches the concurrency failure and discards it (WRK-24). No call is made | ✅ No fault and no call |
+
+**Precision note (not a gap).** design.md § DeviceLoop step 4 (line 128) still lists "Load device"
+before "load user". The binding text is the Risks row (`:234`), which the new order satisfies more
+tightly. Refresh the step order the next time design.md is touched.
+
+### 3.3 Discrimination
+
+Each mutant was injected in the working tree and run, then removed with `git checkout -- src/`.
+`git status` was clean afterwards.
+
+| ID | Mutation | Result | Killed by |
+| --- | --- | --- | --- |
+| M23 | Reload and `ReaderGone` check removed. The device is read once per reader and reused for every later call | ✅ Killed 3/3 | `DeviceChurnTests.A_reader_whose_address_and_password_changed_is_reached_at_the_new_ones`. `A_deleted_reader_is_called_no_more` survives |
+| M24 | The loop ignores `Cycle.ReaderGone` and keeps claiming (`DeviceLoop.cs:82` `return` → `continue`) | ⚪ Equivalent: survives churn ×3 and the full suite (340/340) | — |
+
+- **No discrimination lost by the relaxation.** The old strict assertion (`<= 0`, equivalent to the
+  former `DoesNotContain`) was put back temporarily and run 6× under M23. It passed 6/6. So the old
+  test did not kill M23 either, and its only extra power was the flake.
+- **Why M24 is equivalent.** After the delete, the cascade removes every row for that reader, so a
+  loop that keeps claiming finds nothing. It idles until the supervisor stops it within one tick.
+  It cannot start a call. The `ReaderGone` exit is an early stop, not the WRK-25 guard. The guard is
+  the reload plus the cascade.
+- **Not discriminated, by nature: the reorder itself.** Moving the reload after the user and picture
+  loads only narrows a timing window that was already accepted. No deterministic test can tell the
+  iteration-2 order from the new one, and none is required, because both satisfy design.md:234.
+
+### 3.4 Gate
+
+| Check | Result |
+| --- | --- |
+| `dotnet build HikvisionReplicator.slnx --no-incremental` | 0 errors, 17 warnings (baseline, CS0618 Testcontainers ctor) |
+| `dotnet test src/HikvisionReplicator.Tests` | 465 passed, 0 failed |
+| `dotnet test src/HikvisionReplicator.IntegrationTests` | 340/340 passed on **three** consecutive full runs (two before the mutants, one after a clean rebuild) |
+
+### 3.5 Outcome
+
+Fix 5 is closed. All 35 criteria are verified, and iterations 1–2 have no open survivors. M24 is
+classified as equivalent. **PASS ✅.**
 
 ---
 
