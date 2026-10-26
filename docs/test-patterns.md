@@ -180,7 +180,7 @@ share `WorkerApiTests` as their base, the way the use-case classes share `UserAp
 
 | Situation | Class |
 |---|---|
-| Queued work reaching every reader — payloads, order, one call per reader (WRK-01…WRK-08, WRK-31, WRK-32) | `DeliveryTests` (12) |
+| Queued work reaching every reader — payloads, order, one call per reader (WRK-01…WRK-08, WRK-31, WRK-32) | `DeliveryTests` (13) |
 | A new reader's backfill expanded and delivered (WRK-04, WRK-34) | `BackfillDeliveryTests` (4) |
 | Readers joining, leaving and changing under a running worker (WRK-10, WRK-24, WRK-25, WRK-33) | `DeviceChurnTests` (5) |
 | A reader off the network — release, pause, probe (WRK-11…WRK-14) | `OfflineReaderTests` (3) |

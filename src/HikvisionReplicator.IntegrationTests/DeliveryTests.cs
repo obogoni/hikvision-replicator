@@ -1,6 +1,10 @@
+using System.Data.Common;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Infrastructure.Worker;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -445,7 +449,73 @@ public class DeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixtu
     }
 
     /// <summary>
-    /// The one test here that has to watch a window go by: with no reader at all there is
+    /// Counts the queries a host sends to find a reader's next piece of work — the one place a
+    /// worker's checks of the queue can be seen, since an idle check calls no reader and changes
+    /// no row. Only the claim look filters on the backoff instant, so that is what picks it out.
+    /// </summary>
+    private sealed class QueueChecks : DbCommandInterceptor
+    {
+        private int _count;
+
+        public int Count => Volatile.Read(ref _count);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default
+        )
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            if (command.CommandText.Contains("\"NextAttemptAt\" <=", StringComparison.Ordinal))
+                Interlocked.Increment(ref _count);
+
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <summary>
+    /// A reader with nothing queued, on a host of its own polling every quarter second. Watched
+    /// for two seconds, its loop must look about eight times — not the thousands a loop that
+    /// went straight back to the queue would. A fixed window, unlike everywhere else here,
+    /// because the claim is a rate: nothing the worker does marks the moment it has waited
+    /// enough, so the test lets a known span pass and counts. Each look asks for live work and
+    /// then bulk work, two queries; the bound allows two looks of slack either side.
+    /// </summary>
+    [Fact]
+    public async Task An_idle_reader_is_checked_once_a_poll_interval_rather_than_continuously()
+    {
+        var poll = TimeSpan.FromMilliseconds(250);
+        var window = TimeSpan.FromSeconds(2);
+        var checks = new QueueChecks();
+        await using var host = await Fixture.StartIsolatedHostAsync(
+            new Dictionary<string, string?> { ["ReplicationWorker:PollInterval"] = poll.ToString() },
+            builder =>
+                builder.ConfigureServices(services =>
+                    services.ConfigureDbContext<AppDbContext>(options =>
+                        options.AddInterceptors(checks)
+                    )
+                )
+        );
+        using var client = host.CreateClient();
+        var reader = await GivenRegisteredDeviceAsync("10.0.1.1", via: client);
+
+        await Eventually.UntilAsync(
+            () => Task.FromResult(checks.Count),
+            count => count > 0,
+            "the reader's loop has looked at the queue"
+        );
+        var before = checks.Count;
+        await Task.Delay(window);
+        var looks = (checks.Count - before) / 2.0;
+
+        var expected = window / poll;
+        Assert.InRange(looks, expected - 2, expected + 2);
+        Assert.DoesNotContain(host.Readers.Calls, call => call.DeviceId == reader);
+    }
+
+    /// <summary>
+    /// One of two tests here that have to watch a window go by: with no reader at all there is
     /// nothing whose delivery could mark the worker as having looked. The window is many
     /// polls long, and the assertion is that the worker is still running and called no one.
     /// </summary>
