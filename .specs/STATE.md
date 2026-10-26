@@ -467,10 +467,10 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 ## Handoff
 
 - **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2.
-- **Phase / Task**: Specify confirmed. **Design drafted** (`design.md`), awaiting approval; then Tasks.
+- **Phase / Task**: Specify and Design approved. **tasks.md drafted** (T1–T22, 3 batches), awaiting approval; then Execute.
 - **Completed**: `replication-queue` squash-merged to `main` as `173f8c1` (#17). OD-3 resolved by AD-043 — own hosted worker, no job runner, own `DevicePause` (Polly rejected: v8 is ratio-only). AD-044 extends the transition table and adds an `xmin` token.
 - **In-progress** (file:line): none.
-- **Next step**: get design approval, then write `tasks.md`.
+- **Next step**: approve tasks.md, then Execute batch A (Phase 1, T1–T7).
 - **Blockers**: none.
 - **Uncommitted files**: none tracked. `.agents/`, `.claude/`, `.design/` untracked and undecided.
 - **Branch**: `feat/replication-worker`, based on `main` at `173f8c1`.
