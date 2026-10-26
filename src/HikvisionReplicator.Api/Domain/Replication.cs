@@ -36,6 +36,13 @@ public class Replication : AggregateRoot, IAggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// The earliest moment a requeued rejection may be taken again (WRK-16). <c>null</c> means
+    /// eligible now — new work, work released without an attempt counted, and anything already
+    /// taken in hand, since a backoff only ever governs the next claim.
+    /// </summary>
+    public DateTime? NextAttemptAt { get; private set; }
+
     private Replication() { } // for EF Core
 
     private Replication(
@@ -88,9 +95,24 @@ public class Replication : AggregateRoot, IAggregateRoot
         return replication;
     }
 
-    /// <summary>Takes the work in hand: <c>Pending → InProgress</c>.</summary>
-    public OneOf<Success, ValidationError> Begin(DateTime now) =>
-        MoveTo(ReplicationStatus.Pending, ReplicationStatus.InProgress, Errors.CannotBegin, now);
+    /// <summary>
+    /// Takes the work in hand: <c>Pending → InProgress</c>. Any backoff is spent the moment the
+    /// work is claimed, so it is cleared here rather than left to describe a past wait.
+    /// </summary>
+    public OneOf<Success, ValidationError> Begin(DateTime now)
+    {
+        var result = MoveTo(
+            ReplicationStatus.Pending,
+            ReplicationStatus.InProgress,
+            Errors.CannotBegin,
+            now
+        );
+
+        if (result.IsT0)
+            NextAttemptAt = null;
+
+        return result;
+    }
 
     /// <summary>The device accepted it: <c>InProgress → Succeeded</c>, terminal.</summary>
     public OneOf<Success, ValidationError> Succeed(DateTime now) =>
@@ -119,6 +141,26 @@ public class Replication : AggregateRoot, IAggregateRoot
     /// </summary>
     public OneOf<Success, ValidationError> Retry(DateTime now) =>
         MoveTo(ReplicationStatus.Failed, ReplicationStatus.Pending, Errors.CannotRetry, now);
+
+    /// <summary>
+    /// Back into the queue after a rejection, but not before <paramref name="notBefore"/>:
+    /// <c>Failed → Pending</c> (AD-044). The wait is held on the row rather than in a worker's
+    /// memory, so it survives a restart, and the attempt count survives with it (REP-31).
+    /// </summary>
+    public OneOf<Success, ValidationError> Retry(DateTime now, DateTime notBefore)
+    {
+        var result = MoveTo(
+            ReplicationStatus.Failed,
+            ReplicationStatus.Pending,
+            Errors.CannotRetry,
+            now
+        );
+
+        if (result.IsT0)
+            NextAttemptAt = notBefore;
+
+        return result;
+    }
 
     /// <summary>
     /// A newer intent replaced this one: <c>Pending → Superseded</c>, terminal. In-flight

@@ -89,7 +89,7 @@ T20 → T21 → T22
 
 ## Task Breakdown
 
-### T1: `Replication` — rejection backoff (`NextAttemptAt`, `Retry(now, notBefore)`)
+### T1: `Replication` — rejection backoff (`NextAttemptAt`, `Retry(now, notBefore)`) ✅
 
 **What**: Add `NextAttemptAt`; add `Retry(DateTime now, DateTime notBefore)` (`Failed → Pending`, sets `NextAttemptAt`); `Begin` clears it; the existing `Retry(now)` keeps REP-31 and leaves `NextAttemptAt` null.
 **Where**: `Domain/Replication.cs`, `Tests/Domain/ReplicationTransitionTests.cs`
@@ -98,10 +98,10 @@ T20 → T21 → T22
 **Requirement**: WRK-16, WRK-19 (domain half)
 **Tools**: MCP: NONE · Skill: NONE
 **Done when**:
-- [ ] Retry with not-before → `Pending`, `NextAttemptAt == notBefore`, attempt count preserved
-- [ ] `Begin` clears `NextAttemptAt`; a new replication has `NextAttemptAt == null`
-- [ ] Retry from any non-`Failed` status refused, every field unchanged
-- [ ] Quick gate passes; ≥ 368 unit
+- [x] Retry with not-before → `Pending`, `NextAttemptAt == notBefore`, attempt count preserved
+- [x] `Begin` clears `NextAttemptAt`; a new replication has `NextAttemptAt == null`
+- [x] Retry from any non-`Failed` status refused, every field unchanged
+- [x] Quick gate passes; ≥ 368 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(replication): schedule a rejected attempt's retry`
 

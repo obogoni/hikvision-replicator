@@ -8,6 +8,7 @@ public class ReplicationTransitionTests
     private static readonly DateTime StartedOn = new(2026, 10, 3, 18, 0, 5, DateTimeKind.Utc);
     private static readonly DateTime SettledOn = new(2026, 10, 3, 18, 0, 9, DateTimeKind.Utc);
     private static readonly DateTime RefusedOn = new(2026, 10, 3, 19, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime RetryDueOn = new(2026, 10, 3, 19, 0, 4, DateTimeKind.Utc);
 
     private sealed record Snapshot(
         ReplicationStatus Status,
@@ -271,5 +272,88 @@ public class ReplicationTransitionTests
         work.Fail(complaint, SettledOn);
 
         Assert.Equal(complaint, work.LastError);
+    }
+
+    // ─── WRK-16 / WRK-19 (AD-044): a rejection waits out its backoff on the row itself ───
+
+    [Fact]
+    public void Rejected_work_goes_back_into_the_queue_to_wait_out_its_backoff()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+
+        var result = work.Retry(RefusedOn, RetryDueOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Equal("device said no", work.LastError);
+        Assert.Equal(RefusedOn, work.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(ReplicationStatus.Pending)]
+    [InlineData(ReplicationStatus.InProgress)]
+    [InlineData(ReplicationStatus.Succeeded)]
+    [InlineData(ReplicationStatus.Superseded)]
+    public void Only_failed_work_can_be_queued_to_wait_out_a_backoff(ReplicationStatus status)
+    {
+        var work = InStatus(status);
+        var before = Capture(work);
+
+        var result = work.Retry(RefusedOn, RetryDueOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(Replication.Errors.StatusField, result.AsT1.Field);
+        Assert.Equal(Replication.Errors.CannotRetry, result.AsT1.Message);
+        Assert.Equal(before, Capture(work));
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void Work_already_waiting_out_a_backoff_cannot_have_it_moved()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        var before = Capture(work);
+
+        var result = work.Retry(SettledOn, RetryDueOn.AddMinutes(5));
+
+        Assert.True(result.IsT1);
+        Assert.Equal(before, Capture(work));
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void New_work_is_eligible_at_once()
+    {
+        var work = Queued();
+
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void Taking_work_in_hand_spends_its_backoff()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+
+        work.Begin(RetryDueOn);
+
+        Assert.Equal(ReplicationStatus.InProgress, work.Status);
+        Assert.Null(work.NextAttemptAt);
+        Assert.Equal(1, work.AttemptCount);
+    }
+
+    [Fact]
+    public void Failed_work_requeued_without_a_backoff_is_eligible_at_once()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+
+        work.Retry(RefusedOn);
+
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Null(work.NextAttemptAt);
+        Assert.Equal(1, work.AttemptCount);
     }
 }
