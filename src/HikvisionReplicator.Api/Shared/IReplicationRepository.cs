@@ -35,4 +35,25 @@ public interface IReplicationRepository : IRepository<Replication>
     /// </para>
     /// </summary>
     OneOf<Success, ConflictError> TranslateIfDuplicatePending(DbUpdateException exception);
+
+    /// <summary>
+    /// Reports whether a failed save lost a row-version race on queued work and nothing else
+    /// (AD-044) — typically the fan-out superseding a <c>Pending</c> row the worker claimed
+    /// between the fan-out's read and its save. The caller answers it with
+    /// <see cref="DuplicatePendingWork"/>: the integrator re-sends, exactly as REP-13 already
+    /// behaves, and the re-send finds the claim and queues beside it (REP-12).
+    /// <para>
+    /// <b>Only when every conflicting entry is a replication.</b> A concurrency failure on a
+    /// spectator or a reader — a row removed behind a tracked instance — is a fault, and a
+    /// conflict the caller can do nothing about would hide it.
+    /// </para>
+    /// <para>
+    /// Static rather than an instance member because it keys off the entries' type, not off
+    /// anything a repository holds — so the device repository can ask it without taking the
+    /// queue as a dependency.
+    /// </para>
+    /// </summary>
+    static bool LostRaceForQueuedWork(DbUpdateException exception) =>
+        exception is DbUpdateConcurrencyException { Entries.Count: > 0 } concurrency
+        && concurrency.Entries.All(entry => entry.Entity is Replication);
 }

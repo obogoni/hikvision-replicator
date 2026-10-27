@@ -31,6 +31,27 @@ public class ReplicationConfiguration : IEntityTypeConfiguration<Replication>
     public const string PendingRowsFilter = "\"Status\" = 'Pending'";
 
     /// <summary>
+    /// WRK-06: at most one operation in a reader's hands at any moment, across every worker
+    /// instance. A partial unique index, so the database arbitrates two claims for one reader
+    /// rather than an in-memory lock or a read-then-write check (AD-022). Named so the worker
+    /// can recognise its refusal as "another instance holds this reader".
+    /// </summary>
+    public const string DeviceInProgressIndexName = "IX_replications_device_in_progress";
+
+    /// <summary>
+    /// The claim query's index: one reader's pending work, by lane, oldest first (WRK-05).
+    /// The worker reads it once per lane — never ordered by lane, because the stored words
+    /// sort <c>Bulk</c> before <c>Live</c>.
+    /// </summary>
+    public const string DevicePendingIndexName = "IX_replications_device_pending";
+
+    /// <summary>EF's convention name for the cascading foreign key's index, kept explicitly.</summary>
+    public const string DeviceForeignKeyIndexName = "IX_replications_DeviceId";
+
+    /// <summary>The partial-index predicate that scopes per-reader exclusivity to work in hand.</summary>
+    public const string InProgressRowsFilter = "\"Status\" = 'InProgress'";
+
+    /// <summary>
     /// Enums are stored as words, not ordinals: feature 8 puts this table in front of
     /// operators, and inserting a member must not silently re-map the rows already written.
     /// </summary>
@@ -51,6 +72,15 @@ public class ReplicationConfiguration : IEntityTypeConfiguration<Replication>
         builder.Property(replication => replication.AttemptCount).IsRequired();
         builder.Property(replication => replication.CreatedAt).IsRequired();
         builder.Property(replication => replication.UpdatedAt).IsRequired();
+
+        // Nullable on purpose: null is "eligible now", which is every row but a rejection
+        // waiting out its backoff (WRK-16).
+        builder.Property(replication => replication.NextAttemptAt);
+
+        // PostgreSQL's xmin system column, so no column is added (AD-044). It closes the race
+        // between the fan-out superseding a pending row and the worker claiming it: whichever
+        // saves second finds the version moved and is refused instead of overwriting.
+        builder.Property(replication => replication.Version).IsRowVersion();
 
         builder
             .Property(replication => replication.LastError)
@@ -106,5 +136,32 @@ public class ReplicationConfiguration : IEntityTypeConfiguration<Replication>
         builder
             .HasIndex(replication => new { replication.Lane, replication.Status })
             .HasDatabaseName(LaneStatusIndexName);
+
+        // Named explicitly, and declared rather than left to convention: the two indexes below
+        // lead with DeviceId, and EF drops its convention foreign-key index once another index
+        // covers the column. Both are partial, so neither serves the cascade a device delete
+        // runs across every row it owns.
+        builder
+            .HasIndex(replication => replication.DeviceId, DeviceForeignKeyIndexName)
+            .HasDatabaseName(DeviceForeignKeyIndexName);
+
+        builder
+            .HasIndex(replication => replication.DeviceId, DeviceInProgressIndexName)
+            .IsUnique()
+            .HasDatabaseName(DeviceInProgressIndexName)
+            .HasFilter(InProgressRowsFilter);
+
+        builder
+            .HasIndex(
+                replication => new
+                {
+                    replication.DeviceId,
+                    replication.Lane,
+                    replication.CreatedAt,
+                },
+                DevicePendingIndexName
+            )
+            .HasDatabaseName(DevicePendingIndexName)
+            .HasFilter(PendingRowsFilter);
     }
 }

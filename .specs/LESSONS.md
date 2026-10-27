@@ -234,6 +234,78 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: src/HikvisionReplicator.IntegrationTests/UserObservabilityTests.cs:190 (testing)
 - last seen: 2026-08-26T21:36:10Z
 
+### L-044 — When asserting a duration metric, make every candidate start instant differ in the test; a frozen clock that makes creation and claim coincide cannot tell which interval is measured.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `metrics` · harmful: 0
+- features: replication-worker
+- evidence: validation.md M15 (WRK-26) (metrics)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-045 — Assert every timestamp a criterion says comes from the injected clock, not only the last one; an unasserted stamp can silently read the wall clock.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: validation.md M20 (WRK-03) (worker)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-046 — Give an idle-wait rule a counting assertion over a window; asserting only that no external call was made passes a loop that spins on the database.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: validation.md M21 (WRK-31) (worker)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-047 — When a guard only matters on a retry, test it by forcing the first attempt to fail; a test whose first attempt always succeeds never reaches the guarded window.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: validation.md M16 (WRK-34) (worker)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-048 — State a latency criterion as a numeric bound a test can assert; 'within one poll interval' ends up tested at a deadline orders of magnitude looser.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `spec` · harmful: 0
+- features: replication-worker
+- evidence: WRK-01, WRK-10 (spec)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-049 — When a row-version token closes a multi-writer race, check every table those writers settle, not only the one the design names.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `persistence` · harmful: 0
+- features: replication-worker
+- evidence: BackfillIntentConfiguration.cs:35 (persistence)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-050 — When a criterion keeps what an attempt cost, verify the terminal transition carries this attempt's fields rather than the previous attempt's.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `domain` · harmful: 0
+- features: replication-worker
+- evidence: ReplicationOutcomeRecorder.cs:304 (domain)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-051 — Split a decision function where its inputs come into existence; one function spanning before and after a call needs a fake outcome for a call never made.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: OutcomeDecision.cs:45 (worker)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-052 — Gate a hosted service on bound options at run time, not on builder configuration at registration; test hosts layer configuration after Program reads it.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `hosting` · harmful: 0
+- features: replication-worker
+- evidence: ReplicationWorker.cs:42 (hosting)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-053 — Cancel an in-flight call to a deleted resource rather than completing it, when deletion leaves no row to record its outcome.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: ReplicationWorker.cs:173 (worker)
+- last seen: 2026-10-26T21:45:49Z
+
+### L-054 — When a periodic supervisor gates an action on several separate reads, order the reads so each later read is a superset of what the earlier one admits, because under read committed every query sees its own snapshot
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `worker` · harmful: 0
+- features: replication-worker
+- evidence: WRK-34; f082fae ReplicationWorker.cs:56-61; mutant M22 (worker)
+- last seen: 2026-10-26T22:40:35Z
+
+### L-055 — When code guards an action with a check-then-act read, bound the test's assertion from the moment the guard can observe the change, not from the moment the test made it, or the check-to-act gap makes the test flaky
+- signal: `gate_fail` · recurrence: 1 feature(s) · scope: `tests` · harmful: 0
+- features: replication-worker
+- evidence: DeviceChurnTests.cs:78 flake (iteration-2 integration run 1); DeviceLoop.cs:209-235 reload-to-call gap; design.md:234 (tests)
+- last seen: 2026-10-26T22:41:05Z
+
 ## Quarantined (failed when applied — ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

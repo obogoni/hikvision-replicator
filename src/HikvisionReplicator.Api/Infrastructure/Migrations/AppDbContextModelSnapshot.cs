@@ -47,6 +47,12 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceId")
@@ -152,6 +158,9 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Operation")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -168,9 +177,13 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
-                    b.HasIndex("DeviceId");
+                    b.HasKey("Id");
 
                     b.HasIndex("Lane", "Status")
                         .HasDatabaseName("IX_replications_lane_status");
@@ -178,6 +191,18 @@ namespace HikvisionReplicator.Api.Infrastructure.Migrations
                     b.HasIndex("UserId", "DeviceId")
                         .IsUnique()
                         .HasDatabaseName("IX_replications_pending")
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.HasIndex(new[] { "DeviceId" }, "IX_replications_DeviceId")
+                        .HasDatabaseName("IX_replications_DeviceId");
+
+                    b.HasIndex(new[] { "DeviceId" }, "IX_replications_device_in_progress")
+                        .IsUnique()
+                        .HasDatabaseName("IX_replications_device_in_progress")
+                        .HasFilter("\"Status\" = 'InProgress'");
+
+                    b.HasIndex(new[] { "DeviceId", "Lane", "CreatedAt" }, "IX_replications_device_pending")
+                        .HasDatabaseName("IX_replications_device_pending")
                         .HasFilter("\"Status\" = 'Pending'");
 
                     b.ToTable("replications", (string)null);
