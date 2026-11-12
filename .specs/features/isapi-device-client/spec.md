@@ -223,8 +223,8 @@ that a slow or refusing reader can be diagnosed without packet captures.
 **Acceptance Criteria**:
 
 1. **ISA-28** — WHEN tracing is enabled THEN each HTTP request to a reader SHALL produce a client
-   span carrying the device id and the step name (person, face, compensate, delete-face,
-   delete-person).
+   span carrying the device id and the step name, exactly one of `person`, `person-modify`,
+   `face-delete`, `face` or `person-delete`. A compensating delete (ISA-04) is a `person-delete` span.
 2. **ISA-29** — Each adapter call SHALL write one structured log entry with the device id,
    operation, outcome, failing step (if any), HTTP status (if any), `subStatusCode` (if any) and
    duration, at Information for `Delivered` and Warning otherwise.

@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Spec**: `.specs/features/isapi-device-client/spec.md`
 **Design**: `.specs/features/isapi-device-client/design.md`
-**Status**: Approved
+**Status**: In Progress
 
 ---
 
@@ -84,7 +84,7 @@ T17 → T18
 
 ## Task Breakdown
 
-### T1: `DeviceEnrolment` carries `Name`
+### T1: `DeviceEnrolment` carries `Name` ✅
 
 **What**: Add `Name` to `DeviceEnrolment` (after `ExternalRef`). `DeviceLoop.EnrolmentOf` fills it from `user.Name`. Update every existing construction site in tests to compile, and add a `DeliveryTests` assertion that the fake received the user's name.
 **Where**: `Shared/IDeviceClient.cs`, `Infrastructure/Worker/DeviceLoop.cs:340`, `Tests/Infrastructure/FakeDeviceClientTests.cs`, `IntegrationTests/DeliveryTests.cs` (+ any other construction site the compiler names)
@@ -93,15 +93,15 @@ T17 → T18
 **Requirement**: ISA-26 (port half), ISA-27
 **Tools**: MCP: NONE · Skill: NONE
 **Done when**:
-- [ ] A user upserted with name `"Ana Souza"` reaches the fake with `Enrolment.Name == "Ana Souza"` (literal) on add and on update
-- [ ] Existing tests changed only to pass the new constructor argument
-- [ ] Full gate passes; ≥ 465 unit · ≥ 341 integration
+- [x] A user upserted with name `"Ana Souza"` reaches the fake with `Enrolment.Name == "Ana Souza"` (literal) on add and on update
+- [x] Existing tests changed only to pass the new constructor argument
+- [x] Full gate passes; ≥ 465 unit · ≥ 341 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(worker): carry the spectator's name to the reader`
 
 ---
 
-### T2: `IsapiOptions` and its validator
+### T2: `IsapiOptions` and its validator ✅
 
 **What**: `IsapiOptions` (section `Isapi`) with the design's fields and defaults; `IsapiOptionsValidator` rejects a non-positive `NameMaxLength`, a non-positive `ConnectionLifetime` or `AuthFailureHold`, `ValidFrom ≥ ValidTo`, a blank `FaceLibraryId`/`FaceLibraryType`/`PlanTemplateNo`, and `DoorNo < 1`, reporting every failure rather than the first.
 **Where**: `Infrastructure/Isapi/IsapiOptions.cs`, `Tests/Infrastructure/Isapi/IsapiOptionsValidatorTests.cs`
@@ -109,56 +109,56 @@ T17 → T18
 **Reuses**: `FaceImageOptions` / `FaceImageOptionsValidator` pattern (AD-033)
 **Requirement**: A-6, A-8, ISA-11, ISA-37 (configuration)
 **Done when**:
-- [ ] Defaults validate; each invalid field fails with a message naming `Isapi:{Field}`; two invalid fields yield two failures
-- [ ] Quick gate passes; ≥ 473 unit
+- [x] Defaults validate; each invalid field fails with a message naming `Isapi:{Field}`; two invalid fields yield two failures
+- [x] Quick gate passes; ≥ 473 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): add validated adapter options`
 
 ---
 
-### T3: `IsapiIdentity` — `employeeNo` and name truncation
+### T3: `IsapiIdentity` — `employeeNo` and name truncation ✅
 
 **What**: `EmployeeNo(externalRef)`, the A-2 hash; `TruncateName(name, max)` on text-element boundaries.
 **Where**: `Infrastructure/Isapi/IsapiIdentity.cs`, `Tests/Infrastructure/Isapi/IsapiIdentityTests.cs`
 **Depends on**: T2
 **Requirement**: A-2, ISA-26
 **Done when**:
-- [ ] A pinned vector: `EmployeeNo("TICKET-0001")` equals a literal computed independently in the test (e.g. with `sha256sum`), 32 lowercase hex characters
-- [ ] Same input gives the same output; inputs differing by one character give different outputs; a 255-character and a non-ASCII `ExternalRef` give 32 ASCII hex characters
-- [ ] A name at, under and over the limit; a cut that would split a surrogate pair or a combining sequence keeps it whole and stays ≤ the limit
-- [ ] Quick gate passes; ≥ 481 unit
+- [x] A pinned vector: `EmployeeNo("TICKET-0001")` equals a literal computed independently in the test (e.g. with `sha256sum`), 32 lowercase hex characters
+- [x] Same input gives the same output; inputs differing by one character give different outputs; a 255-character and a non-ASCII `ExternalRef` give 32 ASCII hex characters
+- [x] A name at, under and over the limit; a cut that would split a surrogate pair or a combining sequence keeps it whole and stays ≤ the limit
+- [x] Quick gate passes; ≥ 481 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): derive the reader key and fit the name`
 
 ---
 
-### T4: `IsapiOutcomes` — the classification rule
+### T4: `IsapiOutcomes` — the classification rule ✅
 
 **What**: `StepResult` and the two `Classify` overloads, exactly per the design's table. The reason is built only from step, status and `ResponseStatus` fields, with `errorMsg` capped at 200 characters.
 **Where**: `Infrastructure/Isapi/IsapiOutcomes.cs`, `Tests/Infrastructure/Isapi/IsapiOutcomesTests.cs`
 **Depends on**: T2
 **Requirement**: ISA-12…ISA-18, ISA-25, A-4, A-14
 **Done when**:
-- [ ] One test per table row, reasons asserted as **literal strings**
-- [ ] 401 with a locked-account body (JSON and XML forms) → `AuthFailed("account locked …")` with the parsed unlock time; 401 without → `"authentication failed"`; 403 → same as 401
-- [ ] Each `HttpRequestError` value used (`NameResolutionError`, `ConnectionError`, `SecureConnectionError`, `ResponseEnded`, other) → `ReaderDown` naming the class
-- [ ] A refused answer whose body contains extra fields (and a password-like string) yields a reason with none of them (ISA-25)
-- [ ] Quick gate passes; ≥ 497 unit
+- [x] One test per table row, reasons asserted as **literal strings**
+- [x] 401 with a locked-account body (JSON and XML forms) → `AuthFailed("account locked …")` with the parsed unlock time; 401 without → `"authentication failed"`; 403 → same as 401
+- [x] Each `HttpRequestError` value used (`NameResolutionError`, `ConnectionError`, `SecureConnectionError`, `ResponseEnded`, other) → `ReaderDown` naming the class
+- [x] A refused answer whose body contains extra fields (and a password-like string) yields a reason with none of them (ISA-25)
+- [x] Quick gate passes; ≥ 497 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): classify every reader answer onto one outcome`
 
 ---
 
-### T5: `IsapiRequests` — the ISAPI shapes
+### T5: `IsapiRequests` — the ISAPI shapes ✅
 
 **What**: One builder per step (`PersonCreate`, `PersonModify`, `PersonDelete`, `FaceDelete`, `FaceCreate`) producing the method, path and body in the design's table, using `IsapiOptions` constants.
 **Where**: `Infrastructure/Isapi/IsapiRequests.cs`, `Tests/Infrastructure/Isapi/IsapiRequestsTests.cs`
 **Depends on**: T3
 **Requirement**: A-1, A-7, A-8, ISA-01 (shape half)
 **Done when**:
-- [ ] Each step: method, relative path and query asserted as literals; JSON body parsed and its fields asserted (`employeeNo`, `name` truncated, `password` = PIN, `Valid`, `RightPlan`)
-- [ ] `FaceCreate` is multipart with exactly two parts in order, `FaceDataRecord` (JSON with `faceLibType`, `FDID`, `FPID`) then `FaceImage` (`image/jpeg`, the exact bytes)
-- [ ] Quick gate passes; ≥ 503 unit
+- [x] Each step: method, relative path and query asserted as literals; JSON body parsed and its fields asserted (`employeeNo`, `name` truncated, `password` = PIN, `Valid`, `RightPlan`)
+- [x] `FaceCreate` is multipart with exactly two parts in order, `FaceDataRecord` (JSON with `faceLibType`, `FDID`, `FPID`) then `FaceImage` (`image/jpeg`, the exact bytes)
+- [x] Quick gate passes; ≥ 503 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): build the person and face requests`
 
