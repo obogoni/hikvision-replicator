@@ -480,4 +480,63 @@ public class UserPersistenceContractTests(PostgresFixture fixture) : IAsyncLifet
         );
         Assert.Equal(IReplicationRepository.DuplicatePendingWork, result.AsT1.Message);
     }
+
+    // ─── AD-044: a user write that loses a row-version race to a claim ─
+
+    /// <summary>
+    /// What a user write gets when the worker claimed a pending row between the fan-out's read
+    /// and its save.
+    /// <para>
+    /// HTTP cannot distinguish it deterministically: through a route the window is the few
+    /// milliseconds between the fan-out loading the pending rows and the slice saving, and
+    /// whether a worker commits a claim inside it is scheduling (AD-026). Here the claim is
+    /// committed behind the tracked row every time. Untranslated it is a <c>500</c>; translated
+    /// wrongly it would overwrite work in a reader's hands and free its exclusivity slot.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_write_that_loses_a_race_with_a_claim_on_its_queued_work_is_reported_as_a_conflict()
+    {
+        var userId = await GivenRegisteredUserAsync("TICKET-1", "123456");
+        var deviceId = await GivenRegisteredDeviceAsync();
+
+        await using (var seed = fixture.CreateDbContext())
+        {
+            seed.Replications.Add(
+                Replication.Create(
+                    userId,
+                    deviceId,
+                    ReplicationOperation.Add,
+                    ReplicationLane.Live,
+                    Now
+                )
+            );
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = fixture.CreateDbContext();
+        var tracked = await context.Replications.SingleAsync();
+        tracked.Supersede(Now.AddMinutes(1));
+
+        // The worker's claim, committed after the read above and before the save below.
+        await using (var worker = fixture.CreateDbContext())
+        {
+            var claimed = await worker.Replications.SingleAsync();
+            claimed.Begin(Now.AddMinutes(1));
+            await worker.SaveChangesAsync();
+        }
+
+        var result = await RepositoryOver(context).SaveIfKeysFreeAsync(CancellationToken.None);
+
+        Assert.Equal(
+            "Replication work for this user and device is already queued.",
+            result.AsT1.Message
+        );
+
+        await using var verification = fixture.CreateDbContext();
+        Assert.Equal(
+            ReplicationStatus.InProgress,
+            (await verification.Replications.SingleAsync()).Status
+        );
+    }
 }

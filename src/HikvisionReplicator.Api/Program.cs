@@ -9,6 +9,7 @@ using HikvisionReplicator.Api.Features.Users.ListUsers;
 using HikvisionReplicator.Api.Features.Users.RemoveUser;
 using HikvisionReplicator.Api.Features.Users.UpsertUser;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Infrastructure.Worker;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -39,6 +40,41 @@ builder
     .Services.AddOptions<FaceImageOptions>()
     .Bind(builder.Configuration.GetSection(FaceImageOptions.SectionName))
     .ValidateOnStart();
+
+// A worker setting it cannot run on — a zero poll interval hot-loops, a lease no longer than
+// the call timeout reclaims live calls — aborts startup naming the setting (WRK-30).
+builder.Services.AddSingleton<
+    IValidateOptions<ReplicationWorkerOptions>,
+    ReplicationWorkerOptionsValidator
+>();
+builder
+    .Services.AddOptions<ReplicationWorkerOptions>()
+    .Bind(builder.Configuration.GetSection(ReplicationWorkerOptions.SectionName))
+    .ValidateOnStart();
+
+// The adapter is named explicitly and nothing is a default: the only one that exists is a fake
+// that always answers, and shipping it silently would report spectators enrolled on readers
+// that never heard of them. An unknown or missing adapter stops startup naming the setting.
+builder.Services.AddSingleton<IValidateOptions<DeviceClientOptions>, DeviceClientOptionsValidator>();
+builder
+    .Services.AddOptions<DeviceClientOptions>()
+    .Bind(builder.Configuration.GetSection(DeviceClientOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<FakeDeviceClient>();
+builder.Services.AddSingleton<IDeviceClient>(services =>
+    services.GetRequiredService<IOptions<DeviceClientOptions>>().Value.Adapter
+    == DeviceClientOptions.FakeAdapter
+        ? services.GetRequiredService<FakeDeviceClient>()
+        : throw new InvalidOperationException(
+            $"{DeviceClientOptionsValidator.AdapterPath} names no adapter this build provides."
+        )
+);
+
+// The queue's drain: a supervisor keeping one serial loop per reader (AD-043). Singletons,
+// because each loop opens a fresh scope per cycle rather than holding one.
+builder.Services.AddSingleton<ReplicationOutcomeRecorder>();
+builder.Services.AddSingleton<DeviceLoop>();
+builder.Services.AddHostedService<ReplicationWorker>();
 
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 // Stateless and CPU-bound, so one instance serves every request (A-14).

@@ -36,6 +36,21 @@ public class Replication : AggregateRoot, IAggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// The earliest moment a requeued rejection may be taken again (WRK-16). <c>null</c> means
+    /// eligible now — new work, work released without an attempt counted, and anything already
+    /// taken in hand, since a backoff only ever governs the next claim.
+    /// </summary>
+    public DateTime? NextAttemptAt { get; private set; }
+
+    /// <summary>
+    /// The row version (AD-044). Every writer of this table — the fan-out superseding pending
+    /// work and the worker claiming it — saves against the version it read, so a claim
+    /// committed between another writer's read and its save is refused rather than overwritten.
+    /// Set by the database, never by the aggregate.
+    /// </summary>
+    public uint Version { get; private set; }
+
     private Replication() { } // for EF Core
 
     private Replication(
@@ -88,9 +103,24 @@ public class Replication : AggregateRoot, IAggregateRoot
         return replication;
     }
 
-    /// <summary>Takes the work in hand: <c>Pending → InProgress</c>.</summary>
-    public OneOf<Success, ValidationError> Begin(DateTime now) =>
-        MoveTo(ReplicationStatus.Pending, ReplicationStatus.InProgress, Errors.CannotBegin, now);
+    /// <summary>
+    /// Takes the work in hand: <c>Pending → InProgress</c>. Any backoff is spent the moment the
+    /// work is claimed, so it is cleared here rather than left to describe a past wait.
+    /// </summary>
+    public OneOf<Success, ValidationError> Begin(DateTime now)
+    {
+        var result = MoveTo(
+            ReplicationStatus.Pending,
+            ReplicationStatus.InProgress,
+            Errors.CannotBegin,
+            now
+        );
+
+        if (result.IsT0)
+            NextAttemptAt = null;
+
+        return result;
+    }
 
     /// <summary>The device accepted it: <c>InProgress → Succeeded</c>, terminal.</summary>
     public OneOf<Success, ValidationError> Succeed(DateTime now) =>
@@ -107,7 +137,7 @@ public class Replication : AggregateRoot, IAggregateRoot
 
         Status = ReplicationStatus.Failed;
         AttemptCount++;
-        LastError = error.Length > MaxLastErrorLength ? error[..MaxLastErrorLength] : error;
+        LastError = Truncate(error);
         UpdatedAt = now;
 
         return new Success();
@@ -121,11 +151,78 @@ public class Replication : AggregateRoot, IAggregateRoot
         MoveTo(ReplicationStatus.Failed, ReplicationStatus.Pending, Errors.CannotRetry, now);
 
     /// <summary>
+    /// Back into the queue after a rejection, but not before <paramref name="notBefore"/>:
+    /// <c>Failed → Pending</c> (AD-044). The wait is held on the row rather than in a worker's
+    /// memory, so it survives a restart, and the attempt count survives with it (REP-31).
+    /// </summary>
+    public OneOf<Success, ValidationError> Retry(DateTime now, DateTime notBefore)
+    {
+        var result = MoveTo(
+            ReplicationStatus.Failed,
+            ReplicationStatus.Pending,
+            Errors.CannotRetry,
+            now
+        );
+
+        if (result.IsT0)
+            NextAttemptAt = notBefore;
+
+        return result;
+    }
+
+    /// <summary>
+    /// Back into the queue with nothing counted against it: <c>InProgress → Pending</c>
+    /// (AD-044). For an attempt that never reached a device willing to judge the record — the
+    /// reader was unreachable, the call timed out, the lease expired or the worker stopped —
+    /// none of which is the record's fault (WRK-11, WRK-22, WRK-23). The reason is kept,
+    /// bounded like any device string (REP-33), and the work is eligible again at once.
+    /// </summary>
+    public OneOf<Success, ValidationError> Release(string reason, DateTime now)
+    {
+        var result = MoveTo(
+            ReplicationStatus.InProgress,
+            ReplicationStatus.Pending,
+            Errors.CannotRelease,
+            now
+        );
+
+        if (result.IsT0)
+        {
+            LastError = Truncate(reason);
+            NextAttemptAt = null;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// A newer intent replaced this one: <c>Pending → Superseded</c>, terminal. In-flight
     /// work is never superseded — it is left to reach its own terminal status (REP-12).
     /// </summary>
     public OneOf<Success, ValidationError> Supersede(DateTime now) =>
         MoveTo(ReplicationStatus.Pending, ReplicationStatus.Superseded, Errors.CannotSupersede, now);
+
+    /// <summary>
+    /// A newer intent overtook an attempt that did not land: <c>InProgress | Failed →
+    /// Superseded</c>, terminal (AD-044, WRK-20). Returning it to <c>Pending</c> instead would
+    /// put it beside the newer one and replay stale intent. The attempt count and last error
+    /// are what that attempt cost and are kept as its record. This is deliberately a separate
+    /// method: <see cref="Supersede"/> stays <c>Pending</c>-only, so a user write still cannot
+    /// supersede work in a reader's hands (REP-12) — only the worker that holds it can.
+    /// </summary>
+    public OneOf<Success, ValidationError> SupersedeAfterAttempt(DateTime now)
+    {
+        if (Status is not (ReplicationStatus.InProgress or ReplicationStatus.Failed))
+            return new ValidationError(Errors.StatusField, Errors.CannotSupersedeAfterAttempt);
+
+        Status = ReplicationStatus.Superseded;
+        UpdatedAt = now;
+
+        return new Success();
+    }
+
+    private static string Truncate(string error) =>
+        error.Length > MaxLastErrorLength ? error[..MaxLastErrorLength] : error;
 
     // The guard returns before any assignment, so a refused transition leaves the aggregate
     // exactly as it was (REP-28). Succeeded and Superseded are the `from` of nothing, which
@@ -153,6 +250,9 @@ public class Replication : AggregateRoot, IAggregateRoot
         public const string CannotSucceed = "Only work in progress can succeed.";
         public const string CannotFail = "Only work in progress can fail.";
         public const string CannotRetry = "Only failed work can be retried.";
+        public const string CannotRelease = "Only work in progress can be released.";
+        public const string CannotSupersedeAfterAttempt =
+            "Only work in progress or failed work can be superseded after an attempt.";
         public const string CannotSupersede = "Only pending work can be superseded.";
     }
 }

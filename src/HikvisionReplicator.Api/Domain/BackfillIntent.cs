@@ -24,6 +24,13 @@ public class BackfillIntent : AggregateRoot, IAggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// The row version. Two worker instances can both read a debt as outstanding; the one that
+    /// saves second finds the version moved and its whole expansion is refused, so the roster
+    /// is never queued twice (WRK-04). Set by the database, never by the aggregate.
+    /// </summary>
+    public uint Version { get; private set; }
+
     private BackfillIntent() { } // for EF Core
 
     private BackfillIntent(int deviceId, DateTime now)

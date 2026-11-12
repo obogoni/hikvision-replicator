@@ -32,6 +32,13 @@ public class BackfillIntentConfiguration : IEntityTypeConfiguration<BackfillInte
         builder.Property(intent => intent.CreatedAt).IsRequired();
         builder.Property(intent => intent.UpdatedAt).IsRequired();
 
+        // SPEC_DEVIATION: AD-044 puts the xmin token on replications only; it is extended here.
+        // Reason: two worker instances can both read a debt as Pending, and the second's
+        // expansion re-queues every spectator the first instance has already delivered — those
+        // rows are no longer Pending, so the queue's pending index cannot refuse them. The token
+        // refuses the second settlement instead, and with it the whole second expansion.
+        builder.Property(intent => intent.Version).IsRowVersion();
+
         builder
             .Property(intent => intent.Status)
             .IsRequired()

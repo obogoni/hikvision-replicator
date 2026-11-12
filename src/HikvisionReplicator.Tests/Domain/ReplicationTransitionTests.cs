@@ -8,6 +8,7 @@ public class ReplicationTransitionTests
     private static readonly DateTime StartedOn = new(2026, 10, 3, 18, 0, 5, DateTimeKind.Utc);
     private static readonly DateTime SettledOn = new(2026, 10, 3, 18, 0, 9, DateTimeKind.Utc);
     private static readonly DateTime RefusedOn = new(2026, 10, 3, 19, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime RetryDueOn = new(2026, 10, 3, 19, 0, 4, DateTimeKind.Utc);
 
     private sealed record Snapshot(
         ReplicationStatus Status,
@@ -51,7 +52,8 @@ public class ReplicationTransitionTests
         return work;
     }
 
-    // ─── REP-27 / REP-32: the five legal transitions, each timestamped from the clock ───
+    // ─── REP-27 / REP-32: the five legal transitions, each timestamped from the clock.
+    //     AD-044 adds three more, each with its own section below.                      ───
 
     [Fact]
     public void Pending_work_can_be_taken_in_hand()
@@ -176,6 +178,8 @@ public class ReplicationTransitionTests
     [InlineData(ReplicationStatus.InProgress)]
     [InlineData(ReplicationStatus.Succeeded)]
     [InlineData(ReplicationStatus.Superseded)]
+    // AD-044 makes InProgress → Pending legal, but only through Release, which counts no
+    // attempt. Retry still refuses it: Retry is the way back for an attempt that was counted.
     public void Only_failed_work_can_go_back_into_the_queue(ReplicationStatus status)
     {
         var work = InStatus(status);
@@ -271,5 +275,230 @@ public class ReplicationTransitionTests
         work.Fail(complaint, SettledOn);
 
         Assert.Equal(complaint, work.LastError);
+    }
+
+    // ─── WRK-16 / WRK-19 (AD-044): a rejection waits out its backoff on the row itself ───
+
+    [Fact]
+    public void Rejected_work_goes_back_into_the_queue_to_wait_out_its_backoff()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+
+        var result = work.Retry(RefusedOn, RetryDueOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Equal("device said no", work.LastError);
+        Assert.Equal(RefusedOn, work.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(ReplicationStatus.Pending)]
+    [InlineData(ReplicationStatus.InProgress)]
+    [InlineData(ReplicationStatus.Succeeded)]
+    [InlineData(ReplicationStatus.Superseded)]
+    public void Only_failed_work_can_be_queued_to_wait_out_a_backoff(ReplicationStatus status)
+    {
+        var work = InStatus(status);
+        var before = Capture(work);
+
+        var result = work.Retry(RefusedOn, RetryDueOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(Replication.Errors.StatusField, result.AsT1.Field);
+        Assert.Equal(Replication.Errors.CannotRetry, result.AsT1.Message);
+        Assert.Equal(before, Capture(work));
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void Work_already_waiting_out_a_backoff_cannot_have_it_moved()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        var before = Capture(work);
+
+        var result = work.Retry(SettledOn, RetryDueOn.AddMinutes(5));
+
+        Assert.True(result.IsT1);
+        Assert.Equal(before, Capture(work));
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void New_work_is_eligible_at_once()
+    {
+        var work = Queued();
+
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void Taking_work_in_hand_spends_its_backoff()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+
+        work.Begin(RetryDueOn);
+
+        Assert.Equal(ReplicationStatus.InProgress, work.Status);
+        Assert.Null(work.NextAttemptAt);
+        Assert.Equal(1, work.AttemptCount);
+    }
+
+    [Fact]
+    public void Failed_work_requeued_without_a_backoff_is_eligible_at_once()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+
+        work.Retry(RefusedOn);
+
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Null(work.NextAttemptAt);
+        Assert.Equal(1, work.AttemptCount);
+    }
+
+    // ─── WRK-11 / WRK-22 / WRK-23 (AD-044): an attempt that never reached a device willing
+    //     to judge the record goes back without costing anything                        ───
+
+    [Fact]
+    public void Work_in_hand_goes_back_into_the_queue_without_costing_an_attempt()
+    {
+        var work = InStatus(ReplicationStatus.InProgress);
+
+        var result = work.Release("reader unreachable", SettledOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(0, work.AttemptCount);
+        Assert.Equal("reader unreachable", work.LastError);
+        Assert.Null(work.NextAttemptAt);
+        Assert.Equal(SettledOn, work.UpdatedAt);
+    }
+
+    [Fact]
+    public void Released_work_keeps_the_attempts_earlier_rejections_cost()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        work.Begin(RetryDueOn);
+
+        work.Release("reader unreachable", RetryDueOn);
+
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void An_overlong_release_reason_is_stored_truncated_and_the_release_still_lands()
+    {
+        var work = InStatus(ReplicationStatus.InProgress);
+        var reason = new string('x', 1001);
+
+        var result = work.Release(reason, SettledOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Pending, work.Status);
+        Assert.Equal(reason[..1000], work.LastError);
+    }
+
+    [Theory]
+    [InlineData(ReplicationStatus.Pending)]
+    [InlineData(ReplicationStatus.Succeeded)]
+    [InlineData(ReplicationStatus.Failed)]
+    [InlineData(ReplicationStatus.Superseded)]
+    public void Only_work_in_hand_can_be_released(ReplicationStatus status)
+    {
+        var work = InStatus(status);
+        var before = Capture(work);
+
+        var result = work.Release("reader unreachable", RefusedOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(Replication.Errors.StatusField, result.AsT1.Field);
+        Assert.Equal(Replication.Errors.CannotRelease, result.AsT1.Message);
+        Assert.Equal(before, Capture(work));
+        Assert.Null(work.NextAttemptAt);
+    }
+
+    [Fact]
+    public void Work_waiting_out_a_backoff_cannot_be_released()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        var before = Capture(work);
+
+        var result = work.Release("reader unreachable", SettledOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(before, Capture(work));
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
+    }
+
+    // ─── WRK-20 / WRK-21 (AD-044): an unfinished attempt a newer intent overtook ends there,
+    //     keeping what that attempt cost. Supersede itself stays Pending-only (REP-12).  ───
+
+    [Fact]
+    public void Work_in_hand_overtaken_by_a_newer_intent_ends_keeping_what_its_attempts_cost()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        work.Begin(RetryDueOn);
+
+        var result = work.SupersedeAfterAttempt(SettledOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Superseded, work.Status);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Equal("device said no", work.LastError);
+        Assert.Equal(SettledOn, work.UpdatedAt);
+    }
+
+    [Fact]
+    public void Failed_work_overtaken_by_a_newer_intent_ends_keeping_what_its_attempt_cost()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+
+        var result = work.SupersedeAfterAttempt(RefusedOn);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(ReplicationStatus.Superseded, work.Status);
+        Assert.Equal(1, work.AttemptCount);
+        Assert.Equal("device said no", work.LastError);
+        Assert.Equal(RefusedOn, work.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(ReplicationStatus.Pending)]
+    [InlineData(ReplicationStatus.Succeeded)]
+    [InlineData(ReplicationStatus.Superseded)]
+    public void Only_attempted_work_can_be_overtaken_after_its_attempt(ReplicationStatus status)
+    {
+        var work = InStatus(status);
+        var before = Capture(work);
+
+        var result = work.SupersedeAfterAttempt(RefusedOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(Replication.Errors.StatusField, result.AsT1.Field);
+        Assert.Equal(Replication.Errors.CannotSupersedeAfterAttempt, result.AsT1.Message);
+        Assert.Equal(before, Capture(work));
+    }
+
+    [Fact]
+    public void Work_waiting_out_a_backoff_cannot_be_overtaken_as_if_it_were_in_hand()
+    {
+        var work = InStatus(ReplicationStatus.Failed);
+        work.Retry(RefusedOn, RetryDueOn);
+        var before = Capture(work);
+
+        var result = work.SupersedeAfterAttempt(SettledOn);
+
+        Assert.True(result.IsT1);
+        Assert.Equal(before, Capture(work));
+        Assert.Equal(RetryDueOn, work.NextAttemptAt);
     }
 }

@@ -207,6 +207,129 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
         Assert.Contains("IX_replications_DeviceId", indexes);
     }
 
+    // ─── WRK-06: one operation per reader, enforced by the schema ───
+
+    private async Task<int> GivenWorkInProgressAsync(int userId, int deviceId)
+    {
+        await using var context = fixture.CreateDbContext();
+        var work = Replication.Create(
+            userId,
+            deviceId,
+            ReplicationOperation.Add,
+            ReplicationLane.Live,
+            Now
+        );
+        work.Begin(Now);
+        context.Replications.Add(work);
+        await context.SaveChangesAsync();
+        return work.Id;
+    }
+
+    /// <summary>
+    /// The shape of the per-reader exclusivity index.
+    /// <para>
+    /// HTTP cannot distinguish it: no route claims work, and a worker that happens to run one
+    /// loop per reader in one process never collides with itself, so a missing or unfiltered
+    /// index serves every single-instance run identically. Only a second instance reveals it —
+    /// and drop the filter and a reader can never hold more than one row of any status at all.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_reader_has_at_most_one_operation_in_progress_and_nothing_else_is_constrained()
+    {
+        var definition = await IndexDefinitionAsync(
+            ReplicationConfiguration.DeviceInProgressIndexName
+        );
+
+        Assert.Contains("UNIQUE", definition, StringComparison.Ordinal);
+        Assert.Contains("(\"DeviceId\")", definition, StringComparison.Ordinal);
+
+        var filter = definition[definition.IndexOf(" WHERE ", StringComparison.Ordinal)..];
+        Assert.Contains("\"Status\"", filter, StringComparison.Ordinal);
+        Assert.Contains(
+            $"'{nameof(ReplicationStatus.InProgress)}'",
+            filter,
+            StringComparison.Ordinal
+        );
+    }
+
+    /// <summary>
+    /// The claim query's index: one reader's pending work by lane, oldest first.
+    /// <para>
+    /// HTTP cannot distinguish it: an index changes a plan, not a response, and nothing returns
+    /// a replication. Made unique it would refuse a reader's second piece of pending work in a
+    /// lane, which no round-trip in this feature would attribute to the index.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_readers_pending_work_is_indexed_by_lane_then_age_and_is_not_constrained()
+    {
+        var definition = await IndexDefinitionAsync(ReplicationConfiguration.DevicePendingIndexName);
+
+        Assert.DoesNotContain("UNIQUE", definition, StringComparison.Ordinal);
+        Assert.Contains(
+            "(\"DeviceId\", \"Lane\", \"CreatedAt\")",
+            definition,
+            StringComparison.Ordinal
+        );
+
+        var filter = definition[definition.IndexOf(" WHERE ", StringComparison.Ordinal)..];
+        Assert.Contains($"'{nameof(ReplicationStatus.Pending)}'", filter, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// That a second claim on a busy reader is refused by the database, under the index's name.
+    /// <para>
+    /// HTTP cannot distinguish it: no route claims work, and the refusal only happens when two
+    /// worker instances race for one reader. The name matters as much as the refusal — the
+    /// worker recognises "another instance holds this reader" by it, so a rename turns a
+    /// polite back-off into a crashed loop.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_second_operation_in_progress_on_one_reader_is_refused_by_the_named_index()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenActiveSpectatorsAsync(2);
+        int[] users;
+        await using (var context = fixture.CreateDbContext())
+            users = await context.Users.OrderBy(user => user.Id).Select(user => user.Id).ToArrayAsync();
+
+        await GivenWorkInProgressAsync(users[0], deviceId);
+        var secondUser = users[1];
+
+        var violation = await Assert.ThrowsAsync<DbUpdateException>(() =>
+            GivenWorkInProgressAsync(secondUser, deviceId)
+        );
+
+        var postgres = Assert.IsType<Npgsql.PostgresException>(violation.InnerException);
+        Assert.Equal(Npgsql.PostgresErrorCodes.UniqueViolation, postgres.SqlState);
+        Assert.Equal("IX_replications_device_in_progress", postgres.ConstraintName);
+    }
+
+    /// <summary>
+    /// That exclusivity is per reader, not global.
+    /// <para>
+    /// HTTP cannot distinguish an index over the wrong column set from the right one here: a
+    /// unique index on <c>Status</c> alone would refuse the second reader's claim, and nothing
+    /// a route returns would show that every reader but one had stopped (WRK-07).
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Operations_in_progress_on_different_readers_do_not_collide()
+    {
+        var firstDevice = await GivenRegisteredDeviceAsync("10.0.0.5");
+        var secondDevice = await GivenRegisteredDeviceAsync("10.0.0.6");
+        var userId = await GivenRegisteredUserAsync();
+
+        await GivenWorkInProgressAsync(userId, firstDevice);
+        await GivenWorkInProgressAsync(userId, secondDevice);
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(2, queued.Count);
+        Assert.All(queued, work => Assert.Equal(ReplicationStatus.InProgress, work.Status));
+    }
+
     // ─── REP-16 / AD-034: the two foreign keys are deliberately asymmetric ───
 
     /// <summary>
@@ -773,6 +896,49 @@ public class ReplicationQueueContractTests(PostgresFixture fixture) : IAsyncLife
         Assert.Equal(3, queued.Count);
         Assert.Equal(3, queued.Select(work => work.UserId).Distinct().Count());
         Assert.All(queued, work => Assert.Equal(ReplicationStatus.Pending, work.Status));
+    }
+
+    /// <summary>
+    /// That a debt settled by one worker cannot be settled again by another that read it as
+    /// outstanding first — even once the first worker's rows have left <c>Pending</c>.
+    /// <para>
+    /// HTTP cannot distinguish it: there is no route, and the interleaving — the second
+    /// expansion read before the first committed, saved after the first's rows were delivered
+    /// — is reachable only by two worker instances winning a scheduling race. Once those rows
+    /// are <c>Succeeded</c> the pending index no longer refuses their duplicates; only the
+    /// debt's row version does, so it is staged here, in that order, every time.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_debt_already_settled_elsewhere_cannot_be_settled_again()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync();
+        await GivenRecordedDebtAsync(deviceId);
+        await GivenActiveSpectatorsAsync(3);
+
+        using var late = fixture.Factory.Services.CreateScope();
+        await late
+            .ServiceProvider.GetRequiredService<ReplicationFanOut>()
+            .ExpandBackfillAsync(deviceId, Now, CancellationToken.None);
+
+        await ExpandAsync(deviceId);
+        await using (var worker = fixture.CreateDbContext())
+        {
+            foreach (var work in await worker.Replications.ToListAsync())
+            {
+                work.Begin(Now);
+                work.Succeed(Now);
+            }
+            await worker.SaveChangesAsync();
+        }
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            late.ServiceProvider.GetRequiredService<AppDbContext>().SaveChangesAsync()
+        );
+
+        var queued = await QueuedWorkAsync();
+        Assert.Equal(3, queued.Count);
+        Assert.All(queued, work => Assert.Equal(ReplicationStatus.Succeeded, work.Status));
     }
 
     /// <summary>

@@ -1,12 +1,12 @@
 using System.Diagnostics.Metrics;
 using HikvisionReplicator.Api.Domain;
+using HikvisionReplicator.Api.Infrastructure.Worker;
 
 namespace HikvisionReplicator.Api.Infrastructure;
 
 /// <summary>
-/// What the queue publishes about itself (REP-35…REP-38). Nothing drains yet, so the
-/// operational value lands with the runner — but the write path is instrumented now, because
-/// instrumenting it later means re-opening it.
+/// What the queue publishes about itself (REP-35…REP-38), and what the worker draining it
+/// publishes (WRK-26…WRK-29) — one meter for both, already subscribed by the deployment.
 /// <para>
 /// <b>The meter must be named in <c>Program.cs</c>'s <c>AddMeter</c></b> or every instrument
 /// below records into nothing while a test that installs its own listener still passes
@@ -32,7 +32,19 @@ public sealed class ReplicationMetrics
 
     public const string FanOutSizeMetricName = "replication.fanout.size";
 
+    public const string DeliveryDurationMetricName = "replication.delivery.duration";
+
+    public const string AttemptsMetricName = "replication.attempts";
+
+    public const string DeadLetteredMetricName = "replication.dead_lettered";
+
+    public const string DevicePauseMetricName = "replication.device.pause";
+
     public const string OperationTag = "operation";
+
+    public const string OutcomeTag = "outcome";
+
+    public const string TransitionTag = "transition";
 
     public const string LaneTag = "lane";
 
@@ -42,6 +54,10 @@ public sealed class ReplicationMetrics
     private readonly Counter<long> _superseded;
     private readonly Counter<long> _capacityExceeded;
     private readonly Histogram<int> _fanOutSize;
+    private readonly Histogram<double> _deliveryDuration;
+    private readonly Counter<long> _attempts;
+    private readonly Counter<long> _deadLettered;
+    private readonly Counter<long> _devicePause;
 
     public ReplicationMetrics(IMeterFactory meterFactory)
     {
@@ -71,6 +87,26 @@ public sealed class ReplicationMetrics
             unit: "{replication}",
             description: "How many readers one spectator write owed work to."
         );
+        _deliveryDuration = meter.CreateHistogram<double>(
+            DeliveryDurationMetricName,
+            unit: "s",
+            description: "Seconds from work being queued to the reader accepting it."
+        );
+        _attempts = meter.CreateCounter<long>(
+            AttemptsMetricName,
+            unit: "{attempt}",
+            description: "Delivery attempts, by how they ended."
+        );
+        _deadLettered = meter.CreateCounter<long>(
+            DeadLetteredMetricName,
+            unit: "{replication}",
+            description: "Records set aside after a reader refused them for the last time."
+        );
+        _devicePause = meter.CreateCounter<long>(
+            DevicePauseMetricName,
+            unit: "{transition}",
+            description: "Readers paused for not answering, and resumed when they did."
+        );
     }
 
     /// <summary>
@@ -99,4 +135,46 @@ public sealed class ReplicationMetrics
     /// twenty-reader envelope is observable rather than assumed.
     /// </summary>
     public void FanOut(int size) => _fanOutSize.Record(size);
+
+    /// <summary>
+    /// WRK-26. Creation to success, tagged by lane and operation — the live lane's p95 is the
+    /// AD-038 reading, and it must not be diluted by a backfill's hours-long waits.
+    /// </summary>
+    public void Delivered(ReplicationLane lane, ReplicationOperation operation, TimeSpan sinceQueued) =>
+        _deliveryDuration.Record(
+            sinceQueued.TotalSeconds,
+            new KeyValuePair<string, object?>(LaneTag, lane.ToString()),
+            new KeyValuePair<string, object?>(OperationTag, operation.ToString())
+        );
+
+    /// <summary>WRK-27. One per attempt, tagged by how it ended.</summary>
+    public void AttemptEnded(AttemptOutcome outcome) =>
+        _attempts.Add(
+            1,
+            new KeyValuePair<string, object?>(
+                OutcomeTag,
+                outcome switch
+                {
+                    AttemptOutcome.Delivered => "succeeded",
+                    AttemptOutcome.Rejected => "rejected",
+                    _ => "unreachable",
+                }
+            )
+        );
+
+    /// <summary>
+    /// WRK-28. Untagged: which record and why are in the log line, and are unbounded
+    /// cardinality.
+    /// </summary>
+    public void DeadLettered() => _deadLettered.Add(1);
+
+    /// <summary>WRK-29. Tagged by the transition only — the reader is in the log line.</summary>
+    public void DevicePause(PauseTransition transition) =>
+        _devicePause.Add(
+            1,
+            new KeyValuePair<string, object?>(
+                TransitionTag,
+                transition == PauseTransition.Paused ? "paused" : "resumed"
+            )
+        );
 }

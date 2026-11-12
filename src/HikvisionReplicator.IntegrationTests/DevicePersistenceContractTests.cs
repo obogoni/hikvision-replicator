@@ -95,6 +95,67 @@ public class DevicePersistenceContractTests(PostgresFixture fixture) : IAsyncLif
         );
     }
 
+    // ─── AD-044: a device write that loses a row-version race on queued work ─
+
+    /// <summary>
+    /// The device write path's answer to the same race the user path translates.
+    /// <para>
+    /// HTTP cannot distinguish it: no device route modifies a replication today, so the race
+    /// is reachable only below the slice — and a device save that carried queued work and lost
+    /// to a claim must answer as the user path does, not as an address collision or a
+    /// <c>500</c>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_write_that_loses_a_race_with_a_claim_on_queued_work_is_reported_as_a_conflict()
+    {
+        var deviceId = await GivenRegisteredDeviceAsync("192.168.1.10");
+
+        await using (var seed = fixture.CreateDbContext())
+        {
+            var user = User.Create(
+                    "TICKET-1",
+                    "Ada Lovelace",
+                    "123456",
+                    FaceFingerprint.Create("0f1e2d3c", 51_200, 800, 600).AsT0,
+                    [0x01, 0x02, 0x03],
+                    Now
+                )
+                .AsT0;
+            seed.Users.Add(user);
+            seed.Replications.Add(
+                Replication.Create(
+                    user,
+                    deviceId,
+                    ReplicationOperation.Add,
+                    ReplicationLane.Live,
+                    Now
+                )
+            );
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = fixture.CreateDbContext();
+        var tracked = await context.Replications.SingleAsync();
+        tracked.Supersede(Now.AddMinutes(1));
+
+        await using (var worker = fixture.CreateDbContext())
+        {
+            var claimed = await worker.Replications.SingleAsync();
+            claimed.Begin(Now.AddMinutes(1));
+            await worker.SaveChangesAsync();
+        }
+
+        var result = await new DeviceRepository(context).SaveIfAddressFreeAsync(
+            CancellationToken.None
+        );
+
+        Assert.Equal(
+            "Replication work for this user and device is already queued.",
+            result.AsT1.Message
+        );
+    }
+
     // ─── AD-007: cancellation is end-to-end, not a threaded parameter ────
 
     [Fact]

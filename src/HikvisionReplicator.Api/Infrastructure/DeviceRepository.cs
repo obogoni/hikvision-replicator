@@ -11,7 +11,8 @@ namespace HikvisionReplicator.Api.Infrastructure;
 /// The database is the authority for address uniqueness (AD-022). A write that loses the
 /// race past the pre-check comes back as PostgreSQL <c>23505</c> on the named address
 /// index, and is translated here into the same <see cref="ConflictError"/> the pre-check
-/// would have produced (DEV-06). Every other failure propagates untouched.
+/// would have produced (DEV-06). A row-version race lost on queued work is the queue's answer
+/// (AD-044); every other failure propagates untouched.
 /// </summary>
 public class DeviceRepository(AppDbContext dbContext)
     : RepositoryBase<Device>(dbContext),
@@ -38,6 +39,13 @@ public class DeviceRepository(AppDbContext dbContext)
         catch (DbUpdateException exception) when (IsAddressConflict(exception))
         {
             return new ConflictError(IDeviceRepository.AddressAlreadyRegistered);
+        }
+        catch (DbUpdateException exception)
+            when (IReplicationRepository.LostRaceForQueuedWork(exception))
+        {
+            // A device write that carried queued work lost its row-version race to the
+            // worker (AD-044): the same answer the user write path gives.
+            return new ConflictError(IReplicationRepository.DuplicatePendingWork);
         }
     }
 

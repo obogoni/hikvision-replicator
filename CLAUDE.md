@@ -19,9 +19,9 @@ C# / .NET 10 · ASP.NET Core 10 Minimal APIs · Entity Framework Core 10 + **Pos
 (Npgsql) · System.Security.Cryptography (AES-256).
 
 PostgreSQL is the database from the first commit of the rewrite (AD-018), so **Docker is required**
-to run the app or its integration tests. **No job runner is in the solution** — that
-choice is open until feature 4 `replication-worker` (AD-030, AD-039), so nothing may
-assume Hangfire, and `replication-queue` must stay runner-agnostic.
+to run the app or its integration tests. **No job runner is in the solution, by decision**
+(AD-043): the queue is drained by our own hosted worker claiming from the `replications` table.
+Do not add Hangfire, Quartz or Polly for background work without superseding AD-043.
 
 ## Project structure
 
