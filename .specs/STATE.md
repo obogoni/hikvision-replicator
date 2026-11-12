@@ -466,17 +466,15 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ## Handoff
 
-- **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2 — **complete, verified and merged** — PR #18, squash `92c3a56` on `main`.
-- **Phase / Task**: T1–T22 done, plus fix commits. Verifier **PASS** at iteration 3 of 3 (`validation.md`).
-- **Completed**: spec · context · design · tasks · validation. Executed as three batch sub-agents (T1–T7, T8–T14, T15–T22), then Verifier → 4 test fixes + 1 production fix → re-verify → 1 flake fix → re-verify. Author ≠ verifier held (AD-028).
-- **Test totals**: **465 unit · 340 integration**, green; 5 consecutive full integration runs green. 17 warnings (baseline). Entering: 364 · 286.
-- **Verifier**: 35/35 WRK criteria evidenced. Sensor across three iterations: every listed fault killed; survivors classified equivalent (M9a newer-pending check backed by the pending index; M24 `ReaderGone` exit backed by the cascade).
-- **Production defect found by verification**: `f082fae` — the supervisor read backfill debts before the catalogue, so a reader registered between the two reads got a loop with no debt and a spectator was delivered twice (WRK-34). Fixed by reading the catalogue first.
-- **Decisions**: AD-043 (OD-3 closed — own hosted worker, no job runner, own `DevicePause`; Polly rejected, v8 is ratio-only). AD-044 (transition table extended; `xmin` row version on `replications` and `backfill_intents`).
-- **Next step**: merge `fix/lessons-no-silent-prune`, then specify feature 5 `isapi-device-client` (real adapter behind `IDeviceClient`; must also verify A-13 on hardware).
-- **Blockers**: none.
+- **Feature**: `isapi-device-client` (`.specs/features/isapi-device-client/`) — feature 5, Phase 3. Spec, context, design, tasks approved.
+- **Phase / Task**: T1–T16 done (three batch sub-agents). **Next: T17, the bench UAT, which needs the user at the DS-K1T342MFWX.** Runbook: `uat.md`. **Part A (direct ISAPI probes) must run first**: its A4 answer sets `Isapi:AbsentSubStatusCodes`.
+- **Test totals**: **595 unit · 363 integration**, green, two consecutive full runs. 17 warnings (baseline). Entering: 465 · 340.
+- **Spec changes since approval**: ISA-37 (refused credentials held in-process, so probes cannot lock the reader) added at design; ISA-28 step names pinned to `person`, `person-modify`, `face-delete`, `face`, `person-delete`.
+- **Known risks for the UAT**: (1) `AbsentSubStatusCodes` ships empty; if the reader answers a "nothing to delete" with a refusal, every first enrolment dead-letters at `face-delete`. (2) Every step is digest-challenged, so the face upload is sent twice; measure the per-step `ElapsedMs`. (3) Face replace is delete-then-create, so a refused Update face leaves the spectator PIN-only; switch to `FDSetUp` if A3 shows it is supported. (4) `Device.HttpPort` holds the HTTPS port (A-9).
+- **After the UAT**: corrections become T17.n fix tasks; T18 (docs: ROADMAP gap, A-13 in `user-registry`, `test-patterns.md`, `appsettings.json` `Isapi` section); then the Verifier (AD-028, automatic).
+- **Blockers**: the bench session.
 - **Uncommitted files**: none tracked. `.agents/`, `.claude/`, `.design/` untracked and undecided.
-- **Branch**: `fix/lessons-no-silent-prune`, based on `main` at `92c3a56`.
+- **Branch**: `feat/isapi-device-client`, based on `main` at `a9a3c31`. Not pushed.
 
 ### What `replication-worker` established that later features inherit
 

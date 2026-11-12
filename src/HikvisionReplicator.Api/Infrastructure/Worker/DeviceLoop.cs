@@ -336,10 +336,14 @@ public sealed partial class DeviceLoop(
             ConstraintName: ReplicationConfiguration.DeviceInProgressIndexName,
         };
 
-    /// <summary>What an <c>Add</c> or <c>Update</c> carries: the reference, the PIN and the face (WRK-02).</summary>
+    /// <summary>
+    /// What an <c>Add</c> or <c>Update</c> carries: the reference, the name, the PIN and the face
+    /// (WRK-02, ISA-26).
+    /// </summary>
     private static DeviceEnrolment EnrolmentOf(User user) =>
         new(
             user.ExternalRef.Value,
+            user.Name,
             user.AccessCode.Value,
             user.Picture?.Content
                 ?? throw new InvalidOperationException(
