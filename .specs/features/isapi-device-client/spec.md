@@ -160,9 +160,16 @@ and never the other way round.
    status in the reason.
 7. **ISA-18** — WHEN a response cannot be parsed as a `ResponseStatus` THEN the call SHALL return
    `Unreachable` with the reason `"unrecognised response"` and the HTTP status.
-8. **ISA-19** — The adapter SHALL make at most one HTTP attempt per step, plus at most one
+8. **ISA-37** — WHEN a reader has answered `"authentication failed"` or `"account locked"` for a
+   given set of credentials THEN every later call to that reader with the **same** credentials
+   SHALL return `Unreachable` with the same reason **without contacting the reader**. This lasts
+   until the reader's unlock time if it gave one, otherwise for a configured hold (default
+   30 minutes), or until the device's credentials change, whichever comes first. *Added at design:
+   without it, the worker's pause-then-probe cadence sends about 5 failed logins in 35 s and locks
+   the account (ISA-34).*
+9. **ISA-19** — The adapter SHALL make at most one HTTP attempt per step, plus at most one
    compensating delete (ISA-04), and SHALL NOT retry anything itself.
-9. **ISA-20** — WHEN the cancellation token fires during a call THEN the adapter SHALL stop issuing
+10. **ISA-20** — WHEN the cancellation token fires during a call THEN the adapter SHALL stop issuing
    requests, SHALL NOT compensate, and SHALL let `OperationCanceledException` propagate. The worker
    already maps it to `Unreachable` (WRK-11).
 
@@ -272,12 +279,12 @@ observations) is recorded in `validation.md`.
 | Input validation & bounds | ISA-26 (name truncation), A-2 (`employeeNo` length); the face envelope is checked at ingest (USR-15/16), measured by ISA-33 |
 | Failure / partial-failure states | ISA-04…ISA-06, ISA-09, ISA-10, ISA-20 |
 | Idempotency / retry / duplicate handling | ISA-02, ISA-03, ISA-08, ISA-11, ISA-19 |
-| Auth boundaries & rate limits | ISA-15, ISA-21, ISA-34, A-14. Rate: one call per reader at a time is already enforced (WRK-06). |
+| Auth boundaries & rate limits | ISA-15, ISA-21, ISA-34, ISA-37, A-14. Rate: one call per reader at a time is already enforced (WRK-06). |
 | Concurrency / ordering | N/A because the worker never issues two calls to one reader at once (WRK-06), and the steps inside one call are sequential. |
 | Data lifecycle / expiry | ISA-10 (biometric removed from the reader on delete). Validity windows are out of scope (A-8). |
 | Observability | ISA-28, ISA-29; secrets excluded by ISA-24 |
 | External-dependency failure | ISA-13…ISA-18; pausing and recovery are the worker's (WRK-11…WRK-14) and are proven on hardware by ISA-35 |
-| State-transition integrity | N/A because the adapter holds no state. Replication transitions stay in the aggregate (AD-044). |
+| State-transition integrity | N/A because the adapter holds no persisted state; its only memory is the ISA-37 hold, in process. Replication transitions stay in the aggregate (AD-044). |
 
 ---
 
@@ -288,13 +295,13 @@ observations) is recorded in `validation.md`.
 | ISA-01…ISA-06 | P1: Enrol | Design | Pending |
 | ISA-07…ISA-09 | P1: Update | Design | Pending |
 | ISA-10, ISA-11 | P1: Remove | Design | Pending |
-| ISA-12…ISA-20 | P1: Classify | Design | Pending |
+| ISA-12…ISA-20, ISA-37 | P1: Classify | Design | Pending |
 | ISA-21…ISA-25 | P1: Reach securely | Design | Pending |
 | ISA-26, ISA-27 | P1: Name | Design | Pending |
 | ISA-28, ISA-29 | P2: Observe | Design | Pending |
 | ISA-30…ISA-36 | P1: Bench UAT | Design | Pending |
 
-**Coverage:** 36 total, 0 mapped to tasks, 36 unmapped ⚠️ (tasks not yet written)
+**Coverage:** 37 total, 0 mapped to tasks, 37 unmapped ⚠️ (tasks not yet written)
 
 ---
 
