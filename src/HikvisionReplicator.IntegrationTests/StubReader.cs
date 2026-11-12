@@ -59,6 +59,7 @@ public sealed partial class StubReader : IAsyncDisposable
     private readonly ConcurrentDictionary<string, StubPerson> _persons = new();
     private readonly ConcurrentDictionary<string, byte[]> _faces = new();
     private readonly ConcurrentDictionary<IsapiStep, Func<HttpContext, Task>> _scripts = new();
+    private readonly ConcurrentQueue<string> _authorizations = new();
     private int _failedLogins;
     private volatile bool _offline;
 
@@ -79,6 +80,12 @@ public sealed partial class StubReader : IAsyncDisposable
 
     /// <summary>Authenticated requests whose digest did not match the reader's password.</summary>
     public int FailedLogins => Volatile.Read(ref _failedLogins);
+
+    /// <summary>
+    /// Every <c>Authorization</c> header value it was sent, verbatim — what must never reappear in
+    /// the application's logs, spans or reasons (ISA-24).
+    /// </summary>
+    public IReadOnlyList<string> Authorizations => [.. _authorizations];
 
     /// <summary>The persons it holds, by <c>employeeNo</c>.</summary>
     public IReadOnlyDictionary<string, StubPerson> Persons => new Dictionary<string, StubPerson>(_persons);
@@ -231,6 +238,8 @@ public sealed partial class StubReader : IAsyncDisposable
         string authorization = context.Request.Headers.Authorization.ToString();
         if (!authorization.StartsWith("Digest ", StringComparison.Ordinal))
             return false;
+
+        _authorizations.Enqueue(authorization);
 
         var fields = DigestFields()
             .Matches(authorization["Digest ".Length..])

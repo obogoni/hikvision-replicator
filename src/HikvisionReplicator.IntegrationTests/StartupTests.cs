@@ -197,6 +197,43 @@ public class StartupTests(PostgresFixture fixture)
         Assert.Empty(options.AbsentSubStatusCodes);
     }
 
+    // ─── ISA-22: the reader's self-signed certificate is trusted by the adapter alone ─
+
+    /// <summary>
+    /// The host registers no <c>IHttpClientFactory</c>, so the process's default client is a
+    /// plain <see cref="HttpClient"/>: that is what any other outbound HTTPS call would use, and
+    /// what a process-wide bypass — a global validation callback or switch — would loosen.
+    /// The adapter, composed by the same host, reaches the same reader.
+    /// </summary>
+    [Fact]
+    public async Task Only_the_adapter_trusts_a_readers_self_signed_certificate()
+    {
+        await using var reader = await StubReader.StartAsync("Reader-Passw0rd-71c4");
+        using var factory = BootWith(
+            settings:
+            [
+                ("DeviceClient:Adapter", "Isapi"),
+                ("Isapi:AbsentSubStatusCodes:0", StubReader.NothingThere),
+            ]
+        );
+        Assert.Null(factory.Services.GetService<IHttpClientFactory>());
+
+        var outcome = await factory
+            .Services.GetRequiredService<IDeviceClient>()
+            .AddAsync(
+                new DeviceEndpoint(1, "127.0.0.1", reader.Port, StubReader.Username, "Reader-Passw0rd-71c4"),
+                new DeviceEnrolment("TICKET-0001", "Ana Souza", "123456", new byte[] { 0xFF, 0xD8, 0xFF }),
+                CancellationToken.None
+            );
+        Assert.True(outcome.IsT0, $"Expected the adapter to deliver, got {outcome.Value}.");
+
+        using var plain = new HttpClient();
+        var refused = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            plain.GetAsync(reader.BaseAddress)
+        );
+        Assert.Equal(HttpRequestError.SecureConnectionError, refused.HttpRequestError);
+    }
+
     // ─── DEV-16: tracing exists only when an export endpoint is configured ─
 
     [Fact]
