@@ -10,8 +10,11 @@ namespace HikvisionReplicator.Api.Infrastructure.Isapi;
 /// (AD-043) — so every step is sent once (ISA-19) and a cancelled token simply propagates
 /// (ISA-20).
 /// </summary>
-public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<IsapiOptions> options)
-    : IDeviceClient
+public sealed class IsapiDeviceClient(
+    IReaderConnections connections,
+    IOptions<IsapiOptions> options,
+    TimeProvider timeProvider
+) : IDeviceClient
 {
     private readonly IsapiOptions _options = options.Value;
 
@@ -28,13 +31,16 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(enrolment);
 
-        var client = connections.For(device);
+        if (connections.IsHeld(device, out var held))
+            return new Unreachable(held);
 
-        var person = await UpsertPersonAsync(client, enrolment, cancellationToken);
+        var call = new Call(device, connections.For(device), cancellationToken);
+
+        var person = await UpsertPersonAsync(call, enrolment);
         if (person.Result is not StepResult.Ok)
             return Failure(person);
 
-        var face = await ReplaceFaceAsync(client, enrolment, cancellationToken);
+        var face = await ReplaceFaceAsync(call, enrolment);
         if (face.Result is StepResult.Ok)
             return new Delivered();
 
@@ -42,10 +48,9 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
             return Failure(face);
 
         var compensation = await SendAsync(
-            client,
+            call,
             IsapiStep.PersonDelete,
-            IsapiRequests.PersonDelete(enrolment.ExternalRef),
-            cancellationToken
+            IsapiRequests.PersonDelete(enrolment.ExternalRef)
         );
 
         return compensation.Result is StepResult.Ok or StepResult.Absent
@@ -66,13 +71,16 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(enrolment);
 
-        var client = connections.For(device);
+        if (connections.IsHeld(device, out var held))
+            return new Unreachable(held);
 
-        var person = await UpsertPersonAsync(client, enrolment, cancellationToken);
+        var call = new Call(device, connections.For(device), cancellationToken);
+
+        var person = await UpsertPersonAsync(call, enrolment);
         if (person.Result is not StepResult.Ok)
             return Failure(person);
 
-        var face = await ReplaceFaceAsync(client, enrolment, cancellationToken);
+        var face = await ReplaceFaceAsync(call, enrolment);
         return face.Result is StepResult.Ok ? new Delivered() : Failure(face);
     }
 
@@ -89,95 +97,85 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(externalRef);
 
-        var client = connections.For(device);
+        if (connections.IsHeld(device, out var held))
+            return new Unreachable(held);
+
+        var call = new Call(device, connections.For(device), cancellationToken);
 
         var face = await SendAsync(
-            client,
+            call,
             IsapiStep.FaceDelete,
-            IsapiRequests.FaceDelete(externalRef, _options),
-            cancellationToken
+            IsapiRequests.FaceDelete(externalRef, _options)
         );
         if (face.Result is not (StepResult.Ok or StepResult.Absent))
             return Failure(face);
 
-        var person = await SendAsync(
-            client,
-            IsapiStep.PersonDelete,
-            IsapiRequests.PersonDelete(externalRef),
-            cancellationToken
-        );
+        var person = await SendAsync(call, IsapiStep.PersonDelete, IsapiRequests.PersonDelete(externalRef));
         return person.Result is StepResult.Ok or StepResult.Absent
             ? new Delivered()
             : Failure(person);
     }
 
     /// <summary>ISA-02: create, and converge an existing person with a modify.</summary>
-    private async Task<Exchange> UpsertPersonAsync(
-        HttpClient client,
-        DeviceEnrolment enrolment,
-        CancellationToken cancellationToken
-    )
+    private async Task<Exchange> UpsertPersonAsync(Call call, DeviceEnrolment enrolment)
     {
         var created = await SendAsync(
-            client,
+            call,
             IsapiStep.PersonCreate,
-            IsapiRequests.PersonCreate(enrolment, _options),
-            cancellationToken
+            IsapiRequests.PersonCreate(enrolment, _options)
         );
         if (created.Result is not StepResult.AlreadyExists)
             return created;
 
         return await SendAsync(
-            client,
+            call,
             IsapiStep.PersonModify,
-            IsapiRequests.PersonModify(enrolment, _options),
-            cancellationToken
+            IsapiRequests.PersonModify(enrolment, _options)
         );
     }
 
     /// <summary>ISA-03: delete whatever face is there (none is fine), then write the enrolment's.</summary>
-    private async Task<Exchange> ReplaceFaceAsync(
-        HttpClient client,
-        DeviceEnrolment enrolment,
-        CancellationToken cancellationToken
-    )
+    private async Task<Exchange> ReplaceFaceAsync(Call call, DeviceEnrolment enrolment)
     {
         var deleted = await SendAsync(
-            client,
+            call,
             IsapiStep.FaceDelete,
-            IsapiRequests.FaceDelete(enrolment.ExternalRef, _options),
-            cancellationToken
+            IsapiRequests.FaceDelete(enrolment.ExternalRef, _options)
         );
         if (deleted.Result is not (StepResult.Ok or StepResult.Absent))
             return deleted;
 
-        return await SendAsync(
-            client,
-            IsapiStep.FaceCreate,
-            IsapiRequests.FaceCreate(enrolment, _options),
-            cancellationToken
-        );
+        return await SendAsync(call, IsapiStep.FaceCreate, IsapiRequests.FaceCreate(enrolment, _options));
     }
 
     /// <summary>
     /// One authenticated exchange, attempted once (ISA-19). A cancelled token is never caught
-    /// (ISA-20); the worker maps it to unreachable (WRK-11).
+    /// (ISA-20); the worker maps it to unreachable (WRK-11). Refused credentials are held, so
+    /// the worker's probes cannot lock the reader's account (ISA-37).
     /// </summary>
-    private async Task<Exchange> SendAsync(
-        HttpClient client,
-        IsapiStep step,
-        HttpRequestMessage request,
-        CancellationToken cancellationToken
-    )
+    private async Task<Exchange> SendAsync(Call call, IsapiStep step, HttpRequestMessage request)
+    {
+        var exchange = await ExchangeAsync(call, step, request);
+
+        if (exchange.Result is StepResult.AuthFailed auth)
+        {
+            var until = timeProvider.GetUtcNow() + (auth.UnlockAfter ?? _options.AuthFailureHold);
+            connections.Hold(call.Device, auth.Reason, until);
+        }
+
+        return exchange;
+    }
+
+    private async Task<Exchange> ExchangeAsync(Call call, IsapiStep step, HttpRequestMessage request)
     {
         using (request)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            call.Token.ThrowIfCancellationRequested();
 
             try
             {
-                using var response = await client.SendAsync(request, cancellationToken);
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var response = await call.Client.SendAsync(request, call.Token);
+                var body = await response.Content.ReadAsStringAsync(call.Token);
                 return new Exchange(
                     step,
                     IsapiOutcomes.Classify(step, response.StatusCode, body, _options),
@@ -188,7 +186,7 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
             {
                 return new Exchange(step, IsapiOutcomes.Classify(step, exception), null);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (!call.Token.IsCancellationRequested)
             {
                 // Cannot happen with Timeout = Infinite; classified rather than thrown, defensively.
                 return new Exchange(step, new StepResult.ReaderDown("request timed out"), null);
@@ -214,6 +212,9 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
             StepResult.AuthFailed auth => $"{IsapiOutcomes.NameOf(exchange.Step)}: {auth.Reason}",
             _ => $"{IsapiOutcomes.NameOf(exchange.Step)}: unexpected answer",
         };
+
+    /// <summary>The reader, its client and the worker's token, for every step of one port call.</summary>
+    private readonly record struct Call(DeviceEndpoint Device, HttpClient Client, CancellationToken Token);
 
     /// <summary>One step and how it ended; <paramref name="Status"/> is null when no answer came.</summary>
     private readonly record struct Exchange(IsapiStep Step, StepResult Result, int? Status);

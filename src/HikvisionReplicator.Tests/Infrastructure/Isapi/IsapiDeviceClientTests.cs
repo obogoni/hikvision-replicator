@@ -63,7 +63,7 @@ public partial class IsapiDeviceClientTests : IDisposable
     public IsapiDeviceClientTests()
     {
         _connections = new ReaderConnections(_clock, _ => _reader);
-        _client = new IsapiDeviceClient(_connections, Options.Create(_options));
+        _client = new IsapiDeviceClient(_connections, Options.Create(_options), _clock);
     }
 
     public void Dispose()
