@@ -57,13 +57,14 @@ public partial class IsapiDeviceClientTests : IDisposable
     );
     private readonly ScriptedReader _reader = new();
     private readonly IsapiOptions _options = new() { AbsentSubStatusCodes = ["deviceUserNotExist"] };
+    private readonly CapturingLogger<IsapiDeviceClient> _logger = new();
     private readonly ReaderConnections _connections;
     private readonly IsapiDeviceClient _client;
 
     public IsapiDeviceClientTests()
     {
         _connections = new ReaderConnections(_clock, _ => _reader);
-        _client = new IsapiDeviceClient(_connections, Options.Create(_options), _clock);
+        _client = new IsapiDeviceClient(_connections, Options.Create(_options), _clock, _logger);
     }
 
     public void Dispose()
