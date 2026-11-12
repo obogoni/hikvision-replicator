@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -113,6 +114,44 @@ public sealed partial class StubReader : IAsyncDisposable
             .Addresses.Single();
         reader.Port = new Uri(address).Port;
         return reader;
+    }
+
+    /// <summary>
+    /// What a worker host needs to deliver to stub readers: the ISAPI adapter, and this reader's
+    /// way of saying there is nothing to delete as the adapter's absent code (ISA-11). A fresh
+    /// copy, so a test can add its own settings.
+    /// </summary>
+    public static Dictionary<string, string?> HostSettings() =>
+        new()
+        {
+            ["DeviceClient:Adapter"] = "Isapi",
+            ["Isapi:AbsentSubStatusCodes:0"] = NothingThere,
+        };
+
+    /// <summary>
+    /// Registers this reader through the application's own route, with <paramref name="password"/>
+    /// as the credential the adapter will log in with, and returns its id.
+    /// </summary>
+    public async Task<int> RegisterThroughAsync(HttpClient api, string password)
+    {
+        ArgumentNullException.ThrowIfNull(api);
+
+        using var response = await api.PostAsJsonAsync(
+            "/api/devices",
+            new
+            {
+                name = $"Stub reader {Port}",
+                ipAddress = "127.0.0.1",
+                httpPort = Port,
+                username = Username,
+                password,
+                faceCapacity = 1_500,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("id").GetInt32();
     }
 
     /// <summary>Refuses every later <paramref name="step"/> as a record it will not take (ISA-13).</summary>
