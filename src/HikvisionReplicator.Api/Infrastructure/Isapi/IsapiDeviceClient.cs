@@ -53,17 +53,63 @@ public sealed class IsapiDeviceClient(IReaderConnections connections, IOptions<I
             : new Rejected($"{refused.Reason}; compensation failed: {ReasonOf(compensation)}");
     }
 
-    public Task<OneOf<Delivered, Rejected, Unreachable>> UpdateAsync(
+    /// <summary>
+    /// ISA-07…ISA-09: the same upsert and face replace as an add, with no compensation — the
+    /// spectator was enrolled before, and a bad photograph must not lock them out.
+    /// </summary>
+    public async Task<OneOf<Delivered, Rejected, Unreachable>> UpdateAsync(
         DeviceEndpoint device,
         DeviceEnrolment enrolment,
         CancellationToken cancellationToken
-    ) => throw new NotImplementedException();
+    )
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(enrolment);
 
-    public Task<OneOf<Delivered, Rejected, Unreachable>> RemoveAsync(
+        var client = connections.For(device);
+
+        var person = await UpsertPersonAsync(client, enrolment, cancellationToken);
+        if (person.Result is not StepResult.Ok)
+            return Failure(person);
+
+        var face = await ReplaceFaceAsync(client, enrolment, cancellationToken);
+        return face.Result is StepResult.Ok ? new Delivered() : Failure(face);
+    }
+
+    /// <summary>
+    /// ISA-10, ISA-11: the face first, so a partial remove never leaves a person holding a face;
+    /// nothing to delete counts as deleted.
+    /// </summary>
+    public async Task<OneOf<Delivered, Rejected, Unreachable>> RemoveAsync(
         DeviceEndpoint device,
         string externalRef,
         CancellationToken cancellationToken
-    ) => throw new NotImplementedException();
+    )
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(externalRef);
+
+        var client = connections.For(device);
+
+        var face = await SendAsync(
+            client,
+            IsapiStep.FaceDelete,
+            IsapiRequests.FaceDelete(externalRef, _options),
+            cancellationToken
+        );
+        if (face.Result is not (StepResult.Ok or StepResult.Absent))
+            return Failure(face);
+
+        var person = await SendAsync(
+            client,
+            IsapiStep.PersonDelete,
+            IsapiRequests.PersonDelete(externalRef),
+            cancellationToken
+        );
+        return person.Result is StepResult.Ok or StepResult.Absent
+            ? new Delivered()
+            : Failure(person);
+    }
 
     /// <summary>ISA-02: create, and converge an existing person with a modify.</summary>
     private async Task<Exchange> UpsertPersonAsync(
