@@ -1,9 +1,15 @@
+using System.Net;
+using System.Text.Json;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Infrastructure.Isapi;
+using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace HikvisionReplicator.IntegrationTests;
@@ -208,6 +214,125 @@ public class HarnessTests(PostgresFixture fixture) : IAsyncLifetime
         {
             await RunOnServerAsync($"""DROP DATABASE IF EXISTS "{ProbeDatabase}" WITH (FORCE)""");
         }
+    }
+
+    // ─── The stub reader the ISAPI tests run against: real TLS, real digest ───
+
+    private const string ReaderPassword = "Reader-Passw0rd-71c4";
+
+    /// <summary>
+    /// A client of the test's own, outside the application: it trusts exactly the stub's
+    /// certificate, and authenticates by digest only when given a password.
+    /// </summary>
+    private static HttpClient RawClientTo(StubReader reader, string? password = null)
+    {
+        var handler = new SocketsHttpHandler();
+        handler.SslOptions.RemoteCertificateValidationCallback = (_, certificate, _, _) =>
+            certificate?.GetCertHashString() == reader.Certificate.GetCertHashString();
+
+        if (password is not null)
+        {
+            handler.Credentials = new CredentialCache
+            {
+                {
+                    reader.BaseAddress,
+                    "Digest",
+                    new NetworkCredential(StubReader.Username, password)
+                },
+            };
+        }
+
+        return new HttpClient(handler) { BaseAddress = reader.BaseAddress };
+    }
+
+    private static readonly DeviceEnrolment Enrolment = new(
+        "TICKET-0001",
+        "Ana Souza",
+        "123456",
+        new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x01, 0x02 }
+    );
+
+    [Fact]
+    public async Task Stub_reader_challenges_a_request_without_credentials_for_digest()
+    {
+        await using var reader = await StubReader.StartAsync(ReaderPassword);
+        using var client = RawClientTo(reader);
+
+        using var response = await client.SendAsync(
+            IsapiRequests.PersonCreate(Enrolment, new IsapiOptions())
+        );
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Equal("Digest", challenge.Scheme);
+        Assert.Contains("qop=\"auth\"", challenge.Parameter, StringComparison.Ordinal);
+        Assert.Contains("nonce=\"", challenge.Parameter, StringComparison.Ordinal);
+        // Being challenged is the first half of every login, not a failed one.
+        Assert.Equal(0, reader.FailedLogins);
+        Assert.Empty(reader.Persons);
+    }
+
+    [Fact]
+    public async Task Stub_reader_answers_a_digest_login_with_the_right_password()
+    {
+        await using var reader = await StubReader.StartAsync(ReaderPassword);
+        using var client = RawClientTo(reader, ReaderPassword);
+
+        using var response = await client.SendAsync(
+            IsapiRequests.PersonCreate(Enrolment, new IsapiOptions())
+        );
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, body.RootElement.GetProperty("statusCode").GetInt32());
+        Assert.Equal(0, reader.FailedLogins);
+    }
+
+    [Fact]
+    public async Task Stub_reader_refuses_a_wrong_password_and_counts_the_failed_login()
+    {
+        await using var reader = await StubReader.StartAsync(ReaderPassword);
+        using var client = RawClientTo(reader, "Not-The-Passw0rd");
+
+        using var response = await client.SendAsync(
+            IsapiRequests.PersonCreate(Enrolment, new IsapiOptions())
+        );
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(1, reader.FailedLogins);
+        Assert.Empty(reader.Persons);
+    }
+
+    [Fact]
+    public async Task Stub_reader_holds_one_person_and_one_face_after_an_enrolment_through_the_adapter()
+    {
+        await using var reader = await StubReader.StartAsync(ReaderPassword);
+        // The face is deleted before it is written; on a fresh reader there is none to delete.
+        var options = Options.Create(
+            new IsapiOptions { AbsentSubStatusCodes = [StubReader.NothingThere] }
+        );
+        using var connections = new ReaderConnections(options, TimeProvider.System);
+        var adapter = new IsapiDeviceClient(
+            connections,
+            options,
+            TimeProvider.System,
+            NullLogger<IsapiDeviceClient>.Instance
+        );
+
+        var outcome = await adapter.AddAsync(
+            new DeviceEndpoint(1, "127.0.0.1", reader.Port, StubReader.Username, ReaderPassword),
+            Enrolment,
+            CancellationToken.None
+        );
+
+        Assert.True(outcome.IsT0, $"Expected delivered, got {outcome.Value}.");
+        // The A-2 key of TICKET-0001, computed outside .NET (see IsapiIdentityTests).
+        const string EmployeeNo = "b43a95a2c19a97b6289861e47299284f";
+        Assert.Equal(new StubPerson(EmployeeNo, "Ana Souza", "123456"), Assert.Single(reader.Persons).Value);
+        var face = Assert.Single(reader.Faces);
+        Assert.Equal(EmployeeNo, face.Key);
+        Assert.Equal(Enrolment.FacePicture.ToArray(), face.Value);
+        Assert.Equal(0, reader.FailedLogins);
     }
 
     private async Task RunOnServerAsync(string sql)
