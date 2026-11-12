@@ -18,8 +18,13 @@ Commands:
   add        Record a grounded lesson from a verification signal.
   list       Print lessons (default: confirmed) for loading at Specify/Design.
   penalize   Mark a confirmed lesson as having failed when applied (-> quarantine).
-  prune      Drop stale uncorroborated candidates (also runs automatically on add/list).
-  status     Print counts (used by the self-check in validate.md).
+  prune      Report stale uncorroborated candidates; deletes them only with --apply.
+  status     Print counts, including stale candidates (used by the self-check in validate.md).
+
+Only `add`, `penalize`, `init` and `prune --apply` write the store. Nothing prunes
+implicitly: `list` and `status` are read-only, and `add` never drops other lessons.
+Staleness is measured in wall-clock days, but a feature here can run for weeks, so
+an automatic prune deleted candidates before a second feature could corroborate them.
   init       Create empty store + rendered file.
 
 Exit codes: 0 ok, 2 usage/validation error (e.g. missing grounding).
@@ -108,22 +113,18 @@ def _key(signal, text):
     return signal + "::" + _norm(text)
 
 
-def _auto_prune(data):
-    """Drop candidates that never recurred within the window. Mutates data."""
+def _stale_ids(data):
+    """Ids of candidates that never recurred within the window. Pure — never mutates."""
     threshold = data["promote_threshold"]
     window = data["window_days"]
     now = _dt.datetime.now(_dt.timezone.utc)
-    kept = []
-    dropped = []
+    stale = []
     for l in data["lessons"]:
         if l["status"] == "candidate" and l["recurrence"] < threshold:
             age_days = (now - _parse_date(l.get("last_seen", l.get("created", _now())))).days
             if age_days > window:
-                dropped.append(l["id"])
-                continue
-        kept.append(l)
-    data["lessons"] = kept
-    return dropped
+                stale.append(l["id"])
+    return stale
 
 
 def _find(data, signal, text):
@@ -222,7 +223,6 @@ def cmd_add(root, args):
         return 2
 
     data = _load(root)
-    _auto_prune(data)
     existing = _find(data, signal, text)
     now = _now()
 
@@ -288,8 +288,6 @@ def cmd_penalize(root, args):
 
 def cmd_list(root, args):
     data = _load(root)
-    if _auto_prune(data):
-        _save(root, data)
     want = args.status
     q = (args.query or "").lower().strip()
     scope = (args.scope or "").lower().strip()
@@ -313,9 +311,16 @@ def cmd_list(root, args):
 
 def cmd_prune(root, args):
     data = _load(root)
-    dropped = _auto_prune(data)
+    stale = _stale_ids(data)
+    listed = ", ".join(stale) if stale else "—"
+    if not args.apply:
+        print(f"{len(stale)} stale candidate(s) older than {data['window_days']} days: {listed}")
+        print("Dry run — nothing deleted. Re-run with --apply to delete them.")
+        return 0
+    doomed = set(stale)
+    data["lessons"] = [l for l in data["lessons"] if l["id"] not in doomed]
     _save(root, data)
-    print(f"Pruned {len(dropped)} stale candidate(s): {', '.join(dropped) if dropped else '—'}")
+    print(f"Pruned {len(stale)} stale candidate(s): {listed}")
     return 0
 
 
@@ -325,7 +330,7 @@ def cmd_status(root, args):
     for l in data["lessons"]:
         counts[l["status"]] = counts.get(l["status"], 0) + 1
     total = len(data["lessons"])
-    print(f"lessons: {total} total | confirmed={counts['confirmed']} candidate={counts['candidate']} quarantined={counts['quarantined']}")
+    print(f"lessons: {total} total | confirmed={counts['confirmed']} candidate={counts['candidate']} quarantined={counts['quarantined']} | stale={len(_stale_ids(data))}")
     return 0
 
 
@@ -355,7 +360,8 @@ def main(argv=None):
     sp.add_argument("--scope", default="", help="Substring filter on scope")
     sp.set_defaults(fn=cmd_list)
 
-    sp = sub.add_parser("prune", help="Drop stale uncorroborated candidates")
+    sp = sub.add_parser("prune", help="Report stale uncorroborated candidates (--apply deletes them)")
+    sp.add_argument("--apply", action="store_true", help="Actually delete the stale candidates")
     sp.set_defaults(fn=cmd_prune)
 
     sp = sub.add_parser("status", help="Print counts")
