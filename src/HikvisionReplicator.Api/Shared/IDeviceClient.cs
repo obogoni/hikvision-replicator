@@ -17,10 +17,12 @@ public sealed record DeviceEndpoint(
 
 /// <summary>
 /// What a reader needs to recognise a spectator at the turnstile (WRK-02): the key the
-/// integrator knows them by, the PIN, and the normalized face.
+/// integrator knows them by, the name the reader shows (ISA-26), the PIN, and the normalized
+/// face.
 /// </summary>
 public sealed record DeviceEnrolment(
     string ExternalRef,
+    string Name,
     string AccessCode,
     ReadOnlyMemory<byte> FacePicture
 );

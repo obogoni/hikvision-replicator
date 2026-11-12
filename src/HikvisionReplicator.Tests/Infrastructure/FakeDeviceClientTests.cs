@@ -17,7 +17,7 @@ public class FakeDeviceClientTests
     private static readonly DeviceEndpoint BackGate = new(2, "10.0.0.2", 80, "admin", "secret");
 
     private static DeviceEnrolment Spectator(string externalRef) =>
-        new(externalRef, "123456", new byte[] { 0xFF, 0xD8, 0xFF });
+        new(externalRef, "Ada Lovelace", "123456", new byte[] { 0xFF, 0xD8, 0xFF });
 
     private readonly FakeTimeProvider _clock = new(
         new DateTimeOffset(2026, 10, 26, 18, 0, 0, TimeSpan.Zero)

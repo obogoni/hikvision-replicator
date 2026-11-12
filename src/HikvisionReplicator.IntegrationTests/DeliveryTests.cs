@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Net.Http.Json;
 using HikvisionReplicator.Api.Domain;
 using HikvisionReplicator.Api.Infrastructure;
 using HikvisionReplicator.Api.Infrastructure.Worker;
@@ -159,6 +160,58 @@ public class DeliveryTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixtu
         Assert.Equal("TICKET-1", update.Enrolment!.ExternalRef);
         Assert.Equal("654321", update.Enrolment.AccessCode);
         Assert.Equal(await StoredPictureAsync("TICKET-1"), update.Enrolment.FacePicture.ToArray());
+    }
+
+    // ─── ISA-26 / ISA-27: the name the reader shows travels with the enrolment ───
+
+    private async Task UpsertNamedSpectatorAsync(string externalRef, string name)
+    {
+        var response = await Client.PutAsJsonAsync(
+            UserRoute(externalRef),
+            new
+            {
+                name,
+                accessCode = DefaultAccessCode,
+                facePicture = FaceFixtures.Bytes(FaceFixtures.Portrait),
+            }
+        );
+
+        Assert.True(response.IsSuccessStatusCode, $"Upsert answered {response.StatusCode}.");
+    }
+
+    [Fact]
+    public async Task A_new_spectator_reaches_the_reader_with_their_name()
+    {
+        await GivenRegisteredDeviceAsync("10.0.1.1");
+
+        await UpsertNamedSpectatorAsync("TICKET-1", "Ana Souza");
+
+        var add = Assert.Single(
+            await CallsUntilAsync(calls => calls.Count == 1, "the reader has been called")
+        );
+        Assert.Equal(ReplicationOperation.Add, add.Operation);
+        Assert.Equal("Ana Souza", add.Enrolment!.Name);
+    }
+
+    [Fact]
+    public async Task A_renamed_spectator_reaches_the_reader_as_an_update_with_the_new_name()
+    {
+        await GivenRegisteredDeviceAsync("10.0.1.1");
+        await UpsertNamedSpectatorAsync("TICKET-1", "Ada Lovelace");
+        await QueueUntilAsync(
+            queue => queue.Single().Status == ReplicationStatus.Succeeded,
+            "the enrolment has been delivered"
+        );
+
+        await UpsertNamedSpectatorAsync("TICKET-1", "Ana Souza");
+
+        await QueueUntilAsync(
+            queue => queue.Count == 2 && queue.All(work => work.Status == ReplicationStatus.Succeeded),
+            "the rename has been delivered"
+        );
+        var update = Readers.Calls[^1];
+        Assert.Equal(ReplicationOperation.Update, update.Operation);
+        Assert.Equal("Ana Souza", update.Enrolment!.Name);
     }
 
     [Fact]
