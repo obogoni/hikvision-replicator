@@ -1,6 +1,7 @@
 using System.Net;
 using HikvisionReplicator.Api.Domain.Events;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Infrastructure.Isapi;
 using HikvisionReplicator.Api.Infrastructure.Worker;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.AspNetCore.Hosting;
@@ -123,15 +124,77 @@ public class StartupTests(PostgresFixture fixture)
         Assert.Contains("DeviceClient:Adapter", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// ISA-23 supersedes this test's original premise, that <c>Isapi</c> was an adapter the
+    /// build did not have. The check that survives is the one about a name that is still
+    /// unknown, and the message now has to name both values an operator may choose from.
+    /// </summary>
     [Fact]
     public void Application_does_not_start_with_a_device_adapter_it_does_not_have()
     {
-        using var factory = BootWith(settings: ("DeviceClient:Adapter", "Isapi"));
+        using var factory = BootWith(settings: ("DeviceClient:Adapter", "Bogus"));
 
         var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
 
         Assert.Contains("DeviceClient:Adapter", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("Isapi", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Bogus", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'Fake'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'Isapi'", exception.Message, StringComparison.Ordinal);
+    }
+
+    // ─── ISA-23: the real readers are one setting away ─
+
+    [Fact]
+    public void Application_starts_on_the_isapi_adapter_and_answers_for_the_readers_with_it()
+    {
+        using var factory = BootWith(settings: ("DeviceClient:Adapter", "Isapi"));
+
+        Assert.IsType<IsapiDeviceClient>(factory.Services.GetRequiredService<IDeviceClient>());
+    }
+
+    [Fact]
+    public void Application_does_not_start_with_an_isapi_setting_the_reader_cannot_work_with()
+    {
+        using var factory = BootWith(
+            settings: [("DeviceClient:Adapter", "Isapi"), ("Isapi:NameMaxLength", "0")]
+        );
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("Isapi:NameMaxLength", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The configuration binder appends configured items to a list that already holds its
+    /// default, so the UAT's correction of a sub-status code would otherwise sit beside the
+    /// guess it was meant to replace.
+    /// </summary>
+    [Fact]
+    public void A_configured_sub_status_list_replaces_its_default_rather_than_extending_it()
+    {
+        using var factory = BootWith(
+            settings:
+            [
+                ("Isapi:AlreadyExistsSubStatusCodes:0", "employeeNoAlreadyExist"),
+                ("Isapi:AbsentSubStatusCodes:0", "employeeNoNotExist"),
+            ]
+        );
+
+        var options = factory.Services.GetRequiredService<IOptions<IsapiOptions>>().Value;
+
+        Assert.Equal(["employeeNoAlreadyExist"], options.AlreadyExistsSubStatusCodes);
+        Assert.Equal(["employeeNoNotExist"], options.AbsentSubStatusCodes);
+    }
+
+    [Fact]
+    public void An_unconfigured_sub_status_list_keeps_its_default()
+    {
+        using var factory = BootWith();
+
+        var options = factory.Services.GetRequiredService<IOptions<IsapiOptions>>().Value;
+
+        Assert.Equal(["deviceUserAlreadyExist"], options.AlreadyExistsSubStatusCodes);
+        Assert.Empty(options.AbsentSubStatusCodes);
     }
 
     // ─── DEV-16: tracing exists only when an export endpoint is configured ─

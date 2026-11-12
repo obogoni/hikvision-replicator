@@ -9,6 +9,7 @@ using HikvisionReplicator.Api.Features.Users.ListUsers;
 using HikvisionReplicator.Api.Features.Users.RemoveUser;
 using HikvisionReplicator.Api.Features.Users.UpsertUser;
 using HikvisionReplicator.Api.Infrastructure;
+using HikvisionReplicator.Api.Infrastructure.Isapi;
 using HikvisionReplicator.Api.Infrastructure.Worker;
 using HikvisionReplicator.Api.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -52,22 +53,50 @@ builder
     .Bind(builder.Configuration.GetSection(ReplicationWorkerOptions.SectionName))
     .ValidateOnStart();
 
-// The adapter is named explicitly and nothing is a default: the only one that exists is a fake
-// that always answers, and shipping it silently would report spectators enrolled on readers
-// that never heard of them. An unknown or missing adapter stops startup naming the setting.
+// The adapter is named explicitly and nothing is a default: one of them is a fake that always
+// answers, and shipping it silently would report spectators enrolled on readers that never
+// heard of them. An unknown or missing adapter stops startup naming the setting (ISA-23).
 builder.Services.AddSingleton<IValidateOptions<DeviceClientOptions>, DeviceClientOptionsValidator>();
 builder
     .Services.AddOptions<DeviceClientOptions>()
     .Bind(builder.Configuration.GetSection(DeviceClientOptions.SectionName))
     .ValidateOnStart();
+
+// Every ISAPI constant the bench UAT may correct is configuration (AD-033), and a value the
+// reader cannot work with stops startup naming the setting.
+var isapiSection = builder.Configuration.GetSection(IsapiOptions.SectionName);
+builder.Services.AddSingleton<IValidateOptions<IsapiOptions>, IsapiOptionsValidator>();
+builder
+    .Services.AddOptions<IsapiOptions>()
+    .Bind(isapiSection)
+    // The binder appends configured items to a list that already holds its default, so a
+    // configured list would keep the default it was meant to replace. A list that is
+    // configured at all is taken as written.
+    .PostConfigure(options =>
+    {
+        if (ConfiguredList(nameof(IsapiOptions.AlreadyExistsSubStatusCodes)) is { } alreadyExists)
+            options.AlreadyExistsSubStatusCodes = alreadyExists;
+        if (ConfiguredList(nameof(IsapiOptions.AbsentSubStatusCodes)) is { } absent)
+            options.AbsentSubStatusCodes = absent;
+    })
+    .ValidateOnStart();
+
+string[]? ConfiguredList(string key) => isapiSection.GetSection(key).Get<string[]>();
+
+// Singletons: the connections hold each reader's warm client and the ISA-37 auth holds, which
+// must outlive any one call, and the device loops share them across threads.
+builder.Services.AddSingleton<IReaderConnections, ReaderConnections>();
+builder.Services.AddSingleton<IsapiDeviceClient>();
 builder.Services.AddSingleton<FakeDeviceClient>();
 builder.Services.AddSingleton<IDeviceClient>(services =>
-    services.GetRequiredService<IOptions<DeviceClientOptions>>().Value.Adapter
-    == DeviceClientOptions.FakeAdapter
-        ? services.GetRequiredService<FakeDeviceClient>()
-        : throw new InvalidOperationException(
+    services.GetRequiredService<IOptions<DeviceClientOptions>>().Value.Adapter switch
+    {
+        DeviceClientOptions.FakeAdapter => services.GetRequiredService<FakeDeviceClient>(),
+        DeviceClientOptions.IsapiAdapter => services.GetRequiredService<IsapiDeviceClient>(),
+        _ => throw new InvalidOperationException(
             $"{DeviceClientOptionsValidator.AdapterPath} names no adapter this build provides."
-        )
+        ),
+    }
 );
 
 // The queue's drain: a supervisor keeping one serial loop per reader (AD-043). Singletons,
@@ -142,6 +171,9 @@ if (!string.IsNullOrEmpty(otlpEndpoint))
                 // Without this the normalizer's ActivitySource has no listener and emits
                 // nothing at all — the child span USR-40 requires would silently not exist.
                 .AddSource(SkiaFaceImageNormalizer.ActivitySourceName)
+                // ISA-28, the same lesson: each reader step's client span is published on the
+                // adapter's own source, and without this it is published to nobody.
+                .AddSource(IsapiDeviceClient.ActivitySourceName)
                 .AddOtlpExporter(options =>
                 {
                     options.Endpoint = new Uri(otlpEndpoint);
