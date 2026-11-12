@@ -139,7 +139,7 @@ public sealed partial class IsapiDeviceClient(
         {
             var result = connections.IsHeld(device, out var held)
                 ? new CallResult(new Unreachable(held), null)
-                : await steps(new Call(device, connections.For(device), cancellationToken));
+                : await steps(new Call(device, connections.ClientFor(device), cancellationToken));
 
             var outcome = result.Outcome.Match(_ => "Delivered", _ => "Rejected", _ => "Unreachable");
             var failedAt = result.FailedAt;

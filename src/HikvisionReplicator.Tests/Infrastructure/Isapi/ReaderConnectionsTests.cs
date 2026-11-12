@@ -53,8 +53,8 @@ public class ReaderConnectionsTests
     {
         using var connections = NewConnections();
 
-        var first = connections.For(FrontGate);
-        var second = connections.For(FrontGate with { });
+        var first = connections.ClientFor(FrontGate);
+        var second = connections.ClientFor(FrontGate with { });
 
         Assert.Same(first, second);
         Assert.Single(_handlers);
@@ -76,9 +76,9 @@ public class ReaderConnectionsTests
     )
     {
         using var connections = NewConnections();
-        var old = connections.For(FrontGate);
+        var old = connections.ClientFor(FrontGate);
 
-        var replacement = connections.For(changed);
+        var replacement = connections.ClientFor(changed);
 
         Assert.NotSame(old, replacement);
         Assert.Equal(2, _handlers.Count);
@@ -91,12 +91,12 @@ public class ReaderConnectionsTests
     public void Another_readers_client_is_unaffected_when_one_reader_changes()
     {
         using var connections = NewConnections();
-        var back = connections.For(BackGate);
-        connections.For(FrontGate);
+        var back = connections.ClientFor(BackGate);
+        connections.ClientFor(FrontGate);
 
-        connections.For(FrontGate with { Password = "Front-Pa56" });
+        connections.ClientFor(FrontGate with { Password = "Front-Pa56" });
 
-        Assert.Same(back, connections.For(BackGate));
+        Assert.Same(back, connections.ClientFor(BackGate));
         Assert.False(_handlers[0].Disposed);
     }
 
@@ -104,8 +104,8 @@ public class ReaderConnectionsTests
     public void Disposing_releases_every_client()
     {
         var connections = NewConnections();
-        connections.For(FrontGate);
-        connections.For(BackGate);
+        connections.ClientFor(FrontGate);
+        connections.ClientFor(BackGate);
 
         connections.Dispose();
 
@@ -196,7 +196,7 @@ public class ReaderConnectionsTests
             _clock
         );
 
-        var client = connections.For(FrontGate);
+        var client = connections.ClientFor(FrontGate);
 
         Assert.Equal("https://10.0.0.5/", client.BaseAddress!.AbsoluteUri);
         Assert.Equal(443, client.BaseAddress.Port);
@@ -211,7 +211,7 @@ public class ReaderConnectionsTests
             _clock
         );
 
-        var client = connections.For(FrontGate with { IpAddress = "::1", Port = 8443 });
+        var client = connections.ClientFor(FrontGate with { IpAddress = "::1", Port = 8443 });
 
         Assert.Equal("https://[::1]:8443/", client.BaseAddress!.AbsoluteUri);
     }

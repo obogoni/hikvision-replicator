@@ -15,12 +15,7 @@ namespace HikvisionReplicator.Api.Infrastructure.Isapi;
 public interface IReaderConnections
 {
     /// <summary>The client for this endpoint's current identity; a changed identity replaces it.</summary>
-    [SuppressMessage(
-        "Naming",
-        "CA1716:Identifiers should not match keywords",
-        Justification = "The design names it For; the codebase is C# only, so the VB keyword clash is moot."
-    )]
-    HttpClient For(DeviceEndpoint endpoint);
+    HttpClient ClientFor(DeviceEndpoint endpoint);
 
     /// <summary>
     /// ISA-37: whether this endpoint's credentials are held after the reader refused them, and
@@ -61,7 +56,7 @@ public sealed class ReaderConnections : IReaderConnections, IDisposable
         _handlerFactory = handlerFactory;
     }
 
-    public HttpClient For(DeviceEndpoint endpoint)
+    public HttpClient ClientFor(DeviceEndpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         var key = ReaderKey.Of(endpoint);
