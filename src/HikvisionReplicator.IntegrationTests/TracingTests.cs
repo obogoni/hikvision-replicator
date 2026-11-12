@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using HikvisionReplicator.Api.Domain;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -271,5 +272,79 @@ public class TracingTests(PostgresFixture fixture) : IAsyncLifetime
                 StringComparison.Ordinal
             );
         }
+    }
+}
+
+/// <summary>
+/// ISA-28 through the deployment's own tracer: with an export endpoint configured and the ISAPI
+/// adapter selected, an enrolment exports one client span per reader step, each naming its
+/// device. Without <c>AddSource</c> for the adapter's source in Program.cs, the adapter's
+/// spans would be published to nobody while its unit tests — which listen for themselves —
+/// stayed green (L-037).
+/// <para>
+/// A class of its own beside <see cref="TracingTests"/>, because a delivery needs the worker
+/// running, and the worker runs only on <see cref="WorkerPostgresFixture"/>.
+/// </para>
+/// </summary>
+[Collection(WorkerCollectionDefinition.Name)]
+public class ReaderTracingTests(WorkerPostgresFixture fixture) : WorkerApiTests(fixture)
+{
+    private readonly InMemorySpanSink _spans = new();
+
+    private List<Activity> ReaderSpans(int deviceId) =>
+        [
+            .. _spans
+                .Spans.Where(span =>
+                    span.Source.Name == "HikvisionReplicator.Isapi"
+                    && Equals(span.GetTagItem("device.id"), deviceId)
+                )
+                .OrderBy(span => span.StartTimeUtc),
+        ];
+
+    [Fact]
+    public async Task An_enrolment_exports_one_client_span_per_reader_step_tagged_with_its_device()
+    {
+        await using var bench = await IsapiBench.StartAsync(
+            Fixture,
+            configure: builder =>
+            {
+                // Host settings: the only layer early enough for the endpoint Program.cs reads
+                // while assembling the builder.
+                builder.UseSetting("OpenTelemetry:OtlpEndpoint", "http://localhost:4317");
+                builder.ConfigureServices(services =>
+                    services.ConfigureOpenTelemetryTracerProvider(tracing =>
+                        tracing.AddInMemoryExporter(_spans)
+                    )
+                );
+            }
+        );
+
+        await bench.UpsertAsync("TICKET-0001", "Ana Souza", "123456");
+        await bench.QueueUntilAsync(
+            queue => queue.Any(work => work.Status == ReplicationStatus.Succeeded),
+            "the enrolment has been delivered"
+        );
+
+        var spans = await Eventually.UntilAsync(
+            () => Task.FromResult(ReaderSpans(bench.DeviceId)),
+            spans => spans.Count >= 3,
+            "the reader steps' spans have been exported"
+        );
+
+        Assert.Equal(["person", "face-delete", "face"], spans.Select(span => span.DisplayName));
+        Assert.All(
+            spans,
+            span =>
+            {
+                Assert.Equal(ActivityKind.Client, span.Kind);
+                Assert.Equal(bench.DeviceId, span.GetTagItem("device.id"));
+                Assert.Equal(span.DisplayName, span.GetTagItem("isapi.step"));
+            }
+        );
+        // The person and the face were written; the face delete found nothing to delete, which
+        // the reader answers as a refusal the adapter counts as done (ISA-11).
+        Assert.Equal(200, spans[0].GetTagItem("http.response.status_code"));
+        Assert.Equal(400, spans[1].GetTagItem("http.response.status_code"));
+        Assert.Equal(200, spans[2].GetTagItem("http.response.status_code"));
     }
 }
