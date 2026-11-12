@@ -164,7 +164,7 @@ T17 → T18
 
 ---
 
-### T6: `ReaderConnections` — a client per reader, and the auth-failure hold
+### T6: `ReaderConnections` — a client per reader, and the auth-failure hold ✅
 
 **What**: `IReaderConnections` + `ReaderConnections`: a client per key `(DeviceId, Ip, Port, Username, SHA-256(Password))`; a new key for a device disposes the old client; `Hold`/`IsHeld` on the injected `TimeProvider`; `Dispose` releases all. The handler factory is `internal`, so tests inspect its configuration: digest-only `CredentialCache`, an accept-all callback on **this** handler, `AllowAutoRedirect = false`, `PooledConnectionLifetime`, `Timeout = Infinite`, HTTPS base address with bracketed IPv6.
 **Where**: `Infrastructure/Isapi/ReaderConnections.cs`, `Tests/Infrastructure/Isapi/ReaderConnectionsTests.cs`
@@ -172,78 +172,78 @@ T17 → T18
 **Reuses**: `TimeProvider` / `FakeTimeProvider` (AD-023)
 **Requirement**: ISA-21, ISA-22 (handler half), ISA-37 (store)
 **Done when**:
-- [ ] The same endpoint twice gives the same client; a changed password gives a new client and the old one is disposed; a different device is unaffected
-- [ ] A hold is reported until its time, not after (both sides of the boundary); a changed password is not held
-- [ ] Handler configuration asserted as listed; `https://[::1]:8443/` for an IPv6 endpoint
-- [ ] Quick gate passes; ≥ 511 unit
+- [x] The same endpoint twice gives the same client; a changed password gives a new client and the old one is disposed; a different device is unaffected
+- [x] A hold is reported until its time, not after (both sides of the boundary); a changed password is not held
+- [x] Handler configuration asserted as listed; `https://[::1]:8443/` for an IPv6 endpoint
+- [x] Quick gate passes; ≥ 511 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): keep one authenticated connection per reader`
 
 ---
 
-### T7: `IsapiDeviceClient.AddAsync` — enrol with compensation
+### T7: `IsapiDeviceClient.AddAsync` — enrol with compensation ✅
 
 **What**: The Add sequence, the person upsert (`AlreadyExists` ⇒ Modify), face replace (`Absent` ok), compensation on a refused face, no compensation on reader-down, cancellation propagating with no compensation, and one exchange per step.
 **Where**: `Infrastructure/Isapi/IsapiDeviceClient.cs`, `Tests/Infrastructure/Isapi/IsapiDeviceClientTests.Add.cs` (+ a shared scripted-handler helper)
 **Depends on**: T6
 **Requirement**: ISA-01…ISA-06, ISA-19, ISA-20
 **Done when**:
-- [ ] Happy path: exact request sequence `PersonCreate, FaceDelete, FaceCreate` → `Delivered`
-- [ ] Person exists → `PersonCreate, PersonModify, FaceDelete, FaceCreate` → `Delivered`
-- [ ] Face refused → `… FaceCreate, PersonDelete` → `Rejected` naming the face step and `subStatusCode` (literal); compensation also refused → `Rejected` whose reason says compensation failed
-- [ ] Face step reader-down or 5xx → `Unreachable`, no `PersonDelete` sent
-- [ ] Token cancelled during `FaceCreate` → `OperationCanceledException`, no further request
-- [ ] No step is sent twice in any test (ISA-19)
-- [ ] Quick gate passes; ≥ 519 unit
+- [x] Happy path: exact request sequence `PersonCreate, FaceDelete, FaceCreate` → `Delivered`
+- [x] Person exists → `PersonCreate, PersonModify, FaceDelete, FaceCreate` → `Delivered`
+- [x] Face refused → `… FaceCreate, PersonDelete` → `Rejected` naming the face step and `subStatusCode` (literal); compensation also refused → `Rejected` whose reason says compensation failed
+- [x] Face step reader-down or 5xx → `Unreachable`, no `PersonDelete` sent
+- [x] Token cancelled during `FaceCreate` → `OperationCanceledException`, no further request
+- [x] No step is sent twice in any test (ISA-19)
+- [x] Quick gate passes; ≥ 519 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): enrol a spectator, never leaving a PIN-only person`
 
 ---
 
-### T8: `IsapiDeviceClient.UpdateAsync` and `RemoveAsync`
+### T8: `IsapiDeviceClient.UpdateAsync` and `RemoveAsync` ✅
 
 **What**: Update (same upsert + face replace, **no** compensation) and Remove (`FaceDelete` → `PersonDelete`, `Absent` ok at both).
 **Where**: `Infrastructure/Isapi/IsapiDeviceClient.cs`, `Tests/Infrastructure/Isapi/IsapiDeviceClientTests.Update.cs`, `.Remove.cs`
 **Depends on**: T7
 **Requirement**: ISA-07…ISA-11
 **Done when**:
-- [ ] Update of a present person and of an absent one → `Delivered` with the exact sequences
-- [ ] Update with the face refused → `Rejected`, no `PersonDelete` sent
-- [ ] Remove → `FaceDelete, PersonDelete` → `Delivered`; either or both answering a configured absent code → `Delivered`; a refusal at either → `Rejected`
-- [ ] Quick gate passes; ≥ 525 unit
+- [x] Update of a present person and of an absent one → `Delivered` with the exact sequences
+- [x] Update with the face refused → `Rejected`, no `PersonDelete` sent
+- [x] Remove → `FaceDelete, PersonDelete` → `Delivered`; either or both answering a configured absent code → `Delivered`; a refusal at either → `Rejected`
+- [x] Quick gate passes; ≥ 525 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): update and remove a spectator on a reader`
 
 ---
 
-### T9: Auth failures pause, and the hold stops repeat logins
+### T9: Auth failures pause, and the hold stops repeat logins ✅
 
 **What**: On `AuthFailed` at any step, the client records a hold (unlock time if given, else `AuthFailureHold`) and returns `Unreachable`; a call on a held key returns `Unreachable` with the same reason and sends **no** request.
 **Where**: `Infrastructure/Isapi/IsapiDeviceClient.cs`, `Tests/Infrastructure/Isapi/IsapiDeviceClientTests.Auth.cs`
 **Depends on**: T8
 **Requirement**: ISA-15, ISA-37
 **Done when**:
-- [ ] 401 → `Unreachable("authentication failed")`; the next three calls send zero requests and return the same reason
-- [ ] After the hold lapses (advance `FakeTimeProvider`), the next call contacts the reader again
-- [ ] A locked answer with an unlock time holds until exactly that time
-- [ ] An endpoint with a changed password is contacted at once
-- [ ] Quick gate passes; ≥ 530 unit
+- [x] 401 → `Unreachable("authentication failed")`; the next three calls send zero requests and return the same reason
+- [x] After the hold lapses (advance `FakeTimeProvider`), the next call contacts the reader again
+- [x] A locked answer with an unlock time holds until exactly that time
+- [x] An endpoint with a changed password is contacted at once
+- [x] Quick gate passes; ≥ 530 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): hold refused credentials so probes cannot lock the reader`
 
 ---
 
-### T10: Step spans and the per-call log entry
+### T10: Step spans and the per-call log entry ✅
 
 **What**: `ActivitySource("HikvisionReplicator.Isapi")` with one `Client` activity per step and the design's tags; one `[LoggerMessage]` per call (Information on `Delivered`, Warning otherwise).
 **Where**: `Infrastructure/Isapi/IsapiDeviceClient.cs`, `Tests/Infrastructure/Isapi/IsapiDeviceClientTests.Observability.cs`
 **Depends on**: T9
 **Requirement**: ISA-28, ISA-29, ISA-24 (unit half)
 **Done when**:
-- [ ] An `ActivityListener` sees one activity per step with `device.id`, `isapi.step`, `http.response.status_code`, and `isapi.sub_status_code` on a refusal
-- [ ] A capturing logger sees exactly one entry per call with the listed fields, at the right level
-- [ ] No captured tag or log text contains the device password, the PIN, or `Digest ` (literal values from the test)
-- [ ] Quick gate passes; ≥ 534 unit
+- [x] An `ActivityListener` sees one activity per step with `device.id`, `isapi.step`, `http.response.status_code`, and `isapi.sub_status_code` on a refusal
+- [x] A capturing logger sees exactly one entry per call with the listed fields, at the right level
+- [x] No captured tag or log text contains the device password, the PIN, or `Digest ` (literal values from the test)
+- [x] Quick gate passes; ≥ 534 unit
 
 **Tests**: unit · **Gate**: quick · **Commit**: `feat(isapi): trace each step and log each call`
 
