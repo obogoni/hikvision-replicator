@@ -466,17 +466,17 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ## Handoff
 
-- **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2 — **complete and verified**, PR into `main` pending.
+- **Feature**: `replication-worker` (`.specs/features/replication-worker/`) — feature 4, Phase 2 — **complete, verified and merged** — PR #18, squash `92c3a56` on `main`.
 - **Phase / Task**: T1–T22 done, plus fix commits. Verifier **PASS** at iteration 3 of 3 (`validation.md`).
 - **Completed**: spec · context · design · tasks · validation. Executed as three batch sub-agents (T1–T7, T8–T14, T15–T22), then Verifier → 4 test fixes + 1 production fix → re-verify → 1 flake fix → re-verify. Author ≠ verifier held (AD-028).
 - **Test totals**: **465 unit · 340 integration**, green; 5 consecutive full integration runs green. 17 warnings (baseline). Entering: 364 · 286.
 - **Verifier**: 35/35 WRK criteria evidenced. Sensor across three iterations: every listed fault killed; survivors classified equivalent (M9a newer-pending check backed by the pending index; M24 `ReaderGone` exit backed by the cascade).
 - **Production defect found by verification**: `f082fae` — the supervisor read backfill debts before the catalogue, so a reader registered between the two reads got a loop with no debt and a spectator was delivered twice (WRK-34). Fixed by reading the catalogue first.
 - **Decisions**: AD-043 (OD-3 closed — own hosted worker, no job runner, own `DevicePause`; Polly rejected, v8 is ratio-only). AD-044 (transition table extended; `xmin` row version on `replications` and `backfill_intents`).
-- **Next step**: open the PR into `main`, squash-merge, then feature 5 `isapi-device-client` (real adapter behind `IDeviceClient`; must also verify A-13 on hardware).
+- **Next step**: merge `fix/lessons-no-silent-prune`, then specify feature 5 `isapi-device-client` (real adapter behind `IDeviceClient`; must also verify A-13 on hardware).
 - **Blockers**: none.
 - **Uncommitted files**: none tracked. `.agents/`, `.claude/`, `.design/` untracked and undecided.
-- **Branch**: `feat/replication-worker`, based on `main` at `173f8c1`.
+- **Branch**: `fix/lessons-no-silent-prune`, based on `main` at `92c3a56`.
 
 ### What `replication-worker` established that later features inherit
 
@@ -488,7 +488,7 @@ read the code itself, `CLAUDE.md`, and [ROADMAP.md](ROADMAP.md).
 
 ### Still outstanding
 
-1. **`scripts/lessons.py` mutates the store on `list` *and* `add`** (auto-prune past `window_days = 45`). The Verifier had to restore 36 candidates (L-008…L-043) twice. Fix the script (or widen the window / promote recurring lessons) before the next lesson write. Candidates now run to L-055; only L-007 is confirmed.
+1. **`scripts/lessons.py` silent prune — fixed** in `b488077`: `list`/`status` are read-only, `add` never prunes, `prune` is a dry run without `--apply`. 36 of 48 candidates are past the 45-day window; **never run `prune --apply`** until their fate is decided. Still open: only L-007 is confirmed because recurrence merges on exact normalised text, so near-duplicate lessons never corroborate each other.
 2. **`docs/test-patterns.md` omits `ReplicationQueueContractTests` from the contract-class list** although AD-040 names it.
 3. **`CA1711` on `IDomainEventHandler`** — unsuppressed warning awaiting a decision.
 4. **Semantic-image-quality gap** still missing from `ROADMAP.md` § Known Gaps.
