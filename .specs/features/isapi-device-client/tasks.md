@@ -249,38 +249,38 @@ T17 → T18
 
 ---
 
-### T11: Wire `Isapi` as a selectable adapter
+### T11: Wire `Isapi` as a selectable adapter ✅
 
 **What**: `DeviceClientOptions.IsapiAdapter`; the validator accepts `Fake` and `Isapi` and its messages name both; `Program.cs` registers `IsapiOptions` (`ValidateOnStart`), `IReaderConnections`, `IsapiDeviceClient`, the adapter switch, and `AddSource(IsapiDeviceClient.ActivitySourceName)`. Rewrite the superseded startup test (see baseline note).
 **Where**: `Infrastructure/DeviceClientOptions.cs`, `Program.cs`, `IntegrationTests/StartupTests.cs`
 **Depends on**: T10
 **Requirement**: ISA-23
 **Done when**:
-- [ ] `Adapter = Isapi` starts and resolves `IDeviceClient` to `IsapiDeviceClient`
-- [ ] `Adapter = Bogus` fails startup; the message names `DeviceClient:Adapter`, `Fake` and `Isapi` (literals)
-- [ ] An invalid `Isapi:NameMaxLength = 0` with `Adapter = Isapi` fails startup naming the setting
-- [ ] Full gate passes; ≥ 534 unit · ≥ 343 integration
+- [x] `Adapter = Isapi` starts and resolves `IDeviceClient` to `IsapiDeviceClient`
+- [x] `Adapter = Bogus` fails startup; the message names `DeviceClient:Adapter`, `Fake` and `Isapi` (literals)
+- [x] An invalid `Isapi:NameMaxLength = 0` with `Adapter = Isapi` fails startup naming the setting
+- [x] Full gate passes; ≥ 534 unit · ≥ 343 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `feat(isapi): make the ISAPI adapter selectable at startup`
 
 ---
 
-### T12: `StubReader` — an ISAPI reader on loopback
+### T12: `StubReader` — an ISAPI reader on loopback ✅
 
 **What**: A test helper: Kestrel on `127.0.0.1:0` over HTTPS with an in-memory self-signed certificate; a **real** digest challenge (MD5, `qop=auth`) that verifies the response against a configured password and counts failed logins; in-memory persons and faces keyed by `employeeNo`; the five design endpoints; scripting (refuse a step with a given `subStatusCode`, answer a status, go offline). Self-tests in `HarnessTests`.
 **Where**: `IntegrationTests/StubReader.cs`, `IntegrationTests/HarnessTests.cs`
 **Depends on**: T11
 **Requirement**: enables ISA-21, ISA-22 and the integration half of every ISA criterion
 **Done when**:
-- [ ] A raw `HttpClient` without credentials gets 401 with a `Digest` challenge; with the right password it gets `statusCode 1`; with a wrong one, 401, and the failed-login count rises by one
-- [ ] A `PersonCreate` + `FaceCreate` through `IsapiDeviceClient` against the stub leaves exactly one person and one face
-- [ ] Full gate passes; ≥ 346 integration
+- [x] A raw `HttpClient` without credentials gets 401 with a `Digest` challenge; with the right password it gets `statusCode 1`; with a wrong one, 401, and the failed-login count rises by one
+- [x] A `PersonCreate` + `FaceCreate` through `IsapiDeviceClient` against the stub leaves exactly one person and one face
+- [x] Full gate passes; ≥ 346 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `test(isapi): add a loopback ISAPI reader for integration tests`
 
 ---
 
-### T13: `IsapiDeliveryTests` — through the API to the stub
+### T13: `IsapiDeliveryTests` — through the API to the stub ✅
 
 **What**: On an isolated worker host with `Adapter = Isapi`, a device registered at the stub's address and port: `PUT /api/users/{ref}` → the stub holds the hashed person with the name and PIN, plus the face bytes, and the replication is `Succeeded`; amend → updated; `DELETE` → gone. Each item is a separate test.
 **Where**: `IntegrationTests/IsapiDeliveryTests.cs`
@@ -288,51 +288,51 @@ T17 → T18
 **Reuses**: `WorkerApiTests` base, `StartIsolatedHostAsync`, `UntilAsync`
 **Requirement**: ISA-01, ISA-07, ISA-10, ISA-21, ISA-26
 **Done when**:
-- [ ] Enrol, update and remove each proven on the stub's state and the replication row
-- [ ] A user whose name exceeds `NameMaxLength` arrives truncated, not refused
-- [ ] Full gate passes; ≥ 350 integration
+- [x] Enrol, update and remove each proven on the stub's state and the replication row
+- [x] A user whose name exceeds `NameMaxLength` arrives truncated, not refused
+- [x] Full gate passes; ≥ 350 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `test(isapi): prove enrol, update and remove through the API`
 
 ---
 
-### T14: `IsapiReaderFailureTests` — reader-level and record-level failures
+### T14: `IsapiReaderFailureTests` — reader-level and record-level failures ✅
 
 **What**: Wrong device password → reader paused, zero dead letters, and the stub counts **exactly one** failed login while the worker keeps probing for several probe intervals; fixing the password via `PUT /api/devices/{id}` → backlog drains. Stub refuses the face → dead letter after `MaxAttempts`, and the stub holds no person. Stub offline → paused; back online → drains with nothing dead-lettered.
 **Where**: `IntegrationTests/IsapiReaderFailureTests.cs`
 **Depends on**: T13
 **Requirement**: ISA-04, ISA-14, ISA-15, ISA-37 (and the stub analogues of ISA-34, ISA-35)
 **Done when**:
-- [ ] Each scenario above is its own test with poll-until deadlines
-- [ ] Full gate passes; ≥ 354 integration
+- [x] Each scenario above is its own test with poll-until deadlines
+- [x] Full gate passes; ≥ 354 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `test(isapi): pause on reader faults and dead-letter only refused records`
 
 ---
 
-### T15: Secrets stay off the wire's edges, and TLS bypass stays local
+### T15: Secrets stay off the wire's edges, and TLS bypass stays local ✅
 
 **What**: Extend `CredentialLeakageTests`: across a successful enrol, a refused face and a wrong password, the log sink, exported spans and `LastError` contain neither the device password, the PIN, nor `Authorization`/`Digest ` values. A new test: a plain `HttpClient` from the host's `IHttpClientFactory` fails TLS against the stub, while the adapter succeeds against the same stub.
 **Where**: `IntegrationTests/CredentialLeakageTests.cs`, `IntegrationTests/StartupTests.cs`
 **Depends on**: T14
 **Requirement**: ISA-22, ISA-24, ISA-25
 **Done when**:
-- [ ] Three leakage flows asserted; the TLS-scope test asserts an `HttpRequestException` with `SecureConnectionError` for the default client
-- [ ] Full gate passes; ≥ 358 integration
+- [x] Three leakage flows asserted; the TLS-scope test asserts an `HttpRequestException` with `SecureConnectionError` for the default client
+- [x] Full gate passes; ≥ 358 integration
 
 **Tests**: integration · **Gate**: full · **Commit**: `test(isapi): prove no credential leaks and no process-wide TLS bypass`
 
 ---
 
-### T16: Reader spans reach the exporter
+### T16: Reader spans reach the exporter ✅
 
 **What**: Extend `TracingTests`: with an export endpoint configured and `Adapter = Isapi`, an enrol exports one `HikvisionReplicator.Isapi` span per step with the design's tags.
 **Where**: `IntegrationTests/TracingTests.cs`
 **Depends on**: T15
 **Requirement**: ISA-28
 **Done when**:
-- [ ] Spans for `person`, `face-delete` and `face` exported for one enrol, each tagged with the device id
-- [ ] Full gate passes; ≥ 359 integration; `--no-incremental` build shows **17 warnings, 0 errors**
+- [x] Spans for `person`, `face-delete` and `face` exported for one enrol, each tagged with the device id
+- [x] Full gate passes; ≥ 359 integration; `--no-incremental` build shows **17 warnings, 0 errors**
 
 **Tests**: integration · **Gate**: full · **Commit**: `test(isapi): export a span per reader step`
 
